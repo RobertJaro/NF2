@@ -80,8 +80,9 @@ class NF2Trainer:
             init_epoch = 0
             lambda_B = 1000 if decay_epochs else 1
             if meta_path:
-                state_dict = torch.load(meta_path, map_location=device)
-                model.load_state_dict(state_dict['m'])
+                state_dict = torch.load(meta_path, map_location=device)['model'].state_dict() if meta_path.endswith('nf2') \
+                    else torch.load(meta_path, map_location=device)['m']
+                model.load_state_dict(state_dict)
                 lambda_B = 1
                 opt = torch.optim.Adam(parallel_model.parameters(), lr=5e-5)
                 logging.info('Loaded meta state: %s' % meta_path)
