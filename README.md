@@ -3,7 +3,7 @@
 
 # [Usage](#usage) --- [Paper](#paper) --- [Data](#data)
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RobertJaro/NF2/blob/master/examples/extrapolation.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://github.com/RobertJaro/NF2/blob/main/example/extrapolation.ipynb)
 
 
 ## Abstract
