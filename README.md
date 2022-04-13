@@ -64,7 +64,7 @@ Example for SHARP 377 (config_377.json):
 Training requires about 2 hours on a single V100 GPU.
 
 ```
-python -m nf2.ar_extrapolation.py --config <<your path>>/config_377.json
+python -m nf2.ar_extrapolation --config <<your path>>/config_377.json
 ```
 
 For the extrapolations of time series we can use the model weights of the previous time step. A single time step can then be performed in a few minutes.
@@ -94,7 +94,7 @@ Example for the time series of SHARP 377 (config_series_377.json):
 
 
 ``` 
-python -m nf2.series_extrapolation.py --config <<your path>>/config_series_377.json
+python -m nf2.series_extrapolation --config <<your path>>/config_series_377.json
 ```
 
 ### Visualization
