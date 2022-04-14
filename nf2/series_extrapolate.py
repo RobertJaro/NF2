@@ -66,8 +66,10 @@ for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in zip(hmi_p_files, hmi_t_files, hm
     # load data cube
     hmi_cube = np.stack([Map(hmi_p).data, -Map(hmi_t).data, Map(hmi_r).data]).transpose()
     error_cube = np.stack([Map(err_p).data, Map(err_t).data, Map(err_r).data]).transpose()
-    hmi_cube = hmi_cube[66:658, 9:377]
-    error_cube = error_cube[66:658, 9:377]
+    if 'slice' in args:
+        slice = args.slice
+        hmi_cube = hmi_cube[slice[0]:slice[1], slice[2]:slice[3]]
+        error_cube = error_cube[slice[0]:slice[1], slice[2]:slice[3]]
 
     # bin data
     if bin > 1:
