@@ -1,9 +1,9 @@
+from tvtk.api import tvtk, write_data
 import argparse
 
 import numpy as np
 import torch
-from tvtk.misc import write_data
-from tvtk.tvtk_access import tvtk
+
 
 from nf2.evaluation.unpack import load_cube
 

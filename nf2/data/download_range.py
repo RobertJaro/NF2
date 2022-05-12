@@ -1,18 +1,26 @@
+import argparse
 import os
-import sys
 
 import drms
 from dateutil.parser import parse
 
 from nf2.data.download import donwload_ds
 
-download_dir = sys.argv[1]
-email = sys.argv[2]
-harpnum = int(sys.argv[3])
-t_start = parse(sys.argv[4])
+parser = argparse.ArgumentParser()
+parser.add_argument('--download_dir', type=str, required=True)
+parser.add_argument('--email', type=str, required=True)
+parser.add_argument('--harpnum', type=int, required=True)
+parser.add_argument('--t_start', type=str, required=True)
+parser.add_argument('--duration', type=str, required=False, default='1d')
+parser.add_argument('--series', type=str, required=False, default='sharp_cea_720s')
+parser.add_argument('--include_error', type=bool, required=False, default=False)
+args = parser.parse_args()
 
-os.makedirs(download_dir, exist_ok=True)
-client = drms.Client(email=email, verbose=True)
-ds = 'hmi.sharp_cea_720s[%d][%s/5d]{Br, Bp, Bt, Br_err, Bp_err, Bt_err}' % \
-     (harpnum, t_start.isoformat('_', timespec='seconds'))
-donwload_ds(ds, download_dir, client)
+
+
+os.makedirs(args.download_dir, exist_ok=True)
+client = drms.Client(email=(args.email), verbose=True)
+segments = 'Br, Bp, Bt, Br_err, Bp_err, Bt_err' if args.include_error else 'Br, Bp, Bt'
+ds = 'hmi.%s[%d][%s/%s]{%s}' % \
+     (args.series, args.harpnum, parse(args.t_start).isoformat('_', timespec='seconds'), args.duration, segments)
+donwload_ds(ds, args.download_dir, client)

@@ -23,7 +23,7 @@ class PotentialModel(nn.Module):
         return potential
 
 
-def get_potential(b_n, height, batch_size=2048):
+def get_potential(b_n, height, batch_size=2048, show_progress=True):
     cube_shape = (*b_n.shape, height)
 
     b_n = b_n.reshape((-1,)).astype(np.float32)
@@ -41,7 +41,9 @@ def get_potential(b_n, height, batch_size=2048):
 
         coords = torch.tensor(coords, dtype=torch.float32)
         potential = []
-        for coord, in tqdm(DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=8)):
+        loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=8)
+        it = tqdm(loader) if show_progress else loader
+        for coord, in it:
             coord = coord.to(device)
             p_batch = model(coord)
             potential += [p_batch]

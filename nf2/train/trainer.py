@@ -212,7 +212,7 @@ class NF2Trainer:
         for i in range(3):
             for j in range(10):
                 v_min_max = np.max(np.abs(imgs[j, ..., i]))
-                axs[i, j].imshow(imgs[j, ..., i], cmap='gray', vmin=-v_min_max, vmax=v_min_max, origin='lower')
+                axs[i, j].imshow(imgs[j, ..., i].transpose(), cmap='gray', vmin=-v_min_max, vmax=v_min_max, origin='lower')
                 axs[i, j].set_axis_off()
         for j, h in enumerate(heights):
             axs[0, j].set_title('%.01f' % h)
@@ -361,16 +361,16 @@ def load_dataset(hmi_cube, error_cube, height, spatial_norm, norm_value, plot=Fa
 
     if plot:
         fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-        axs[0].imshow(n_hmi_cube[..., 0], vmin=-1, vmax=1, cmap='gray', origin='lower')
-        axs[1].imshow(n_hmi_cube[..., 1], vmin=-1, vmax=1, cmap='gray', origin='lower')
-        axs[2].imshow(n_hmi_cube[..., 2], vmin=-1, vmax=1, cmap='gray', origin='lower')
+        axs[0].imshow(n_hmi_cube[..., 0].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
+        axs[1].imshow(n_hmi_cube[..., 1].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
+        axs[2].imshow(n_hmi_cube[..., 2].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
         plt.savefig(os.path.join(plot_path, 'b.jpg'))
         plt.close()
 
         fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-        axs[0].imshow(error_cube[..., 0], vmin=0, cmap='gray', origin='lower')
-        axs[1].imshow(error_cube[..., 1], vmin=0, cmap='gray', origin='lower')
-        axs[2].imshow(error_cube[..., 2], vmin=0, cmap='gray', origin='lower')
+        axs[0].imshow(error_cube[..., 0].transpose(), vmin=0, cmap='gray', origin='lower')
+        axs[1].imshow(error_cube[..., 1].transpose(), vmin=0, cmap='gray', origin='lower')
+        axs[2].imshow(error_cube[..., 2].transpose(), vmin=0, cmap='gray', origin='lower')
         plt.savefig(os.path.join(plot_path, 'b_err.jpg'))
         plt.close()
 
