@@ -14,13 +14,12 @@ def donwload_ds(ds, dir, client):
 
 
 def find_HARP(start_time, noaa_nums, client):
-    noaa_nums = [float(num) for num in noaa_nums[1:-1].split(',')]
-    ar_mapping = client.query('hmi.Mharp_720s[][%sZ]' % start_time.to_pydatetime().isoformat('_', timespec='seconds'),
+    ar_mapping = client.query('hmi.Mharp_720s[][%sZ]' % start_time.isoformat('_', timespec='seconds'),
                               key=['NOAA_AR', 'HARPNUM'])
     if len(ar_mapping) == 0:
         return None
     for noaa_num in noaa_nums:
-        harpnum = ar_mapping[ar_mapping['NOAA_AR'] == noaa_num]['HARPNUM']
+        harpnum = ar_mapping[ar_mapping['NOAA_AR'] == int(noaa_num)]['HARPNUM']
         if len(harpnum) > 0:
             return harpnum.iloc[0]
     return None
