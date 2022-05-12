@@ -48,7 +48,7 @@ def load_coords_from_state(save_path, coords, device=None, **kwargs):
                        **kwargs)
 
 
-def load_coords(model, cube_shape, spatial_norm, b_norm, coords, batch_size=1000, progress=False):
+def load_coords(model, cube_shape, spatial_norm, b_norm, coords, device, batch_size=1000, progress=False):
     assert np.all(coords[..., 0] < cube_shape[0]), 'Invalid x coordinate, maximum is %d' % cube_shape[0]
     assert np.all(coords[..., 1] < cube_shape[1]), 'Invalid x coordinate, maximum is %d' % cube_shape[1]
     assert np.all(coords[..., 2] < cube_shape[2]), 'Invalid x coordinate, maximum is %d' % cube_shape[2]
@@ -64,7 +64,7 @@ def load_coords(model, cube_shape, spatial_norm, b_norm, coords, batch_size=1000
         it = tqdm(it) if progress else it
         for k in it:
             coord = coords[k * batch_size: (k + 1) * batch_size]
-            coord = coord.to(model.device)
+            coord = coord.to(device)
             cube += [model(coord).detach().cpu()]
 
         cube = torch.cat(cube)

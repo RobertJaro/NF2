@@ -112,7 +112,9 @@ python -m nf2.evaluation.vtk <<path to your nf2 file>> <<path to the output vtk 
 
 ## Paper
 
-under review
+under review at Nature Astronomy (Jarolim et al. 2022)
+
+Preprint available: https://doi.org/10.21203/rs.3.rs-1415262/v1
 
 ## Data
 All our simulation results are publicly available (parameter variation, time series, 66 individual active regions).
