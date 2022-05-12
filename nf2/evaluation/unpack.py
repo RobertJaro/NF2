@@ -15,7 +15,7 @@ def load_cube(save_path, device=None, z=None, **kwargs):
     model = nn.DataParallel(state['model'])
     cube_shape = state['cube_shape']
     z = z if z is not None else cube_shape[2]
-    coords = np.mgrid[:cube_shape[0], :cube_shape[1], :z]
+    coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :z], -1)
     return load_coords(model, cube_shape, state['spatial_normalization'],
                        state['normalization'], coords, device, **kwargs)
 
@@ -33,7 +33,7 @@ def load_slice(save_path, z=0, device=None, **kwargs):
     model = nn.DataParallel(state['model'])
     cube_shape = state['cube_shape']
     z = z if z is not None else cube_shape[2]
-    coords = np.mgrid[:cube_shape[0], :cube_shape[1], z:z + 1]
+    coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], z:z + 1], -1)
     return load_coords(model, cube_shape, state['spatial_normalization'],
                        state['normalization'], coords, device, **kwargs)
 
