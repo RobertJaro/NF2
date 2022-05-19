@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from astropy.nddata import block_replicate
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
@@ -23,11 +24,11 @@ class PotentialModel(nn.Module):
         return potential
 
 
-def get_potential(b_n, height, batch_size=2048, show_progress=True):
+def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True):
     cube_shape = (*b_n.shape, height)
-
+    strides = (strides, strides, strides) if isinstance(strides, int) else strides
     b_n = b_n.reshape((-1,)).astype(np.float32)
-    coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :cube_shape[2]], -1).reshape((-1, 3))
+    coords = np.stack(np.mgrid[:cube_shape[0]:strides[0], :cube_shape[1]:strides[1], :cube_shape[2]:strides[2]], -1).reshape((-1, 3))
     r_p = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :1], -1).reshape((-1, 3))
 
     # torch code
@@ -42,13 +43,15 @@ def get_potential(b_n, height, batch_size=2048, show_progress=True):
         coords = torch.tensor(coords, dtype=torch.float32)
         potential = []
         loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=8)
-        it = tqdm(loader) if show_progress else loader
+        it = tqdm(loader) if progress else loader
         for coord, in it:
             coord = coord.to(device)
             p_batch = model(coord)
             potential += [p_batch]
 
     potential = torch.cat(potential).view(cube_shape).cpu().numpy()
+    if strides != (1, 1, 1):
+        potential = block_replicate(potential, strides, conserve_sum=False)
     return potential
 
 

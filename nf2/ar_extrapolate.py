@@ -15,7 +15,8 @@ parser.add_argument('--config', type=str, required=True,
                     help='config file for the simulation')
 parser.add_argument('--num_workers', type=int, required=False, default=4)
 parser.add_argument('--meta_path', type=str, required=False, default=None)
-parser.add_argument('--positional_encoding', type=bool, required=False, default=False)
+parser.add_argument('--positional_encoding', action='store_true')
+parser.add_argument('--use_vector_potential', action='store_true')
 parser.add_argument('--n_samples_epoch', type=int, required=False, default=None)
 args = parser.parse_args()
 
@@ -68,5 +69,5 @@ if bin > 1:
 # init trainer
 trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim, positional_encoding=args.positional_encoding,
                      potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
-                     decay_epochs=decay_epochs, num_workers=args.num_workers, meta_path=args.meta_path)
+                     decay_epochs=decay_epochs, num_workers=args.num_workers, meta_path=args.meta_path, use_vector_potential=args.use_vector_potential)
 trainer.train(epochs, batch_size, n_samples_epoch, log_interval, validation_interval)

@@ -7,15 +7,17 @@ from matplotlib import pyplot as plt
 from torch import nn
 from tqdm import tqdm
 
+from nf2.train.model import VectorPotentialModel
 
-def load_cube(save_path, device=None, z=None, **kwargs):
+
+def load_cube(save_path, device=None, z=None, strides=1, **kwargs):
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     state = torch.load(save_path, map_location=device)
     model = nn.DataParallel(state['model'])
     cube_shape = state['cube_shape']
     z = z if z is not None else cube_shape[2]
-    coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :z], -1)
+    coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :z:strides], -1)
     return load_coords(model, cube_shape, state['spatial_normalization'],
                        state['normalization'], coords, device, **kwargs)
 
@@ -53,7 +55,7 @@ def load_coords(model, cube_shape, spatial_norm, b_norm, coords, device, batch_s
     assert np.all(coords[..., 1] < cube_shape[1]), 'Invalid x coordinate, maximum is %d' % cube_shape[1]
     assert np.all(coords[..., 2] < cube_shape[2]), 'Invalid x coordinate, maximum is %d' % cube_shape[2]
 
-    with torch.no_grad():
+    def _load(coords):
         # normalize and to tensor
         coords = torch.tensor(coords / spatial_norm, dtype=torch.float32)
         coords_shape = coords.shape
@@ -65,12 +67,20 @@ def load_coords(model, cube_shape, spatial_norm, b_norm, coords, device, batch_s
         for k in it:
             coord = coords[k * batch_size: (k + 1) * batch_size]
             coord = coord.to(device)
+            coord.requires_grad = True
             cube += [model(coord).detach().cpu()]
 
         cube = torch.cat(cube)
         cube = cube.view(*coords_shape).numpy()
-    b = cube * b_norm
-    return b
+        b = cube * b_norm
+        return b
+    if isinstance(model, VectorPotentialModel) or \
+            (isinstance(model, nn.DataParallel) and isinstance(model.module, VectorPotentialModel)):
+        return _load(coords)
+    else:
+        with torch.no_grad():
+            return _load(coords)
+
 
 
 def save_fits(vec, path, prefix):

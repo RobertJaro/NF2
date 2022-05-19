@@ -1,11 +1,5 @@
-from tvtk.api import tvtk, write_data
-import argparse
-
 import numpy as np
-import torch
-
-
-from nf2.evaluation.unpack import load_cube
+from tvtk.api import tvtk, write_data
 
 
 def save_vtk(vec, path, name, Mm_per_pix=720e-3):
@@ -23,14 +17,3 @@ def save_vtk(vec, path, name, Mm_per_pix=720e-3):
     sg.point_data.vectors = vectors
     sg.point_data.vectors.name = name
     write_data(sg, path)
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-    parser.add_argument('nf2_path', type=str, help='path to the source NF2 file')
-    parser.add_argument('vtk_path', type=str, help='path to the target VTK file')
-
-    args = parser.parse_args()
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    b = load_cube(args.nf2_path, device, progress=True)
-    save_vtk(b, args.vtk_path, 'B')

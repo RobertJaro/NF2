@@ -12,6 +12,8 @@ from nf2.train.trainer import NF2Trainer
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
                     help='config file for the simulation')
+parser.add_argument('--positional_encoding', action='store_true')
+parser.add_argument('--use_vector_potential', action='store_true')
 args = parser.parse_args()
 
 args.__dict__['num_workers'] = 30  # default parameter
@@ -79,7 +81,7 @@ for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in zip(hmi_p_files, hmi_t_files, hm
     trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim,
                          lambda_div=lambda_div, lambda_ff=lambda_ff,
                          meta_path=meta_path, potential_boundary=potential, decay_epochs=decay_epochs,
-                         num_workers=args.num_workers)
+                         num_workers=args.num_workers, use_vector_potential=args.use_vector_potential, positional_encoding=args.positional_encoding)
 
     trainer.train(epochs, batch_size, n_samples_epoch, log_interval, validation_interval)
     meta_path = final_model_path
