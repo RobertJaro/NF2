@@ -3,6 +3,13 @@ from tvtk.api import tvtk, write_data
 
 
 def save_vtk(vec, path, name, Mm_per_pix=720e-3):
+    """Save numpy array as VTK file
+
+    :param vec: numpy array of the vector field (x, y, z, c)
+    :param path: path to the target VTK file
+    :param name: label of the vector field (e.g., B)
+    :param Mm_per_pix: pixel size in Mm. 360e-3 for original HMI resolution. (default bin2 pixel scale)
+    """
     # Unpack
     dim = vec.shape[:-1]
     # Generate the grid
