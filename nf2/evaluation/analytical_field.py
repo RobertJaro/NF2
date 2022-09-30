@@ -1,6 +1,5 @@
 import numpy as np
-from scipy import interpolate
-from scipy.integrate import solve_ivp, solve_bvp
+from scipy.integrate import solve_bvp
 
 
 def _differential_equation(mu, u, n, a2):
@@ -19,7 +18,7 @@ def _differential_equation(mu, u, n, a2):
     return (dP_dmu, d2P_dmu2)
 
 
-def get_analytic_b_field(n=1, m=1, a2=0.425, l=0.3, psi=np.pi / 4, resolution=64):
+def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[-1, 1, -1, 1, 0, 2]):
     """
     Calculate the analytic NLFF field from Low & Lou (1989).
 
@@ -32,12 +31,13 @@ def get_analytic_b_field(n=1, m=1, a2=0.425, l=0.3, psi=np.pi / 4, resolution=64
     :param bounds: dimensions of the volume (x_start, x_end, y_start, y_end, z_start, z_end)
     :return: magnetic field B (x, y, z, v)
     """
-    sol_P = solve_P(n, m, a2)
+    sol_P, a2 = solve_P(n, m)
 
     resolution = [resolution] * 3 if not isinstance(resolution, list) else resolution
-    coords = np.stack(np.meshgrid(np.linspace(-1, 1, resolution[1], dtype=np.float32),
-                                  np.linspace(-1, 1, resolution[0], dtype=np.float32),
-                                  np.linspace(0, 2, resolution[2], dtype=np.float32)), -1).transpose([1, 0, 2, 3])
+    coords = np.stack(np.meshgrid(np.linspace(bounds[0], bounds[1], resolution[1], dtype=np.float32),
+                                  np.linspace(bounds[2], bounds[3], resolution[0], dtype=np.float32),
+                                  np.linspace(bounds[4], bounds[5], resolution[2], dtype=np.float32)), -1).transpose(
+        [1, 0, 2, 3])
 
     x, y, z = coords[..., 0], coords[..., 1], coords[..., 2]
     X = x * np.cos(psi) - (z + l) * np.sin(psi)
@@ -74,16 +74,16 @@ def get_analytic_b_field(n=1, m=1, a2=0.425, l=0.3, psi=np.pi / 4, resolution=64
     return b_field
 
 
-def solve_P(n, m, a2, v0=10, P0=0):
+def solve_P(n, m):
     """
     Solve the differential equation from Low & Lou (1989).
 
     :param n: variable (only n=1)
-    :param a2: eigenvalue
     :param v0: start condition for dP/dmu
     :param P0: boundary condition for P(-1) and P(1)
     :return: interpolated functions for P and dP/dmu
     """
+
     def f(x, y, p):
         a2 = p[0]
         d2P_dmu2 = -(n * (n + 1) * y[0] + a2 * (1 + n) / n * y[0] ** (1 + 2 / n)) / (1 - x ** 2 + 1e-6)
@@ -91,7 +91,6 @@ def solve_P(n, m, a2, v0=10, P0=0):
 
     def f_boundary(Pa, Pb, p):
         return np.array([Pa[0] - 0, Pb[0] - 0, Pa[1] - 10])
-
 
     mu = np.linspace(-1, 1, num=256)
 
@@ -120,4 +119,4 @@ def solve_P(n, m, a2, v0=10, P0=0):
     # get final solution
     eval = shooting([eigenvalues[-1]])[0]
 
-    return eval.sol
+    return eval.sol, eval.p[0]
