@@ -3,7 +3,7 @@ import json
 
 import numpy as np
 
-from nf2.evaluation.analytical_solution import get_analytic_b_field
+from nf2.evaluation.analytical_field import get_analytic_b_field
 from nf2.train.trainer import NF2Trainer
 
 parser = argparse.ArgumentParser()

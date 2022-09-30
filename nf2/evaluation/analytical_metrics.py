@@ -1,6 +1,6 @@
 import numpy as np
 
-from nf2.evaluation.analytical_solution import get_analytic_b_field
+from nf2.evaluation.analytical_field import get_analytic_b_field
 from nf2.evaluation.unpack import load_cube
 from nf2.potential.potential_field import get_potential
 from nf2.train.metric import vector_norm, curl, divergence
