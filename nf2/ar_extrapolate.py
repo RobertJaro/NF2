@@ -1,13 +1,11 @@
-import os
-
 import argparse
-import glob
 import json
 
 import numpy as np
+import torch
 from astropy.nddata import block_reduce
-from sunpy.map import Map
 
+from nf2.data.loader import load_hmi_data
 from nf2.train.trainer import NF2Trainer
 
 parser = argparse.ArgumentParser()
@@ -37,26 +35,17 @@ lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
 epochs = args.epochs
 decay_epochs = args.decay_epochs
-batch_size = int(args.batch_size)
-n_samples_epoch = int(batch_size * 100) if args.n_samples_epoch is None else args.n_samples_epoch
+n_gpus = torch.cuda.device_count()
+batch_size = int(args.batch_size) * n_gpus if n_gpus >= 1 else int(args.batch_size)
 log_interval = args.log_interval
 validation_interval = args.validation_interval
 potential = args.potential
 
 base_path = args.base_path
 data_path = args.data_path
-if isinstance(data_path, str):
-    hmi_p = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))[0]  # x
-    hmi_t = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))[0]  # y
-    hmi_r = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))[0]  # z
-    err_p = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))[0]  # x
-    err_t = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))[0]  # y
-    err_r = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))[0]  # z
-else:
-    hmi_p, err_p, hmi_r, err_r, hmi_t, err_t = data_path
-# laod maps
-hmi_cube = np.stack([Map(hmi_p).data, -Map(hmi_t).data, Map(hmi_r).data]).transpose()
-error_cube = np.stack([Map(err_p).data, Map(err_t).data, Map(err_r).data]).transpose()
+
+hmi_cube, error_cube = load_hmi_data(data_path)
+
 if 'slice' in args:
     slice = args.slice
     hmi_cube = hmi_cube[slice[0]:slice[1], slice[2]:slice[3]]
@@ -67,7 +56,9 @@ if bin > 1:
     hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
     error_cube = block_reduce(error_cube, (bin, bin, 1), np.mean)
 # init trainer
-trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim, positional_encoding=args.positional_encoding,
+trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim,
+                     positional_encoding=args.positional_encoding,
                      potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
-                     decay_epochs=decay_epochs, num_workers=args.num_workers, meta_path=args.meta_path, use_vector_potential=args.use_vector_potential)
-trainer.train(epochs, batch_size, n_samples_epoch, log_interval, validation_interval)
+                     decay_epochs=decay_epochs, meta_path=args.meta_path,
+                     use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
+trainer.train(epochs, log_interval, validation_interval, num_workers=args.num_workers)

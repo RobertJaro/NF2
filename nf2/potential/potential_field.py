@@ -43,7 +43,7 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
         coords = torch.tensor(coords, dtype=torch.float32)
         potential = []
         loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=8)
-        it = tqdm(loader) if progress else loader
+        it = tqdm(loader, desc='Potential Field') if progress else loader
         for coord, in it:
             coord = coord.to(device)
             p_batch = model(coord)
@@ -83,7 +83,8 @@ def get_potential_boundary(b_n, height, batch_size=2048):
         flat_coords = torch.tensor(flat_coords, dtype=torch.float32, )
 
         potential = []
-        for coord, in tqdm(DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2)):
+        for coord, in tqdm(DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2),
+                           desc='Potential Boundary'):
             coord = coord.to(device)
             p_batch = model(coord)
             potential += [p_batch.cpu()]

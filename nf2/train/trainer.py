@@ -5,30 +5,35 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from matplotlib.colors import Normalize
 from torch import nn
 from torch.cuda import get_device_name
 from torch.optim.lr_scheduler import ExponentialLR
-from torch.utils.data import DataLoader, TensorDataset, RandomSampler
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from nf2.data.dataset import ImageDataset, BoundaryDataset
-from nf2.potential.potential_field import get_potential_boundary
+from nf2.data.dataset import ImageDataset
+from nf2.data.loader import load_hmi_dataset, RandomSampler
 from nf2.train.model import CubeModel, jacobian, VectorPotentialModel
 
 
 class NF2Trainer:
 
-    def __init__(self, base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim=256,
-                 positional_encoding=False, meta_path=None, potential_boundary=True, use_vector_potential=False, lambda_div=0.1, lambda_ff=0.1, decay_epochs=None,
-                 num_workers=4, device=None):
+    def __init__(self, base_path, b_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim=256,
+                 positional_encoding=False, meta_path=None, potential_boundary=True, use_vector_potential=False,
+                 lambda_div=0.1, lambda_ff=0.1, decay_epochs=None,
+                 device=None, work_directory=None):
         self.base_path = base_path
         # data parameters
         self.spatial_norm = spatial_norm
         self.height = height
         self.b_norm = b_norm
+        self.batch_size = batch_size
+
+        work_directory = base_path if work_directory is None else work_directory
 
         os.makedirs(base_path, exist_ok=True)
+        os.makedirs(work_directory, exist_ok=True)
+
         self.save_path = os.path.join(base_path, 'extrapolation_result.nf2')
         self.checkpoint_path = os.path.join(base_path, 'checkpoint.pt')
 
@@ -45,7 +50,7 @@ class NF2Trainer:
         logging.info('dim: %d, lambda_div: %f, lambda_ff: %f, potential: %s, decay_epochs: %s' % (
             dim, lambda_div, lambda_ff, str(potential_boundary), str(decay_epochs)))
 
-        self.hmi_cube = hmi_cube
+        self.b_cube = b_cube
         self.error_cube = error_cube
 
         n_gpus = torch.cuda.device_count()
@@ -55,9 +60,10 @@ class NF2Trainer:
         logging.info('Using device: %s (gpus %d) %s' % (str(device), n_gpus, str(device_names)))
 
         # load dataset
-        boundary_ds, cube_shape = load_dataset(hmi_cube, error_cube, height, spatial_norm, b_norm,
-                                               plot=True, plot_path=base_path, potential_boundary=potential_boundary)
-        logging.info('Cube shape: %s (x, y, z)' % str(cube_shape))
+        self.dataset = load_hmi_dataset(b_cube, error_cube, height, spatial_norm, b_norm, work_directory, batch_size,
+                                        plot=True, plot_path=base_path, potential_boundary=potential_boundary)
+        self.cube_shape = [*b_cube.shape[:-1], height]
+        self.sampler = RandomSampler(self.cube_shape, spatial_norm, batch_size * 2)
 
         # init model
         if use_vector_potential:
@@ -81,7 +87,8 @@ class NF2Trainer:
             init_epoch = 0
             lambda_B = 1000 if decay_epochs else 1
             if meta_path:
-                state_dict = torch.load(meta_path, map_location=device)['model'].state_dict() if meta_path.endswith('nf2') \
+                state_dict = torch.load(meta_path, map_location=device)['model'].state_dict() if meta_path.endswith(
+                    'nf2') \
                     else torch.load(meta_path, map_location=device)['m']
                 model.load_state_dict(state_dict)
                 lambda_B = 1
@@ -96,21 +103,18 @@ class NF2Trainer:
         self.device = device
         self.opt = opt
         self.scheduler = scheduler
-        self.cube_shape = cube_shape
-        self.boundary_ds = boundary_ds
         self.init_epoch = init_epoch
         self.history = history
         self.lambda_B = lambda_B
         self.decay_epochs = decay_epochs
         self.lambda_div, self.lambda_ff = lambda_div, lambda_ff
-        self.num_workers = num_workers
 
-    def train(self, epochs, batch_size, n_samples_epoch, log_interval=100, validation_interval=100):
+    def train(self, epochs, log_interval=100, validation_interval=100, num_workers=None):
         start_time = datetime.now()
-        boundary_loader = DataLoader(self.boundary_ds, batch_size=batch_size,
-                                     sampler=RandomSampler(self.boundary_ds, num_samples=n_samples_epoch,
-                                                           replacement=True),
-                                     num_workers=self.num_workers)
+
+        num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
+        data_loader = DataLoader(self.dataset, batch_size=None, num_workers=num_workers, pin_memory=True, shuffle=True)
+
         model = self.parallel_model
         opt = self.opt
         history = self.history
@@ -124,13 +128,10 @@ class NF2Trainer:
             total_divergence_loss = []
             total_force_loss = []
 
-            for boundary_coords, b_true, b_err in tqdm(boundary_loader, total=len(boundary_loader)):
+            for boundary_coords, b_true, b_err in tqdm(data_loader):
                 opt.zero_grad()
                 boundary_coords, b_true, b_err = boundary_coords.to(device), b_true.to(device), b_err.to(device)
-                random_coords = torch.cuda.FloatTensor(batch_size * 2, 3).uniform_()
-                random_coords[:, 0] *= self.cube_shape[0] / self.spatial_norm
-                random_coords[:, 1] *= self.cube_shape[1] / self.spatial_norm
-                random_coords[:, 2] *= self.cube_shape[2] / self.spatial_norm
+                random_coords = self.sampler.load_sample()
 
                 n_boundary_coords = boundary_coords.shape[0]
                 coords = torch.cat([boundary_coords, random_coords], 0)
@@ -163,17 +164,17 @@ class NF2Trainer:
                 self.lambda_B *= lambda_B_decay
             if self.scheduler.get_last_lr()[0] > 5e-5:
                 self.scheduler.step()
-            if (epoch + 1) % log_interval == 0:
+            if log_interval > 0 and (epoch + 1) % log_interval == 0:
                 model.eval()
                 self.plot_sample(epoch)
                 model.train()
                 logging.info('Lambda B: %f' % (self.lambda_B))
                 logging.info('LR: %f' % (self.scheduler.get_last_lr()[0]))
-            if (epoch + 1) % validation_interval == 0:
+            if validation_interval > 0 and (epoch + 1) % validation_interval == 0:
                 model.eval()
                 self.save(epoch)
                 # validate and plot
-                mean_b, total_divergence, mean_force, sigma_angle = self.validate(self.height, batch_size)
+                mean_b, total_divergence, mean_force, sigma_angle = self.validate(self.height)
                 logging.info('Validation [Cube: B: %.03f; Div: %.03f; For: %.03f; Sig: %.03f]' %
                              (mean_b, total_divergence, mean_force, sigma_angle))
                 #
@@ -214,7 +215,8 @@ class NF2Trainer:
         for i in range(3):
             for j in range(10):
                 v_min_max = np.max(np.abs(imgs[j, ..., i]))
-                axs[i, j].imshow(imgs[j, ..., i].transpose(), cmap='gray', vmin=-v_min_max, vmax=v_min_max, origin='lower')
+                axs[i, j].imshow(imgs[j, ..., i].transpose(), cmap='gray', vmin=-v_min_max, vmax=v_min_max,
+                                 origin='lower')
                 axs[i, j].set_axis_off()
         for j, h in enumerate(heights):
             axs[0, j].set_title('%.01f' % h)
@@ -222,9 +224,9 @@ class NF2Trainer:
         fig.savefig(os.path.join(self.base_path, '%05d.jpg' % (epoch + 1)))
         plt.close(fig)
 
-    def get_image(self, z=0, batch_size=int(1e4)):
+    def get_image(self, z=0):
         image_loader = DataLoader(ImageDataset([*self.cube_shape, 3], self.spatial_norm, z),
-                                  batch_size=batch_size, shuffle=False)
+                                  batch_size=self.batch_size, shuffle=False)
         image = []
         for coord in image_loader:
             coord.requires_grad = True
@@ -233,8 +235,8 @@ class NF2Trainer:
         image = np.array(image).reshape((*self.cube_shape[:2], 3))
         return image
 
-    def validate(self, z, batch_size):
-        b, j, div, coords = self.get_cube(z, batch_size)
+    def validate(self, z):
+        b, j, div, coords = self.get_cube(z, self.batch_size)
         b = b.unsqueeze(0) * self.b_norm
         j = j.unsqueeze(0) * self.b_norm / self.spatial_norm
         div = div.unsqueeze(0) * self.b_norm / self.spatial_norm
@@ -245,7 +247,7 @@ class NF2Trainer:
         sig = torch.abs(sig)
         weighted_sig = np.average(sig.numpy(), weights=j.pow(2).sum(-1).pow(0.5).numpy())
 
-        b_diff = torch.abs(b[0, :, :, 0, :] - self.hmi_cube) - self.error_cube
+        b_diff = torch.abs(b[0, :, :, 0, :] - self.b_cube) - self.error_cube
         b_diff = torch.clip(b_diff, 0, None)
         b_diff = torch.sqrt((b_diff ** 2).sum(-1))
 
@@ -343,52 +345,3 @@ def calculate_loss(b, coords):
     force_loss = torch.sum(jxb ** 2, dim=-1) / (torch.sum(b ** 2, dim=-1) + 1e-7)
     divergence_loss = (dBx_dx + dBy_dy + dBz_dz) ** 2
     return divergence_loss, force_loss
-
-
-def load_dataset(hmi_cube, error_cube, height, spatial_norm, norm_value, plot=False, plot_path=None,
-                 potential_boundary=True):
-    n_hmi_cube = Normalize(-norm_value, norm_value, clip=False)(hmi_cube) * 2 - 1
-    n_hmi_cube = np.array(n_hmi_cube, dtype=np.float32)
-
-    error_cube = Normalize(0, norm_value, clip=False)(error_cube)
-    error_cube = np.array(error_cube, dtype=np.float32)
-
-    if plot:
-        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-        axs[0].imshow(n_hmi_cube[..., 0].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
-        axs[1].imshow(n_hmi_cube[..., 1].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
-        axs[2].imshow(n_hmi_cube[..., 2].transpose(), vmin=-1, vmax=1, cmap='gray', origin='lower')
-        plt.savefig(os.path.join(plot_path, 'b.jpg'))
-        plt.close()
-
-        fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-        axs[0].imshow(error_cube[..., 0].transpose(), vmin=0, cmap='gray', origin='lower')
-        axs[1].imshow(error_cube[..., 1].transpose(), vmin=0, cmap='gray', origin='lower')
-        axs[2].imshow(error_cube[..., 2].transpose(), vmin=0, cmap='gray', origin='lower')
-        plt.savefig(os.path.join(plot_path, 'b_err.jpg'))
-        plt.close()
-
-    mf_coords = np.stack(np.mgrid[:n_hmi_cube.shape[0], :n_hmi_cube.shape[1], :1], -1).reshape((-1, 3))
-    mf_values = n_hmi_cube.reshape((-1, 3))
-    mf_err = error_cube.reshape((-1, 3))
-    if potential_boundary:
-        batch_size = int(1024 * 512 ** 2 / np.prod(hmi_cube.shape[:2]))  # adjust batch to AR size
-        pf_coords, pf_values = get_potential_boundary(hmi_cube[:, :, 2], height, batch_size=batch_size)
-        pf_values = Normalize(-norm_value, norm_value, clip=False)(pf_values) * 2 - 1
-        pf_values = np.array(pf_values, dtype=np.float32)
-
-        pf_err = np.zeros_like(pf_values)
-
-        coords = np.concatenate([pf_coords, mf_coords])
-        values = np.concatenate([pf_values, mf_values])
-        err = np.concatenate([pf_err, mf_err])
-    else:
-        coords = mf_coords
-        values = mf_values
-        err = mf_err
-
-    boundary_ds = BoundaryDataset(coords, values, err, spatial_norm)
-
-    cube_shape = [*n_hmi_cube.shape[:-1], height]
-
-    return boundary_ds, cube_shape

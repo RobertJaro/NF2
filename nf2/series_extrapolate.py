@@ -4,6 +4,7 @@ import json
 import os
 
 import numpy as np
+import torch
 from astropy.nddata import block_reduce
 from sunpy.map import Map
 
@@ -34,8 +35,8 @@ lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
 epochs = args.epochs
 decay_epochs = None
-batch_size = int(args.batch_size)
-n_samples_epoch = int(args.n_samples_epoch)
+n_gpus = torch.cuda.device_count()
+batch_size = int(args.batch_size) * n_gpus if n_gpus >= 1 else int(args.batch_size)
 log_interval = args.log_interval
 validation_interval = args.validation_interval
 potential = args.potential
@@ -78,10 +79,10 @@ for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in zip(hmi_p_files, hmi_t_files, hm
         hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
         error_cube = block_reduce(error_cube, (bin, bin, 1), np.mean)
     # init trainer
-    trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim,
+    trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim,
                          lambda_div=lambda_div, lambda_ff=lambda_ff,
                          meta_path=meta_path, potential_boundary=potential, decay_epochs=decay_epochs,
-                         num_workers=args.num_workers, use_vector_potential=args.use_vector_potential, positional_encoding=args.positional_encoding)
+                         use_vector_potential=args.use_vector_potential, positional_encoding=args.positional_encoding)
 
-    trainer.train(epochs, batch_size, n_samples_epoch, log_interval, validation_interval)
+    trainer.train(epochs, log_interval, validation_interval)
     meta_path = final_model_path
