@@ -11,14 +11,14 @@ from torch.optim.lr_scheduler import ExponentialLR
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from nf2.data.dataset import ImageDataset
-from nf2.data.loader import load_hmi_dataset, RandomSampler
+from nf2.data.dataset import ImageDataset, BoundaryDataset
+from nf2.data.loader import prep_b_data, RandomSampler
 from nf2.train.model import CubeModel, jacobian, VectorPotentialModel
 
 
 class NF2Trainer:
 
-    def __init__(self, base_path, b_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim=256,
+    def __init__(self, base_path, b_cube, error_cube, height, spatial_norm, b_norm, dim=256,
                  positional_encoding=False, meta_path=None, potential_boundary=True, use_vector_potential=False,
                  lambda_div=0.1, lambda_ff=0.1, decay_epochs=None,
                  device=None, work_directory=None):
@@ -27,9 +27,9 @@ class NF2Trainer:
         self.spatial_norm = spatial_norm
         self.height = height
         self.b_norm = b_norm
-        self.batch_size = batch_size
 
         work_directory = base_path if work_directory is None else work_directory
+        self.work_directory = work_directory
 
         os.makedirs(base_path, exist_ok=True)
         os.makedirs(work_directory, exist_ok=True)
@@ -60,10 +60,8 @@ class NF2Trainer:
         logging.info('Using device: %s (gpus %d) %s' % (str(device), n_gpus, str(device_names)))
 
         # load dataset
-        self.dataset = load_hmi_dataset(b_cube, error_cube, height, spatial_norm, b_norm, work_directory, batch_size,
-                                        plot=True, plot_path=base_path, potential_boundary=potential_boundary)
+        self.data = prep_b_data(b_cube, error_cube, height, spatial_norm, b_norm, plot=True, plot_path=base_path, potential_boundary=potential_boundary)
         self.cube_shape = [*b_cube.shape[:-1], height]
-        self.sampler = RandomSampler(self.cube_shape, spatial_norm, batch_size * 2)
 
         # init model
         if use_vector_potential:
@@ -84,16 +82,15 @@ class NF2Trainer:
             lambda_B = state_dict['lambda_B']
             logging.info('Resuming training from epoch %d' % init_epoch)
         else:
-            init_epoch = 0
-            lambda_B = 1000 if decay_epochs else 1
             if meta_path:
-                state_dict = torch.load(meta_path, map_location=device)['model'].state_dict() if meta_path.endswith(
-                    'nf2') \
-                    else torch.load(meta_path, map_location=device)['m']
+                state_dict = torch.load(meta_path, map_location=device)['model'].state_dict() \
+                    if meta_path.endswith('nf2') else torch.load(meta_path, map_location=device)['m']
                 model.load_state_dict(state_dict)
-                lambda_B = 1
                 opt = torch.optim.Adam(parallel_model.parameters(), lr=5e-5)
                 logging.info('Loaded meta state: %s' % meta_path)
+            # init
+            init_epoch = 0
+            lambda_B = 1000 if decay_epochs else 1
             history = {'epoch': [], 'height': [],
                        'b_loss': [], 'divergence_loss': [], 'force_loss': [], 'sigma_angle': []}
 
@@ -109,11 +106,12 @@ class NF2Trainer:
         self.decay_epochs = decay_epochs
         self.lambda_div, self.lambda_ff = lambda_div, lambda_ff
 
-    def train(self, epochs, log_interval=100, validation_interval=100, num_workers=None):
+    def train(self, epochs, batch_size, log_interval=100, validation_interval=100, num_workers=None):
+        num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
         start_time = datetime.now()
 
-        num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
-        data_loader = DataLoader(self.dataset, batch_size=None, num_workers=num_workers, pin_memory=True, shuffle=True)
+        data = self.data
+        sampler = RandomSampler(self.cube_shape, self.spatial_norm, batch_size * 2)
 
         model = self.parallel_model
         opt = self.opt
@@ -124,6 +122,8 @@ class NF2Trainer:
 
         model.train()
         for epoch in range(self.init_epoch, epochs):
+            data_loader = self._init_loader(batch_size, data, num_workers) # shuffle
+
             total_b_diff = []
             total_divergence_loss = []
             total_force_loss = []
@@ -131,7 +131,7 @@ class NF2Trainer:
             for boundary_coords, b_true, b_err in tqdm(data_loader):
                 opt.zero_grad()
                 boundary_coords, b_true, b_err = boundary_coords.to(device), b_true.to(device), b_err.to(device)
-                random_coords = self.sampler.load_sample()
+                random_coords = sampler.load_sample()
 
                 n_boundary_coords = boundary_coords.shape[0]
                 coords = torch.cat([boundary_coords, random_coords], 0)
@@ -166,7 +166,7 @@ class NF2Trainer:
                 self.scheduler.step()
             if log_interval > 0 and (epoch + 1) % log_interval == 0:
                 model.eval()
-                self.plot_sample(epoch)
+                self.plot_sample(epoch, batch_size=batch_size)
                 model.train()
                 logging.info('Lambda B: %f' % (self.lambda_B))
                 logging.info('LR: %f' % (self.scheduler.get_last_lr()[0]))
@@ -174,7 +174,7 @@ class NF2Trainer:
                 model.eval()
                 self.save(epoch)
                 # validate and plot
-                mean_b, total_divergence, mean_force, sigma_angle = self.validate(self.height)
+                mean_b, total_divergence, mean_force, sigma_angle = self.validate(self.height, batch_size)
                 logging.info('Validation [Cube: B: %.03f; Div: %.03f; For: %.03f; Sig: %.03f]' %
                              (mean_b, total_divergence, mean_force, sigma_angle))
                 #
@@ -196,6 +196,26 @@ class NF2Trainer:
                     'spatial_normalization': self.spatial_norm}, self.save_path)
         return self.save_path
 
+    def _init_loader(self, batch_size, data, num_workers):
+        # shuffle data
+        r = np.random.permutation(data.shape[0])
+        data = data[r]
+        # adjust to batch size
+        pad = batch_size - data.shape[0] % batch_size
+        data = np.concatenate([data, data[:pad]])
+        # split data into batches
+        n_batches = data.shape[0] // batch_size
+        batches = np.array(np.split(data, n_batches), dtype=np.float32)
+        # store batches to disk
+        batches_path = os.path.join(self.work_directory, 'batches.npy')
+        np.save(batches_path, batches)
+        # create data loaders
+        dataset = BoundaryDataset(batches_path)
+        # create loader
+        data_loader = DataLoader(dataset, batch_size=None, num_workers=num_workers, pin_memory=True,
+                                 shuffle=True)
+        return data_loader
+
     def save(self, epoch):
         torch.save({'model': self.model,
                     'cube_shape': self.cube_shape,
@@ -208,10 +228,10 @@ class NF2Trainer:
                     'lambda_B': self.lambda_B},
                    self.checkpoint_path)
 
-    def plot_sample(self, epoch, n_samples=10):
+    def plot_sample(self, epoch, n_samples=10, batch_size=4096):
         fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
         heights = np.linspace(0, 1, n_samples) ** 2 * (self.height - 1)  # more samples from lower heights
-        imgs = np.array([self.get_image(h) for h in heights])
+        imgs = np.array([self.get_image(h, batch_size) for h in heights])
         for i in range(3):
             for j in range(10):
                 v_min_max = np.max(np.abs(imgs[j, ..., i]))
@@ -224,9 +244,9 @@ class NF2Trainer:
         fig.savefig(os.path.join(self.base_path, '%05d.jpg' % (epoch + 1)))
         plt.close(fig)
 
-    def get_image(self, z=0):
+    def get_image(self, z=0, batch_size=4096):
         image_loader = DataLoader(ImageDataset([*self.cube_shape, 3], self.spatial_norm, z),
-                                  batch_size=self.batch_size, shuffle=False)
+                                  batch_size=batch_size, shuffle=False)
         image = []
         for coord in image_loader:
             coord.requires_grad = True
@@ -235,8 +255,8 @@ class NF2Trainer:
         image = np.array(image).reshape((*self.cube_shape[:2], 3))
         return image
 
-    def validate(self, z):
-        b, j, div, coords = self.get_cube(z, self.batch_size)
+    def validate(self, z, batch_size):
+        b, j, div, coords = self.get_cube(z, batch_size)
         b = b.unsqueeze(0) * self.b_norm
         j = j.unsqueeze(0) * self.b_norm / self.spatial_norm
         div = div.unsqueeze(0) * self.b_norm / self.spatial_norm

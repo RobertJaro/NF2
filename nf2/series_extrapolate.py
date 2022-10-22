@@ -79,10 +79,10 @@ for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in zip(hmi_p_files, hmi_t_files, hm
         hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
         error_cube = block_reduce(error_cube, (bin, bin, 1), np.mean)
     # init trainer
-    trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim,
+    trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim,
                          lambda_div=lambda_div, lambda_ff=lambda_ff,
                          meta_path=meta_path, potential_boundary=potential, decay_epochs=decay_epochs,
                          use_vector_potential=args.use_vector_potential, positional_encoding=args.positional_encoding)
 
-    trainer.train(epochs, log_interval, validation_interval)
+    trainer.train(epochs, batch_size, log_interval, validation_interval)
     meta_path = final_model_path

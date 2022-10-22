@@ -56,9 +56,9 @@ if bin > 1:
     hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
     error_cube = block_reduce(error_cube, (bin, bin, 1), np.mean)
 # init trainer
-trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, batch_size, dim,
+trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim,
                      positional_encoding=args.positional_encoding,
                      potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
                      decay_epochs=decay_epochs, meta_path=args.meta_path,
                      use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
-trainer.train(epochs, log_interval, validation_interval, num_workers=args.num_workers)
+trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=args.num_workers)

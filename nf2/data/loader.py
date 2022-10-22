@@ -7,24 +7,22 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sunpy.map import Map
 
-from nf2.data.dataset import BoundaryDataset
 from nf2.potential.potential_field import get_potential_boundary
 
 
-def load_hmi_dataset(hmi_cube, error_cube,
-                     height, spatial_norm, b_norm,
-                     work_directory, batch_size,
-                     potential_boundary=True,
-                     plot=False, plot_path=None):
+def prep_b_data(b_cube, error_cube,
+                height, spatial_norm, b_norm,
+                potential_boundary=True,
+                plot=False, plot_path=None):
     # load coordinates
-    mf_coords = np.stack(np.mgrid[:hmi_cube.shape[0], :hmi_cube.shape[1], :1], -1)
+    mf_coords = np.stack(np.mgrid[:b_cube.shape[0], :b_cube.shape[1], :1], -1)
     # flatten data
     mf_coords = mf_coords.reshape((-1, 3))
-    mf_values = hmi_cube.reshape((-1, 3))
+    mf_values = b_cube.reshape((-1, 3))
     mf_err = error_cube.reshape((-1, 3))
     # load potential field
     if potential_boundary:
-        pf_coords, pf_err, pf_values = _load_potential_field_data(hmi_cube, height)
+        pf_coords, pf_err, pf_values = _load_potential_field_data(b_cube, height)
         # concatenate pf data points
         coords = np.concatenate([pf_coords, mf_coords])
         values = np.concatenate([pf_values, mf_values])
@@ -44,28 +42,10 @@ def load_hmi_dataset(hmi_cube, error_cube,
     # stack to numpy array
     data = np.stack([coords, values, err], 1)
 
-    # shuffle data
-    r = np.random.permutation(data.shape[0])
-    data = data[r]
-    # adjust to batch size
-    pad = batch_size - data.shape[0] % batch_size
-    data = np.concatenate([data, data[:pad]])
-
-    # split data into batches
-    n_batches = data.shape[0] // batch_size
-    batches = np.array(np.split(data, n_batches), dtype=np.float32)
-
-    # store batches to disk
-    batches_path = os.path.join(work_directory, 'batches.npy')
-    np.save(batches_path, batches)
-
-    # create data loaders
-    boundary_ds = BoundaryDataset(batches_path)
-
     if plot:
-        _plot_data(error_cube, hmi_cube, plot_path, b_norm)
+        _plot_data(error_cube, b_cube, plot_path, b_norm)
 
-    return boundary_ds
+    return data
 
 
 def load_hmi_data(data_path):
