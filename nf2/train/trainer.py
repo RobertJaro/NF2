@@ -94,7 +94,7 @@ class NF2Trainer:
             history = {'epoch': [], 'height': [],
                        'b_loss': [], 'divergence_loss': [], 'force_loss': [], 'sigma_angle': []}
 
-        scheduler = ExponentialLR(opt, gamma=(5e-5 / 5e-4) ** (1 / 700))
+        scheduler = ExponentialLR(opt, gamma=(5e-5 / 5e-4) ** (1 / decay_epochs))
         self.model = model
         self.parallel_model = parallel_model
         self.device = device
@@ -110,7 +110,6 @@ class NF2Trainer:
         num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
         start_time = datetime.now()
 
-        data = self.data
         sampler = RandomSampler(self.cube_shape, self.spatial_norm, batch_size * 2)
 
         model = self.parallel_model
@@ -122,7 +121,7 @@ class NF2Trainer:
 
         model.train()
         for epoch in range(self.init_epoch, epochs):
-            data_loader = self._init_loader(batch_size, data, num_workers) # shuffle
+            data_loader = self._init_loader(batch_size, self.data, num_workers) # shuffle
 
             total_b_diff = []
             total_divergence_loss = []

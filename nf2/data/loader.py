@@ -32,6 +32,10 @@ def prep_b_data(b_cube, error_cube,
         values = mf_values
         err = mf_err
 
+    coords = coords.astype(np.float32)
+    values = values.astype(np.float32)
+    err = err.astype(np.float32)
+
     # normalize data
     values = Normalize(-b_norm, b_norm, clip=False)(values) * 2 - 1
     err = Normalize(0, b_norm, clip=False)(err)
