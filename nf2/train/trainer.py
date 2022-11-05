@@ -8,7 +8,7 @@ import torch
 from torch import nn
 from torch.cuda import get_device_name
 from torch.optim.lr_scheduler import ExponentialLR
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from tqdm import tqdm
 
 from nf2.data.dataset import ImageDataset, BoundaryDataset
@@ -94,16 +94,15 @@ class NF2Trainer:
             history = {'epoch': [], 'height': [],
                        'b_loss': [], 'divergence_loss': [], 'force_loss': [], 'sigma_angle': []}
 
-        scheduler = ExponentialLR(opt, gamma=(5e-5 / 5e-4) ** (1 / decay_epochs))
         self.model = model
         self.parallel_model = parallel_model
         self.device = device
         self.opt = opt
-        self.scheduler = scheduler
         self.init_epoch = init_epoch
         self.history = history
         self.lambda_B = lambda_B
         self.decay_epochs = decay_epochs
+        self.lambda_B_decay = (1 / 1000) ** (1 / self.decay_epochs) if self.decay_epochs is not None else 1
         self.lambda_div, self.lambda_ff = lambda_div, lambda_ff
 
     def train(self, epochs, batch_size, log_interval=100, validation_interval=100, num_workers=None):
@@ -114,14 +113,17 @@ class NF2Trainer:
 
         model = self.parallel_model
         opt = self.opt
+        scheduler = ExponentialLR(opt, gamma=(5e-5 / 5e-4) ** (1 / epochs))
+
         history = self.history
         device = self.device
         lambda_div, lambda_ff = self.lambda_div, self.lambda_ff
-        lambda_B_decay = (1 / 1000) ** (1 / self.decay_epochs) if self.decay_epochs is not None else 1
+
+        # init loader
+        data_loader = self._init_loader(batch_size, self.data, num_workers)
 
         model.train()
         for epoch in range(self.init_epoch, epochs):
-            data_loader = self._init_loader(batch_size, self.data, num_workers) # shuffle
 
             total_b_diff = []
             total_divergence_loss = []
@@ -160,15 +162,16 @@ class NF2Trainer:
                           np.mean(total_force_loss),
                           datetime.now() - start_time))
             if self.lambda_B > 1:
-                self.lambda_B *= lambda_B_decay
-            if self.scheduler.get_last_lr()[0] > 5e-5:
-                self.scheduler.step()
+                self.lambda_B *= self.lambda_B_decay
+            if scheduler.get_last_lr()[0] > 5e-5:
+                scheduler.step()
             if log_interval > 0 and (epoch + 1) % log_interval == 0:
                 model.eval()
                 self.plot_sample(epoch, batch_size=batch_size)
                 model.train()
                 logging.info('Lambda B: %f' % (self.lambda_B))
-                logging.info('LR: %f' % (self.scheduler.get_last_lr()[0]))
+                logging.info('LR: %f' % (scheduler.get_last_lr()[0]))
+                data_loader = self._init_loader(batch_size, self.data, num_workers)  # shuffle batches
             if validation_interval > 0 and (epoch + 1) % validation_interval == 0:
                 model.eval()
                 self.save(epoch)
@@ -211,8 +214,8 @@ class NF2Trainer:
         # create data loaders
         dataset = BoundaryDataset(batches_path)
         # create loader
-        data_loader = DataLoader(dataset, batch_size=None, num_workers=num_workers, pin_memory=True,
-                                 shuffle=True)
+        c_ds = ConcatDataset([dataset] * 4)
+        data_loader = DataLoader(c_ds, batch_size=None, num_workers=num_workers, pin_memory=True, shuffle=True)
         return data_loader
 
     def save(self, epoch):

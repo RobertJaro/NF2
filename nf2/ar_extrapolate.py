@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 
 import numpy as np
 import torch
@@ -36,10 +37,11 @@ lambda_ff = args.lambda_ff
 epochs = args.epochs
 decay_epochs = args.decay_epochs
 n_gpus = torch.cuda.device_count()
-batch_size = int(args.batch_size) * n_gpus if n_gpus >= 1 else int(args.batch_size)
+batch_size = int(args.batch_size)
 log_interval = args.log_interval
 validation_interval = args.validation_interval
 potential = args.potential
+num_workers = args.num_workers if args.num_workers is not None else os.cpu_count()
 
 base_path = args.base_path
 data_path = args.data_path
@@ -61,4 +63,4 @@ trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_no
                      potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
                      decay_epochs=decay_epochs, meta_path=args.meta_path,
                      use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
-trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=args.num_workers)
+trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=num_workers)
