@@ -25,12 +25,15 @@ with open(args.config) as config:
         args.__dict__[key] = value
 
 # data parameters
-bin = args.bin
+bin = int(args.bin)
 spatial_norm = 320 // bin
 height = 320 // bin
+n_epochs_per_step = bin ** 2
 b_norm = 2500
+
 # model parameters
 dim = args.dim
+
 # training parameters
 lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
@@ -63,4 +66,5 @@ trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_no
                      potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
                      decay_epochs=decay_epochs, meta_path=args.meta_path,
                      use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
-trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=num_workers)
+trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=num_workers,
+              n_epochs_per_step=n_epochs_per_step)

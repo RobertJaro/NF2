@@ -105,7 +105,7 @@ class NF2Trainer:
         self.lambda_B_decay = (1 / 1000) ** (1 / self.decay_epochs) if self.decay_epochs is not None else 1
         self.lambda_div, self.lambda_ff = lambda_div, lambda_ff
 
-    def train(self, epochs, batch_size, log_interval=100, validation_interval=100, num_workers=None):
+    def train(self, epochs, batch_size, log_interval=100, validation_interval=100, num_workers=None, n_epochs_per_step=4):
         num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
         start_time = datetime.now()
 
@@ -120,7 +120,7 @@ class NF2Trainer:
         lambda_div, lambda_ff = self.lambda_div, self.lambda_ff
 
         # init loader
-        data_loader = self._init_loader(batch_size, self.data, num_workers)
+        data_loader = self._init_loader(batch_size, self.data, num_workers, n_epochs_per_step)
 
         model.train()
         for epoch in range(self.init_epoch, epochs):
@@ -171,7 +171,7 @@ class NF2Trainer:
                 model.train()
                 logging.info('Lambda B: %f' % (self.lambda_B))
                 logging.info('LR: %f' % (scheduler.get_last_lr()[0]))
-                data_loader = self._init_loader(batch_size, self.data, num_workers)  # shuffle batches
+                data_loader = self._init_loader(batch_size, self.data, num_workers, n_epochs_per_step)  # shuffle batches
             if validation_interval > 0 and (epoch + 1) % validation_interval == 0:
                 model.eval()
                 self.save(epoch)
@@ -198,7 +198,7 @@ class NF2Trainer:
                     'spatial_normalization': self.spatial_norm}, self.save_path)
         return self.save_path
 
-    def _init_loader(self, batch_size, data, num_workers):
+    def _init_loader(self, batch_size, data, num_workers, n_epochs_per_step):
         # shuffle data
         r = np.random.permutation(data.shape[0])
         data = data[r]
@@ -214,7 +214,7 @@ class NF2Trainer:
         # create data loaders
         dataset = BoundaryDataset(batches_path)
         # create loader
-        c_ds = ConcatDataset([dataset] * 4)
+        c_ds = ConcatDataset([dataset] * n_epochs_per_step)
         data_loader = DataLoader(c_ds, batch_size=None, num_workers=num_workers, pin_memory=True, shuffle=True)
         return data_loader
 
