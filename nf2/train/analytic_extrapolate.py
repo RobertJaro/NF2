@@ -52,7 +52,7 @@ error_cube = np.zeros_like(hmi_cube)
 # init trainer
 trainer = NF2Trainer(base_path, hmi_cube[:, :, 0], error_cube[:, :, 0], height, spatial_norm, b_norm, dim,
                      positional_encoding=args.positional_encoding,
-                     potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
+                     use_potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
                      decay_epochs=decay_epochs, num_workers=args.num_workers, meta_path=args.meta_path,
                      use_vector_potential=args.use_vector_potential)
 

@@ -16,7 +16,6 @@ parser.add_argument('--num_workers', type=int, required=False, default=4)
 parser.add_argument('--meta_path', type=str, required=False, default=None)
 parser.add_argument('--positional_encoding', action='store_true')
 parser.add_argument('--use_vector_potential', action='store_true')
-parser.add_argument('--n_samples_epoch', type=int, required=False, default=None)
 args = parser.parse_args()
 
 with open(args.config) as config:
@@ -28,7 +27,6 @@ with open(args.config) as config:
 bin = int(args.bin)
 spatial_norm = 320 // bin
 height = 320 // bin
-n_epochs_per_step = bin ** 2
 b_norm = 2500
 
 # model parameters
@@ -37,8 +35,6 @@ dim = args.dim
 # training parameters
 lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
-epochs = args.epochs
-decay_epochs = args.decay_epochs
 n_gpus = torch.cuda.device_count()
 batch_size = int(args.batch_size)
 log_interval = args.log_interval
@@ -49,7 +45,7 @@ num_workers = args.num_workers if args.num_workers is not None else os.cpu_count
 base_path = args.base_path
 data_path = args.data_path
 
-hmi_cube, error_cube = load_hmi_data(data_path)
+hmi_cube, error_cube, meta_info = load_hmi_data(data_path)
 
 if 'slice' in args:
     slice = args.slice
@@ -61,10 +57,10 @@ if bin > 1:
     hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
     error_cube = block_reduce(error_cube, (bin, bin, 1), np.mean)
 # init trainer
-trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm, dim,
+trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm,
+                     meta_info=meta_info, dim=dim,
                      positional_encoding=args.positional_encoding,
-                     potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
-                     decay_epochs=decay_epochs, meta_path=args.meta_path,
+                     use_potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
+                     decay_iterations=args.decay_iterations, meta_path=args.meta_path,
                      use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
-trainer.train(epochs, batch_size, log_interval, validation_interval, num_workers=num_workers,
-              n_epochs_per_step=n_epochs_per_step)
+trainer.train(args.iterations, batch_size, log_interval, validation_interval, num_workers=num_workers)

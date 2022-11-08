@@ -18,8 +18,8 @@ def load_cube(save_path, device=None, z=None, strides=1, **kwargs):
     cube_shape = state['cube_shape']
     z = z if z is not None else cube_shape[2]
     coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :z:strides], -1)
-    return load_coords(model, cube_shape, state['spatial_normalization'],
-                       state['normalization'], coords, device, **kwargs)
+    return load_coords(model, cube_shape, state['spatial_norm'],
+                       state['b_norm'], coords, device, **kwargs)
 
 def load_shape(save_path, device=None):
     if device is None:
@@ -36,8 +36,8 @@ def load_slice(save_path, z=0, device=None, **kwargs):
     cube_shape = state['cube_shape']
     z = z if z is not None else cube_shape[2]
     coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], z:z + 1], -1)
-    return load_coords(model, cube_shape, state['spatial_normalization'],
-                       state['normalization'], coords, device, **kwargs)
+    return load_coords(model, cube_shape, state['spatial_norm'],
+                       state['b_norm'], coords, device, **kwargs)
 
 
 def load_coords_from_state(save_path, coords, device=None, **kwargs):
@@ -46,7 +46,7 @@ def load_coords_from_state(save_path, coords, device=None, **kwargs):
     state = torch.load(save_path, map_location=device)
     model = nn.DataParallel(state['model'])
     cube_shape = state['cube_shape']
-    return load_coords(model, cube_shape, state['spatial_normalization'], state['normalization'], coords, device,
+    return load_coords(model, cube_shape, state['spatial_norm'], state['b_norm'], coords, device,
                        **kwargs)
 
 
@@ -83,16 +83,28 @@ def load_coords(model, cube_shape, spatial_norm, b_norm, coords, device, batch_s
 
 
 
-def save_fits(vec, path, prefix):
-    hdu = fits.PrimaryHDU(vec[..., 0])
+def save_fits(vec, path, prefix, meta_info={}):
+    hdu = fits.PrimaryHDU(vec[..., 0].T)
+    for i, v in meta_info.items():
+        hdu.header[i] = v
     hdul = fits.HDUList([hdu])
-    hdul.writeto(os.path.join(path, '%s_Bx.fits' % prefix))
-    hdu = fits.PrimaryHDU(vec[..., 1])
+    x_path = os.path.join(path, '%s_Bx.fits' % prefix)
+    hdul.writeto(x_path)
+
+    hdu = fits.PrimaryHDU(vec[..., 1].T)
+    for i, v in meta_info.items():
+        hdu.header[i] = v
     hdul = fits.HDUList([hdu])
-    hdul.writeto(os.path.join(path, '%s_By.fits' % prefix))
-    hdu = fits.PrimaryHDU(vec[..., 2])
+    y_path = os.path.join(path, '%s_By.fits' % prefix)
+    hdul.writeto(y_path)
+
+    hdu = fits.PrimaryHDU(vec[..., 2].T)
+    for i, v in meta_info.items():
+        hdu.header[i] = v
     hdul = fits.HDUList([hdu])
-    hdul.writeto(os.path.join(path, '%s_Bz.fits' % prefix))
+    z_path = os.path.join(path, '%s_Bz.fits' % prefix)
+    hdul.writeto(z_path)
+    return x_path, y_path, z_path
 
 
 def save_slice(b, file_path, v_min_max=None):

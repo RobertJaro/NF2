@@ -11,7 +11,7 @@ class Sine(nn.Module):
         return torch.sin(self.w0 * x)
 
 
-class CubeModel(nn.Module):
+class BModel(nn.Module):
 
     def __init__(self, in_coords, out_values, dim, pos_encoding=False):
         super().__init__()

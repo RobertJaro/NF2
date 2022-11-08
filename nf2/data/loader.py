@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import torch
+from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sunpy.map import Map
@@ -12,7 +13,7 @@ from nf2.potential.potential_field import get_potential_boundary
 
 def prep_b_data(b_cube, error_cube,
                 height, spatial_norm, b_norm,
-                potential_boundary=True,
+                potential_boundary=True, potential_strides=4,
                 plot=False, plot_path=None):
     # load coordinates
     mf_coords = np.stack(np.mgrid[:b_cube.shape[0], :b_cube.shape[1], :1], -1)
@@ -22,7 +23,7 @@ def prep_b_data(b_cube, error_cube,
     mf_err = error_cube.reshape((-1, 3))
     # load potential field
     if potential_boundary:
-        pf_coords, pf_err, pf_values = _load_potential_field_data(b_cube, height)
+        pf_coords, pf_err, pf_values = _load_potential_field_data(b_cube, height, potential_strides)
         # concatenate pf data points
         coords = np.concatenate([pf_coords, mf_coords])
         values = np.concatenate([pf_values, mf_values])
@@ -65,13 +66,17 @@ def load_hmi_data(data_path):
     # laod maps
     hmi_cube = np.stack([Map(hmi_p).data, -Map(hmi_t).data, Map(hmi_r).data]).transpose()
     error_cube = np.stack([Map(err_p).data, Map(err_t).data, Map(err_r).data]).transpose()
-    return hmi_cube, error_cube
+    return hmi_cube, error_cube, Map(hmi_r).meta
 
 
-def _load_potential_field_data(hmi_cube, height):
+def _load_potential_field_data(hmi_cube, height, reduce):
+    if reduce > 1:
+        hmi_cube = block_reduce(hmi_cube, (reduce, reduce, 1), func=np.mean)
+        height = height // reduce
     pf_batch_size = int(1024 * 512 ** 2 / np.prod(hmi_cube.shape[:2]))  # adjust batch to AR size
     pf_coords, pf_values = get_potential_boundary(hmi_cube[:, :, 2], height, batch_size=pf_batch_size)
     pf_values = np.array(pf_values, dtype=np.float32)
+    pf_coords = np.array(pf_coords, dtype=np.float32) * reduce # expand to original coordinate spacing
     pf_err = np.zeros_like(pf_values)
     return pf_coords, pf_err, pf_values
 
@@ -91,7 +96,7 @@ def _plot_data(error_cube, n_hmi_cube, plot_path, b_norm):
     plt.close()
 
 
-class RandomSampler():
+class RandomCoordinateSampler():
 
     def __init__(self, cube_shape, spatial_norm, batch_size, cuda=True):
         self.cube_shape = cube_shape
