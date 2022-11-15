@@ -9,7 +9,7 @@ def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s'):
 
 def donwload_ds(ds, dir, client):
     os.makedirs(dir, exist_ok=True)
-    r = client.export(ds)
+    r = client.export(ds, protocol='fits')
     r.wait()
     download_result = r.download(dir)
     return download_result
