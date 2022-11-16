@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='nf2',
-    version='v0.1',
+    version='v0.2',
     packages=setuptools.find_packages(),
     url='https://github.com/RobertJaro/NF2',
     license='GNU GENERAL PUBLIC LICENSE',

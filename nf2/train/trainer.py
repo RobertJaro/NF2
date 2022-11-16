@@ -145,7 +145,7 @@ class NF2Trainer:
         :return: path of the final save state.
         """
         start_time = datetime.now()
-        num_workers = os.cpu_count() // 2 if num_workers is None else num_workers
+        num_workers = os.cpu_count() if num_workers is None else num_workers
 
         model = self.parallel_model
         opt = self.opt
