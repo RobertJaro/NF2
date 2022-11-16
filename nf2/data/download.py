@@ -1,19 +1,18 @@
 import os
-import shutil
 
-def download_HARP(harpnum, time, dir, client):
-    ds = 'hmi.sharp_cea_720s[%d][%s]{Br, Bp, Bt, Br_err, Bp_err, Bt_err}' % (harpnum,
-                                                                             time.isoformat('_', timespec='seconds'))
+
+def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s'):
+    ds = 'hmi.%s[%d][%s]{Br, Bp, Bt, Br_err, Bp_err, Bt_err}' % (
+    series, harpnum, time.isoformat('_', timespec='seconds'))
     donwload_ds(ds, dir, client)
+
 
 def donwload_ds(ds, dir, client):
     os.makedirs(dir, exist_ok=True)
-    r = client.export(ds, method='url-tar', protocol='fits')
+    r = client.export(ds, protocol='fits')
     r.wait()
     download_result = r.download(dir)
-    for f in download_result.download:
-        shutil.unpack_archive(f, dir)
-        os.remove(f)
+    return download_result
 
 
 def find_HARP(start_time, noaa_nums, client):

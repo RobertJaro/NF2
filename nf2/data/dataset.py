@@ -4,22 +4,22 @@ from torch.utils.data import Dataset
 
 class BoundaryDataset(Dataset):
 
-    def __init__(self, coords, field, error, norm):
-        self.norm = norm
-        self.error = error
-        self.coordinates = coords
-        self.field = field
+    def __init__(self, batches_path):
+        """Data set for lazy loading a pre-batched numpy data array.
+
+        :param batches_path: path to the numpy array.
+        """
+        self.batches_path = batches_path
 
     def __len__(self):
-        return self.coordinates.shape[0]
+        return np.load(self.batches_path, mmap_mode='r').shape[0]
 
     def __getitem__(self, idx):
-        coord = self.coordinates[idx]
-        field = self.field[idx]
-        err = self.error[idx]
-        scaled_coord = [c / self.norm for c in coord]
-        return np.array([scaled_coord[0], scaled_coord[1], scaled_coord[2]], np.float32), field, err  # coord = (x, y, z)
-
+        # lazy load data
+        d = np.load(self.batches_path, mmap_mode='r')[idx]
+        d = np.copy(d)
+        coord, field, err = d[:, 0],  d[:, 1], d[:, 2]
+        return coord, field, err
 
 class ImageDataset(Dataset):
 
