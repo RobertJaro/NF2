@@ -52,12 +52,13 @@ Example for SHARP 377 (config_377.json):
   "lambda_div": 1e-1,
   "lambda_ff": 1e-1,
   "potential": true,
-  "epochs": 800,
-  "decay_epochs": 500,
+  "use_vector_potential":  false,
+  "iterations": 100000,
+  "decay_iterations": 50000,
   "batch_size": 10000,
-  "log_interval": 100,
-  "validation_interval": 100,
-  "num_workers": 16
+  "log_interval": 10000,
+  "validation_interval": 10000,
+  "num_workers": null
 }
 ```
 
@@ -82,12 +83,13 @@ Example for the time series of SHARP 377 (config_series_377.json):
   "lambda_div": 1e-1,
   "lambda_ff": 1e-1,
   "potential": true,
-  "epochs": 2,
-  "batch_size": 1e4,
-  "n_samples_epoch": 1e7,
-  "log_interval": 1,
-  "validation_interval": 100,
-  "num_workers": 16
+  "use_vector_potential":  false,
+  "iterations": 2000,
+  "batch_size": 10000,
+  "log_interval": 2000,
+  "validation_interval": -1,
+  "work_directory": null,
+  "num_workers": null
 }
 ```
 
@@ -107,7 +109,7 @@ https://www.paraview.org/download/
 NF2 models can be converted to VTK files that can be used by Paraview.
 
 ``` 
-python -m nf2.evaluation.vtk <<path to your nf2 file>> <<path to the output vtk file>>
+python -m nf2.evaluation.convert_vtk_file <<path to your nf2 file>> <<path to the output vtk file>>
 ```
 
 ## Paper
