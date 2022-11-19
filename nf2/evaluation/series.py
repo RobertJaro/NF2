@@ -15,12 +15,13 @@ from nf2.evaluation.unpack import load_cube
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
 parser.add_argument('nf2_path', type=str, help='path to the directory of the NF2 files')
+parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
 parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
 
 args = parser.parse_args()
 
 series_base_path = args.nf2_path
-evaluation_path = os.path.join(series_base_path, 'evaluation')
+evaluation_path = os.path.join(series_base_path, 'evaluation') if args.result_path is None else args.result_path
 os.makedirs(evaluation_path, exist_ok=True)
 
 nf2_paths = sorted(glob.glob(os.path.join(series_base_path, '**', 'extrapolation_result.nf2')))

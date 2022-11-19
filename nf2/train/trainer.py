@@ -159,7 +159,7 @@ class NF2Trainer:
         iterations = total_iterations - self.start_iteration
 
         # init loader
-        data_loader = self._init_loader(batch_size, self.data, num_workers, iterations)
+        data_loader, batches_path = self._init_loader(batch_size, self.data, num_workers, iterations)
 
         total_b_diff = []
         total_divergence_loss = []
@@ -256,6 +256,9 @@ class NF2Trainer:
                     'b_norm': self.b_norm,
                     'spatial_norm': self.spatial_norm,
                     'meta_info': self.meta_info}, self.save_path)
+        # cleanup
+        os.remove(batches_path)
+
         return self.save_path
 
     def _init_loader(self, batch_size, data, num_workers, iterations):
@@ -276,7 +279,7 @@ class NF2Trainer:
         # create loader
         data_loader = DataLoader(dataset, batch_size=None, num_workers=num_workers, pin_memory=True,
                                  sampler=RandomSampler(dataset, replacement=True, num_samples=iterations))
-        return data_loader
+        return data_loader, batches_path
 
     def save(self, iteration):
         torch.save({'model': self.model,
