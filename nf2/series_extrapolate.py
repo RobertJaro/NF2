@@ -1,7 +1,9 @@
 import argparse
 import glob
 import json
+import logging
 import os
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -56,12 +58,25 @@ err_p_files = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))  # x
 err_t_files = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))  # y
 err_r_files = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))  # z
 
+# init logging
+os.makedirs(series_base_path, exist_ok=True)
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+for hdlr in log.handlers[:]:  # remove all old handlers
+    log.removeHandler(hdlr)
+log.addHandler(logging.FileHandler("{0}/{1}.log".format(series_base_path, "info_log")))  # set the new file handler
+log.addHandler(logging.StreamHandler())  # set the new console handler
+
 # create series
+start_time = datetime.now()
 for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in tqdm(zip(hmi_p_files, hmi_t_files, hmi_r_files,
                                                     err_p_files, err_t_files, err_r_files), desc='Series', total=len(hmi_p_files)):
     file_id = os.path.basename(hmi_p).split('.')[3]
     base_path = os.path.join(series_base_path, '%s_dim%d_bin%d_pf%s_ld%s_lf%s' % (
         file_id, dim, bin, str(potential), lambda_div, lambda_ff))
+
+    # log
+    log.info(f'START: {file_id}')
 
     # check if finished
     final_model_path = os.path.join(base_path, 'final.pt')
@@ -90,3 +105,5 @@ for hmi_p, hmi_t, hmi_r, err_p, err_t, err_r in tqdm(zip(hmi_p_files, hmi_t_file
 
     trainer.train(iterations, batch_size, log_interval, validation_interval)
     meta_path = final_model_path
+
+log.info(f'TOTAL RUNTIME: {datetime.now() - start_time}')
