@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset
 
 
@@ -44,25 +45,15 @@ class ImageDataset(Dataset):
 
 class CubeDataset(Dataset):
 
-    def __init__(self, cube_shape, norm, block_shape=(32, 32, 32), coords=[], strides=1):
-        self.cube_shape = cube_shape
-        self.block_shape = block_shape
-        self.coords = coords
-        self.strides = strides
-        self.norm = norm
+    def __init__(self, cube_shape, spatial_norm, strides=1, batch_size=1024):
+        coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)
+        coords = torch.tensor(coords / spatial_norm, dtype=torch.float32)
+        coords = coords.view((-1, 3))
+        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
         return len(self.coords)
 
     def __getitem__(self, idx):
         coord = self.coords[idx]
-        return self.getCube(coord)
-
-    def getCube(self, coord):
-        coord_cube = np.stack(np.mgrid[coord[0]:coord[0] + self.block_shape[0]:self.strides,
-                              coord[1]:coord[1] + self.block_shape[1]:self.strides,
-                              coord[2]:coord[2] + self.block_shape[2]:self.strides, ], -1)
-        coord_cube = np.stack([coord_cube[..., 0] / self.norm,
-                               coord_cube[..., 1] / self.norm,
-                               coord_cube[..., 2] / self.norm, ], -1)
-        return coord_cube.astype(np.float32)
+        return coord
