@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 
 
 class BoundaryDataset(Dataset):
@@ -57,3 +57,23 @@ class CubeDataset(Dataset):
     def __getitem__(self, idx):
         coord = self.coords[idx]
         return coord
+
+
+class RandomCoordinateSampler(Dataset):
+
+    def __init__(self, cube_shape, spatial_norm, batch_size):
+        super().__init__()
+        self.cube_shape = cube_shape
+        self.spatial_norm = spatial_norm
+        self.batch_size = batch_size
+        self.float_tensor = torch.FloatTensor
+
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, item):
+        random_coords = self.float_tensor(self.batch_size, 3).uniform_()
+        random_coords[:, 0] *= self.cube_shape[0] / self.spatial_norm
+        random_coords[:, 1] *= self.cube_shape[1] / self.spatial_norm
+        random_coords[:, 2] *= self.cube_shape[2] / self.spatial_norm
+        return random_coords

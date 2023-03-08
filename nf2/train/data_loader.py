@@ -5,13 +5,14 @@ from astropy.nddata import block_reduce
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, RandomSampler
 
-from nf2.data.dataset import BoundaryDataset, CubeDataset
+from nf2.data.dataset import BoundaryDataset, CubeDataset, RandomCoordinateSampler
 from nf2.data.loader import load_hmi_data, prep_b_data, load_spherical_hmi_data
 
 
 class SHARPDataModule(LightningDataModule):
 
-    def __init__(self, data_path, height, spatial_norm, b_norm, work_directory, batch_size, iterations, num_workers,
+    def __init__(self, data_path, height, spatial_norm, b_norm, work_directory, batch_size, random_batch_size,
+                 iterations, num_workers,
                  use_potential_boundary=True, potential_strides=4, slice=None, bin=1):
         """
         :param b_cube: magnetic field data (x, y, (Bp, -Bt, Br)).
@@ -70,6 +71,7 @@ class SHARPDataModule(LightningDataModule):
         np.save(batches_path, batches)
         # create data loaders
         self.dataset = BoundaryDataset(batches_path)
+        self.random_dataset = RandomCoordinateSampler(cube_shape, spatial_norm, random_batch_size)
         self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=batch_size)
         self.batches_path = batches_path
 
@@ -79,7 +81,9 @@ class SHARPDataModule(LightningDataModule):
     def train_dataloader(self):
         data_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                  sampler=RandomSampler(self.dataset, replacement=True, num_samples=self.iterations))
-        return data_loader
+        random_loader = DataLoader(self.random_dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+                                   sampler=RandomSampler(self.dataset, replacement=True, num_samples=self.iterations))
+        return {'boundary': data_loader, 'random': random_loader}
 
     def val_dataloader(self):
         cube_loader = DataLoader(self.cube_dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True, shuffle=False)

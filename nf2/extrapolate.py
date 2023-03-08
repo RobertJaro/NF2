@@ -8,7 +8,6 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.data.loader import RandomCoordinateSampler
 from nf2.module import NF2Module, save
 from nf2.train.data_loader import SHARPDataModule
 
@@ -40,7 +39,6 @@ lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
 n_gpus = torch.cuda.device_count()
 batch_size = int(args.batch_size)
-log_interval = args.log_interval
 validation_interval = args.validation_interval
 potential = args.potential
 num_workers = args.num_workers if args.num_workers is not None else os.cpu_count()
@@ -72,21 +70,21 @@ slice = args.slice if 'slice' in args else None
 # INIT TRAINING
 data_module = SHARPDataModule(data_path,
                               height, spatial_norm, b_norm,
-                              work_directory, batch_size, iterations, num_workers,
+                              work_directory, batch_size, batch_size * 2, iterations, num_workers,
                               potential,
                               slice=slice, bin=bin)
-sampler = RandomCoordinateSampler(data_module.cube_shape, spatial_norm, batch_size * 2, cuda=n_gpus >= 1)
 
-nf2 = NF2Module(sampler, data_module.cube_shape, dim, positional_encoding, use_vector_potential, lambda_div, lambda_ff, decay_iterations,
+nf2 = NF2Module(data_module.cube_shape, dim, positional_encoding, use_vector_potential, lambda_div, lambda_ff,
+                decay_iterations,
                 args.meta_path)
 
 save_callback = LambdaCallback(on_validation_end=lambda *args: save(save_path, nf2.model, data_module))
-checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss', every_n_train_steps=log_interval, save_last=True)
+checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss',
+                                      every_n_train_steps=validation_interval, save_last=True)
 logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
 logger.experiment.config.update({'dim': dim, 'lambda_div': lambda_div, 'lambda_ff': lambda_ff,
                                  'decay_iterations': decay_iterations, 'use_potential': potential,
                                  'use_vector_potential': use_vector_potential})
-
 
 resume_ckpt = os.path.join(base_path, 'last.ckpt')
 resume_ckpt = resume_ckpt if os.path.exists(resume_ckpt) else None
@@ -97,8 +95,8 @@ trainer = Trainer(max_epochs=1,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                  num_sanity_val_steps=-1,  # validate all points to check the first image
-                  val_check_interval=log_interval,
+                  num_sanity_val_steps=0,  # validate all points to check the first image
+                  val_check_interval=validation_interval,
                   gradient_clip_val=0.1, resume_from_checkpoint=resume_ckpt,
                   callbacks=[checkpoint_callback, save_callback])
 

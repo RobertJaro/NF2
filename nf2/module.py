@@ -12,7 +12,7 @@ from nf2.train.model import BModel, jacobian, VectorPotentialModel
 
 class NF2Module(LightningModule):
 
-    def __init__(self, sampler, cube_shape, dim=256, positional_encoding=False, use_vector_potential=False,
+    def __init__(self, cube_shape, dim=256, positional_encoding=False, use_vector_potential=False,
                  lambda_div=0.1, lambda_ff=0.1, decay_iterations=None, meta_path=None, ):
         """Magnetic field extrapolations trainer
 
@@ -32,7 +32,6 @@ class NF2Module(LightningModule):
         else:
             model = BModel(3, 3, dim, pos_encoding=positional_encoding)
         self.model = model
-        self.sampler = sampler
         self.cube_shape = cube_shape
 
         # load meta state
@@ -56,8 +55,8 @@ class NF2Module(LightningModule):
         return [self.optimizer], [self.scheduler]
 
     def training_step(self, batch, batch_nb):
-        boundary_coords, b_true, b_err = batch
-        random_coords = self.sampler.load_sample()
+        boundary_coords, b_true, b_err = batch['boundary']
+        random_coords = batch['random']
 
         # concatenate boundary and random points
         n_boundary_coords = boundary_coords.shape[0]
