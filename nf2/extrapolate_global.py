@@ -1,13 +1,16 @@
 import argparse
 import json
+import logging
 import os
 
-import numpy as np
 import torch
-from astropy.nddata import block_reduce
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
+from pytorch_lightning.loggers import WandbLogger
 
-from nf2.data.loader import load_hmi_data, load_spherical_hmi_data
-from nf2.train.trainer import NF2Trainer
+from nf2.data.loader import RandomCoordinateSampler, RandomSphericalCoordinateSampler
+from nf2.module import NF2Module, save
+from nf2.train.data_loader import SynopticDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -41,24 +44,63 @@ log_interval = args.log_interval
 validation_interval = args.validation_interval
 potential = args.potential
 num_workers = args.num_workers if args.num_workers is not None else os.cpu_count()
+decay_iterations = args.decay_iterations
+use_vector_potential = args.use_vector_potential
+positional_encoding = args.positional_encoding
+iterations = args.iterations
 
 base_path = args.base_path
 data_path = args.data_path
+work_directory = args.work_directory
+work_directory = base_path if work_directory is None else work_directory
 
-coords, hmi_cube, meta_info = load_spherical_hmi_data(data_path)
+os.makedirs(base_path, exist_ok=True)
+os.makedirs(work_directory, exist_ok=True)
 
-# bin data
-if bin > 1:
-    hmi_cube = block_reduce(hmi_cube, (bin, bin, 1), np.mean)
-    coords = block_reduce(coords, (bin, bin, 1), np.mean)
+# init logging
+log = logging.getLogger()
+log.setLevel(logging.INFO)
+for hdlr in log.handlers[:]:  # remove all old handlers
+    log.removeHandler(hdlr)
+log.addHandler(logging.FileHandler("{0}/{1}.log".format(base_path, "info_log")))  # set the new file handler
+log.addHandler(logging.StreamHandler())  # set the new console handler
 
-error_cube = np.zeros_like(hmi_cube)
+save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
-# init trainer
-trainer = NF2Trainer(base_path, hmi_cube, error_cube, height, spatial_norm, b_norm,
-                     meta_info=meta_info, dim=dim,
-                     positional_encoding=args.positional_encoding,
-                     use_potential_boundary=potential, lambda_div=lambda_div, lambda_ff=lambda_ff,
-                     decay_iterations=args.decay_iterations, meta_path=args.meta_path,
-                     use_vector_potential=args.use_vector_potential, work_directory=args.work_directory)
-trainer.train(args.iterations, batch_size, log_interval, validation_interval, num_workers=num_workers)
+slice = args.slice if 'slice' in args else None
+
+# INIT TRAINING
+data_module = SynopticDataModule(data_path, b_norm, height, work_directory, batch_size, iterations, num_workers, bin=bin)
+sampler = RandomSphericalCoordinateSampler(data_module.cube_shape, spatial_norm, batch_size * 2, cuda=n_gpus >= 1)
+
+nf2 = NF2Module(sampler, data_module.cube_shape, dim, positional_encoding, use_vector_potential, lambda_div, lambda_ff,
+                decay_iterations,
+                args.meta_path)
+
+save_callback = LambdaCallback(on_validation_end=lambda *args: save(save_path, nf2.model, data_module))
+checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss', every_n_train_steps=log_interval,
+                                      save_last=True)
+logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
+logger.experiment.config.update({'dim': dim, 'lambda_div': lambda_div, 'lambda_ff': lambda_ff,
+                                 'decay_iterations': decay_iterations, 'use_potential': potential,
+                                 'use_vector_potential': use_vector_potential})
+
+resume_ckpt = os.path.join(base_path, 'last.ckpt')
+resume_ckpt = resume_ckpt if os.path.exists(resume_ckpt) else None
+
+logging.info('Initialize trainer')
+trainer = Trainer(max_epochs=1,
+                  logger=logger,
+                  devices=n_gpus,
+                  accelerator='gpu' if n_gpus >= 1 else None,
+                  strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
+                  num_sanity_val_steps=-1,  # validate all points to check the first image
+                  val_check_interval=log_interval,
+                  gradient_clip_val=0.1, resume_from_checkpoint=resume_ckpt,
+                  callbacks=[checkpoint_callback, save_callback])
+
+logging.info('Start model training')
+trainer.fit(nf2, data_module)
+save(save_path, nf2.model, data_module)
+# clean up
+data_module.clear()

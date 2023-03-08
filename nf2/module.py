@@ -77,11 +77,9 @@ class NF2Module(LightningModule):
         divergence_loss, force_loss = divergence_loss.mean(), force_loss.mean()
         loss = b_diff * self.lambda_B + divergence_loss * self.lambda_div + force_loss * self.lambda_ff
 
-        # log results to WANDB
-        self.log("train/loss", loss)
-        self.log("Training Loss",
-                 {'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss, 'total': loss})
+        return {'loss': loss, 'b_diff': b_diff, 'div': divergence_loss, 'ff': force_loss}
 
+    def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
         # update training parameters and log
         if self.lambda_B > 1:
             self.lambda_B *= self.lambda_B_decay
@@ -90,7 +88,10 @@ class NF2Module(LightningModule):
         self.log('Learning Rate', self.scheduler.get_last_lr()[0])
         self.log('Lambda B', self.lambda_B)
 
-        return {'loss': loss, 'b_diff': b_diff, 'div': divergence_loss, 'ff': force_loss}
+        # log results to WANDB
+        self.log("train/loss", outputs['loss'])
+        self.log("Training Loss",
+                 {'b_diff': outputs['b_diff'].mean(), 'divergence': outputs['div'].mean(), 'force-free': outputs['ff'].mean(), 'total': outputs['loss'].mean()})
 
     @torch.enable_grad()
     def validation_step(self, batch, batch_nb, dataloader_idx):
