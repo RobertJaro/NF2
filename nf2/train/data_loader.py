@@ -5,7 +5,7 @@ from astropy.nddata import block_reduce
 from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, RandomSampler
 
-from nf2.data.dataset import BoundaryDataset, CubeDataset, RandomCoordinateSampler
+from nf2.data.dataset import BoundaryDataset, CubeDataset, RandomCoordinateDataset
 from nf2.data.loader import load_hmi_data, prep_b_data, load_spherical_hmi_data
 
 
@@ -71,7 +71,7 @@ class SHARPDataModule(LightningDataModule):
         np.save(batches_path, batches)
         # create data loaders
         self.dataset = BoundaryDataset(batches_path)
-        self.random_dataset = RandomCoordinateSampler(cube_shape, spatial_norm, random_batch_size)
+        self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size)
         self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=batch_size)
         self.batches_path = batches_path
 

@@ -59,7 +59,7 @@ class CubeDataset(Dataset):
         return coord
 
 
-class RandomCoordinateSampler(Dataset):
+class RandomCoordinateDataset(Dataset):
 
     def __init__(self, cube_shape, spatial_norm, batch_size):
         super().__init__()
