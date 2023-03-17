@@ -74,7 +74,11 @@ data_module = SHARPDataModule(data_path,
                               potential,
                               slice=slice, bin=bin)
 
-nf2 = NF2Module(data_module.cube_shape, dim, positional_encoding, use_vector_potential, lambda_div, lambda_ff,
+validation_settings = {'cube_shape': data_module.cube_shape,
+                 'gauss_per_dB': b_norm,
+                 'Mm_per_ds': 320 * 360e-3}
+
+nf2 = NF2Module(validation_settings, dim, positional_encoding, use_vector_potential, lambda_div, lambda_ff,
                 decay_iterations,
                 args.meta_path)
 
@@ -90,16 +94,15 @@ resume_ckpt = os.path.join(base_path, 'last.ckpt')
 resume_ckpt = resume_ckpt if os.path.exists(resume_ckpt) else None
 
 logging.info('Initialize trainer')
-trainer = Trainer(max_epochs=1,
+trainer = Trainer(max_epochs=2,
                   logger=logger,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                  num_sanity_val_steps=0,  # validate all points to check the first image
+                  num_sanity_val_steps=0,
                   val_check_interval=validation_interval,
                   gradient_clip_val=0.1, resume_from_checkpoint=resume_ckpt,
                   callbacks=[checkpoint_callback, save_callback])
-
 
 logging.info('Start model training')
 trainer.fit(nf2, data_module)

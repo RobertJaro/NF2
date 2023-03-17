@@ -12,7 +12,7 @@ from nf2.train.model import BModel, jacobian, VectorPotentialModel
 
 class NF2Module(LightningModule):
 
-    def __init__(self, cube_shape, dim=256, positional_encoding=False, use_vector_potential=False,
+    def __init__(self, validation_settings, dim=256, positional_encoding=False, use_vector_potential=False,
                  lambda_div=0.1, lambda_ff=0.1, decay_iterations=None, meta_path=None, ):
         """Magnetic field extrapolations trainer
 
@@ -32,7 +32,7 @@ class NF2Module(LightningModule):
         else:
             model = BModel(3, 3, dim, pos_encoding=positional_encoding)
         self.model = model
-        self.cube_shape = cube_shape
+        self.validation_settings = validation_settings
 
         # load meta state
         if meta_path:
@@ -41,7 +41,7 @@ class NF2Module(LightningModule):
             model.load_state_dict(state_dict)
             logging.info('Loaded meta state: %s' % meta_path)
         # init
-        lambda_B = 1000 if decay_iterations else 1
+        lambda_B = 1000. if decay_iterations else 1.
 
         self.lambda_B = lambda_B
         self.lambda_B_decay = (1 / 1000) ** (1 / decay_iterations) if decay_iterations is not None else 1
@@ -127,17 +127,20 @@ class NF2Module(LightningModule):
             b = self.model(boundary_coords)
 
             # compute boundary loss
-            b_diff = torch.clip(torch.abs(b - b_true) - b_err, 0)
-            b_diff = torch.mean(b_diff.pow(2).sum(-1))
-            return {'b_diff': b_diff.detach()}
+            b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
+            b_diff_error = torch.mean(b_diff_error.pow(2).sum(-1).pow(0.5))
+            b_diff = torch.abs(b - b_true)
+            b_diff = torch.mean(b_diff.pow(2).sum(-1).pow(0.5))
+            return {'b_diff_error': b_diff_error.detach(), 'b_diff': b_diff.detach()}
         else:
             raise NotImplementedError('Validation data loader not supported!')
 
     def validation_epoch_end(self, outputs_list):
         outputs = outputs_list[0]  # unpack data loader 0
-        b = torch.cat([o['b'] for o in outputs])
-        j = torch.cat([o['j'] for o in outputs])
-        div = torch.cat([o['div'] for o in outputs])
+        # stack magnetic field and unnormalize
+        b = torch.cat([o['b'] for o in outputs]) * self.validation_settings['gauss_per_dB']
+        j = torch.cat([o['j'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / self.validation_settings['Mm_per_ds']
+        div = torch.cat([o['div'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / self.validation_settings['Mm_per_ds']
 
         norm = b.pow(2).sum(-1).pow(0.5) * j.pow(2).sum(-1).pow(0.5)
         angle = torch.cross(j, b, dim=-1).pow(2).sum(-1).pow(0.5) / norm
@@ -150,11 +153,14 @@ class NF2Module(LightningModule):
         ff_loss = ff_loss.mean()
 
         outputs = outputs_list[1]  # unpack data loader 1
-        b_diff = torch.stack([o['b_diff'] for o in outputs]).mean()
+        b_diff = torch.stack([o['b_diff'] for o in outputs]).mean() * self.validation_settings['gauss_per_dB']
+        b_diff_error = torch.stack([o['b_diff_error'] for o in outputs]).mean() * self.validation_settings['gauss_per_dB']
 
-        self.plot_sample(b.reshape([*self.cube_shape, 3]).cpu().numpy())
+        b_cube = b.reshape([*self.validation_settings['cube_shape'], 3]).cpu().numpy()
+        self.plot_sample(b_cube)
 
         self.log("Validation B_diff", b_diff)
+        self.log("Validation B_diff_error", b_diff_error)
         self.log("Validation DIV", div_loss)
         self.log("Validation FF", ff_loss)
         self.log("Validation Sigma", weighted_sig)
@@ -177,6 +183,12 @@ class NF2Module(LightningModule):
         fig.tight_layout()
         wandb.log({"Slices": fig})
         plt.close('all')
+
+    def on_load_checkpoint(self, checkpoint):
+        super().on_load_checkpoint(checkpoint)
+        # update scheduled lambda
+        self.lambda_B *= self.lambda_B_decay ** checkpoint['global_step']
+        self.lambda_B = max([self.lambda_B, 1.])
 
 
 def calculate_loss(b, coords):
