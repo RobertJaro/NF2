@@ -3,24 +3,24 @@ import torch
 from torch.utils.data import Dataset, IterableDataset
 
 
-class BoundaryDataset(Dataset):
+class BatchesDataset(Dataset):
 
-    def __init__(self, batches_path):
+    def __init__(self, batches_file_paths, batch_size):
         """Data set for lazy loading a pre-batched numpy data array.
 
         :param batches_path: path to the numpy array.
         """
-        self.batches_path = batches_path
+        self.batches_file_paths = batches_file_paths
+        self.batch_size = batch_size
 
     def __len__(self):
-        return np.load(self.batches_path, mmap_mode='r').shape[0]
+        return np.ceil(np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(np.int)
 
     def __getitem__(self, idx):
         # lazy load data
-        d = np.load(self.batches_path, mmap_mode='r')[idx]
-        d = np.copy(d)
-        coord, field, err = d[:, 0],  d[:, 1], d[:, 2]
-        return coord, field, err
+        data = {k: np.copy(np.load(bf, mmap_mode='r')[idx * self.batch_size: (idx + 1) * self.batch_size])
+                for k, bf in self.batches_file_paths.items()}
+        return data
 
 class ImageDataset(Dataset):
 
@@ -73,7 +73,7 @@ class RandomCoordinateDataset(Dataset):
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] *= self.cube_shape[0] / self.spatial_norm
-        random_coords[:, 1] *= self.cube_shape[1] / self.spatial_norm
-        random_coords[:, 2] *= self.cube_shape[2] / self.spatial_norm
+        random_coords[:, 0] *= (self.cube_shape[0] - 1) / self.spatial_norm
+        random_coords[:, 1] *= (self.cube_shape[1] - 1) / self.spatial_norm
+        random_coords[:, 2] *= (self.cube_shape[2] - 1) / self.spatial_norm
         return random_coords

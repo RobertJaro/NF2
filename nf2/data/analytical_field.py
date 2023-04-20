@@ -18,7 +18,7 @@ def _differential_equation(mu, u, n, a2):
     return (dP_dmu, d2P_dmu2)
 
 
-def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[-1, 1, -1, 1, 0, 2]):
+def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[-1, 1, -1, 1, 0, 2], tau_surfaces=None):
     """
     Calculate the analytic NLFF field from Low & Lou (1989).
 
@@ -34,10 +34,23 @@ def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[
     sol_P, a2 = solve_P(n, m)
 
     resolution = [resolution] * 3 if not isinstance(resolution, list) else resolution
-    coords = np.stack(np.meshgrid(np.linspace(bounds[0], bounds[1], resolution[1], dtype=np.float32),
-                                  np.linspace(bounds[2], bounds[3], resolution[0], dtype=np.float32),
-                                  np.linspace(bounds[4], bounds[5], resolution[2], dtype=np.float32)), -1).transpose(
-        [1, 0, 2, 3])
+    if tau_surfaces:
+        coords = np.stack(np.meshgrid(np.linspace(bounds[0], bounds[1], resolution[0], dtype=np.float32),
+                                      np.linspace(bounds[2], bounds[3], resolution[1], dtype=np.float32),
+                                      np.ones(len(tau_surfaces), dtype=np.float32),
+                                      indexing='ij'), -1)
+        for i, c in enumerate(tau_surfaces):
+            coords[:, :, i, 2] = c / resolution[2] * (bounds[5] - bounds[4]) + bounds[4]
+            sx = sy = 1 - c / resolution[2]
+            x, y = coords[:, :, i, 0], coords[:, :, i, 1]
+            gaussian = np.exp(-(x**2. / (2. * sx**2.) + y **2. / (2. * sy**2.)))
+            gaussian /= gaussian.max() # normalize
+            coords[:, :, i, 2] *= gaussian
+    else:
+        coords = np.stack(np.meshgrid(np.linspace(bounds[0], bounds[1], resolution[0], dtype=np.float32),
+                                      np.linspace(bounds[2], bounds[3], resolution[1], dtype=np.float32),
+                                      np.linspace(bounds[4], bounds[5], resolution[2], dtype=np.float32),
+                                      indexing='ij'), -1)
 
     x, y, z = coords[..., 0], coords[..., 1], coords[..., 2]
     X = x * np.cos(psi) - (z + l) * np.sin(psi)

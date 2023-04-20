@@ -7,13 +7,14 @@ import wandb
 from pytorch_lightning import LightningModule
 from torch.optim.lr_scheduler import ExponentialLR
 
-from nf2.train.model import BModel, jacobian, VectorPotentialModel
+from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappingModel
 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_settings, dim=256, positional_encoding=False, use_vector_potential=False,
-                 lambda_div=0.1, lambda_ff=0.1, decay_iterations=None, meta_path=None, ):
+    def __init__(self, validation_settings, dim=256, lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5},
+                 lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-4, meta_path=None,
+                 positional_encoding=False, use_vector_potential=False, use_height_mapping=False,):
         """Magnetic field extrapolations trainer
 
         :param dim: number of neurons per layer (8 layers).
@@ -31,6 +32,10 @@ class NF2Module(LightningModule):
             model = VectorPotentialModel(3, dim, pos_encoding=positional_encoding)
         else:
             model = BModel(3, 3, dim, pos_encoding=positional_encoding)
+        if use_height_mapping:
+            self.height_mapping_model = HeightMappingModel(3, dim)
+        else:
+            self.height_mapping_model = None
         self.model = model
         self.validation_settings = validation_settings
 
@@ -41,27 +46,39 @@ class NF2Module(LightningModule):
             model.load_state_dict(state_dict)
             logging.info('Loaded meta state: %s' % meta_path)
         # init
-        lambda_B = 1000. if decay_iterations else 1.
-
-        self.lambda_B = lambda_B
-        self.lambda_B_decay = (1 / 1000) ** (1 / decay_iterations) if decay_iterations is not None else 1
+        self.lambda_B = lambda_b['start']
+        self.lambda_B_gamma = (lambda_b['end'] / lambda_b['start']) ** (1 / lambda_b['iterations']) \
+            if lambda_b['iterations'] > 0 else 0
+        self.lambda_B_end = lambda_b['end']
         self.lambda_div, self.lambda_ff = lambda_div, lambda_ff
+        self.lambda_height_reg = lambda_height_reg
         self.use_vector_potential = use_vector_potential
+        self.use_height_mapping = use_height_mapping
 
     def configure_optimizers(self):
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=5e-4)
+        parameters = list(self.model.parameters())
+        if self.use_height_mapping:
+            parameters += list(self.height_mapping_model.parameters())
+        self.optimizer = torch.optim.Adam(parameters, lr=5e-4)
         self.scheduler = ExponentialLR(self.optimizer, gamma=(5e-5 / 5e-4) ** (1 / 1e5))  # decay over 1e5 iterations
 
         return [self.optimizer], [self.scheduler]
 
     def training_step(self, batch, batch_nb):
-        boundary_coords, b_true, b_err = batch['boundary']
-        random_coords = batch['random']
+        boundary_batch = batch['boundary']
+        boundary_coords = boundary_batch['coords']
+        b_true = boundary_batch['values']
+        b_err = boundary_batch['error'] if 'error' in boundary_batch else 0
+        boundary_coords.requires_grad = True
+        if self.use_height_mapping:
+            original_coords = boundary_coords
+            boundary_coords = self.height_mapping_model(boundary_coords, boundary_batch['height_ranges'])
 
+        random_coords = batch['random']
+        random_coords.requires_grad = True
         # concatenate boundary and random points
         n_boundary_coords = boundary_coords.shape[0]
         coords = torch.cat([boundary_coords, random_coords], 0)
-        coords.requires_grad = True
 
         # forward step
         b = self.model(coords)
@@ -75,13 +92,21 @@ class NF2Module(LightningModule):
         divergence_loss, force_loss = calculate_loss(b, coords)
         divergence_loss, force_loss = divergence_loss.mean(), force_loss.mean()
         loss = b_diff * self.lambda_B + divergence_loss * self.lambda_div + force_loss * self.lambda_ff
-
-        return {'loss': loss, 'b_diff': b_diff, 'div': divergence_loss, 'ff': force_loss}
+        if self.use_height_mapping:
+            height_diff = torch.abs(boundary_coords[:, 2] - original_coords[:, 2])
+            normalization = boundary_batch['height_ranges'][:, 1] + 1e-8 # b_true.pow(2).sum(-1).pow(0.5) *
+            # b_filter = b_true.pow(2).sum(-1).pow(0.5) <= 0.03
+            # b_filter = torch.clip(1 - b_true.pow(2).sum(-1).pow(0.5) / 0.05, min=0)
+            height_reg_loss = self.lambda_height_reg * (height_diff / normalization).mean()
+            loss += height_reg_loss
+            return {'loss': loss, 'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
+                    'height_regularization': height_reg_loss}
+        return {'loss': loss, 'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss}
 
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
         # update training parameters and log
-        if self.lambda_B > 1:
-            self.lambda_B *= self.lambda_B_decay
+        if self.lambda_B > self.lambda_B_end:
+            self.lambda_B *= self.lambda_B_gamma
         if self.scheduler.get_last_lr()[0] > 5e-5:
             self.scheduler.step()
         self.log('Learning Rate', self.scheduler.get_last_lr()[0])
@@ -89,8 +114,7 @@ class NF2Module(LightningModule):
 
         # log results to WANDB
         self.log("train/loss", outputs['loss'])
-        self.log("Training Loss",
-                 {'b_diff': outputs['b_diff'].mean(), 'divergence': outputs['div'].mean(), 'force-free': outputs['ff'].mean(), 'total': outputs['loss'].mean()})
+        self.log("Training Loss", {k: v.mean() for k, v in outputs.items()})
 
     @torch.enable_grad()
     def validation_step(self, batch, batch_nb, dataloader_idx):
@@ -121,9 +145,12 @@ class NF2Module(LightningModule):
 
             return {'b': b.detach(), 'j': j.detach(), 'div': div.detach()}
         if dataloader_idx == 1:
-            boundary_coords, b_true, b_err = batch
+            boundary_coords = batch['coords']
+            b_true = batch['values']
+            b_err = batch['error'] if 'error' in batch else 0
             boundary_coords.requires_grad = True
-
+            if self.use_height_mapping:
+                boundary_coords = self.height_mapping_model(boundary_coords, batch['height_ranges'])
             b = self.model(boundary_coords)
 
             # compute boundary loss
@@ -187,8 +214,8 @@ class NF2Module(LightningModule):
     def on_load_checkpoint(self, checkpoint):
         super().on_load_checkpoint(checkpoint)
         # update scheduled lambda
-        self.lambda_B *= self.lambda_B_decay ** checkpoint['global_step']
-        self.lambda_B = max([self.lambda_B, 1.])
+        self.lambda_B *= self.lambda_B_gamma ** checkpoint['global_step']
+        self.lambda_B = max([self.lambda_B, self.lambda_B_end])
 
 
 def calculate_loss(b, coords):
@@ -214,9 +241,10 @@ def calculate_loss(b, coords):
     return divergence_loss, force_loss
 
 
-def save(save_path, model, data_module):
+def save(save_path, model, data_module, height_mapping_model=None):
     torch.save({'model': model,
                 'cube_shape': data_module.cube_shape,
                 'b_norm': data_module.b_norm,
                 'spatial_norm': data_module.spatial_norm,
-                'meta_info': data_module.meta_info}, save_path)
+                'meta_info': data_module.meta_info,
+                'height_mapping_model': height_mapping_model}, save_path)

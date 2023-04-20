@@ -10,6 +10,30 @@ class Sine(nn.Module):
     def forward(self, x):
         return torch.sin(self.w0 * x)
 
+class HeightMappingModel(nn.Module):
+
+    def __init__(self, in_coords, dim, positional_encoding=True):
+        super().__init__()
+        if positional_encoding:
+            posenc = PositionalEncoding(8, 20)
+            d_in = nn.Linear(in_coords * 40, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
+        else:
+            self.d_in = nn.Linear(in_coords, dim)
+        lin = [nn.Linear(dim, dim) for _ in range(4)]
+        self.linear_layers = nn.ModuleList(lin)
+        self.d_out = nn.Linear(dim, 1)
+        self.activation = Sine()
+
+    def forward(self, x, range):
+        input_coords = x
+        x = self.activation(self.d_in(x))
+        for l in self.linear_layers:
+            x = self.activation(l(x))
+        z_coords = torch.sigmoid(self.d_out(x)) * (range[:, 1:2] - range[:, 0:1]) + range[:, 0:1]
+        # shifted_z_coords = input_coords[:, 2:3] * (1 + z_shift) # max shift in dependence of height estimate
+        output_coords = torch.cat([input_coords[:, :2], z_coords], -1)
+        return output_coords
 
 class BModel(nn.Module):
 

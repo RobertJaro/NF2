@@ -6,6 +6,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import torch.cuda
 from matplotlib import pyplot as plt
 from matplotlib.dates import date2num, DateFormatter
 from tqdm import tqdm
@@ -17,16 +18,17 @@ parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
 parser.add_argument('nf2_path', type=str, help='path to the directory of the NF2 files')
 parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
 parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
-
+parser.add_argument('--flare_list', type=str, help='path to the output directory', required=False, default=None)
 args = parser.parse_args()
 
 series_base_path = args.nf2_path
 evaluation_path = os.path.join(series_base_path, 'evaluation') if args.result_path is None else args.result_path
+flare_list_path = args.flare_list
 os.makedirs(evaluation_path, exist_ok=True)
 
 nf2_paths = sorted(glob.glob(os.path.join(series_base_path, '**', 'extrapolation_result.nf2')))
-Mm_per_pix = 360e-3
-cm_per_pix = (Mm_per_pix * args.strides * 1e8)
+Mm_per_pix = 360e-3 * args.strides
+cm_per_pix = (Mm_per_pix * 1e8)
 z_pixels = int(np.ceil(20 / (Mm_per_pix)))  # 20 Mm --> pixels; bin1
 
 # save results as npy files
@@ -36,7 +38,7 @@ for path in tqdm(nf2_paths):
     if os.path.exists(save_path):
         free_energy_files += [save_path]
         continue
-    b = load_cube(path, progress=False, z=z_pixels, strides=args.strides)
+    b = load_cube(path, progress=False, z=z_pixels, strides=args.strides, batch_size=100000 * torch.cuda.device_count())
     free_me = get_free_mag_energy(b, progress=False)
     np.save(save_path, free_me)
     free_energy_files += [save_path]
@@ -66,9 +68,6 @@ for f, d in zip(free_energy_files, series_dates):
     plt.savefig(os.path.join(evaluation_path, 'free_energy_%s.jpg' % d.isoformat('T')))
     plt.close()
 
-flare_list = pd.read_csv('/gpfs/gpfs0/robert.jarolim/data/goes_flares_integrated.csv',
-                         parse_dates=['end_time', 'event_date', 'peak_time', 'start_time'])
-flare_list = flare_list[(flare_list.peak_time >= min(series_dates)) & (flare_list.peak_time <= max(series_dates))]
 
 x_dates = date2num(series_dates)
 date_format = DateFormatter('%d-%H:%M')
@@ -79,16 +78,21 @@ ax.set_xlim(x_dates[0], x_dates[-1])
 ax.xaxis.set_major_formatter(date_format)
 fig.autofmt_xdate()
 
-ax.plot(x_dates, np.array(free_energy_series) * 1e-33)
-ax.set_ylabel('Energy\n[$10^{33}$ erg]')
+ax.plot(x_dates, np.array(free_energy_series) * 1e-32)
+ax.set_ylabel('Energy\n[$10^{32}$ erg]')
 
-goes_mapping = {c: 10 ** (i) for i, c in enumerate(['B', 'C', 'M', 'X'])}
-for t, goes_class in zip(flare_list.peak_time, flare_list.goes_class):
-    flare_intensity = np.log10(float(goes_class[1:]) * goes_mapping[goes_class[0]])
-    if flare_intensity >= np.log10(1 * 10 ** 2):
-        ax.axvline(x=date2num(t), linestyle='dotted', c='black')
-    if flare_intensity >= np.log10(1 * 10 ** 3):
-        ax.axvline(x=date2num(t), linestyle='dotted', c='red')
+# overplot flares
+if flare_list_path:
+    flare_list = pd.read_csv(flare_list_path,
+                             parse_dates=['end_time', 'event_date', 'peak_time', 'start_time'])
+    flare_list = flare_list[(flare_list.peak_time >= min(series_dates)) & (flare_list.peak_time <= max(series_dates))]
+    goes_mapping = {c: 10 ** (i) for i, c in enumerate(['B', 'C', 'M', 'X'])}
+    for t, goes_class in zip(flare_list.peak_time, flare_list.goes_class):
+        flare_intensity = np.log10(float(goes_class[1:]) * goes_mapping[goes_class[0]])
+        if flare_intensity >= np.log10(1 * 10 ** 2):
+            ax.axvline(x=date2num(t), linestyle='dotted', c='black')
+        if flare_intensity >= np.log10(1 * 10 ** 3):
+            ax.axvline(x=date2num(t), linestyle='dotted', c='red')
 
 plt.tight_layout()
 plt.savefig(os.path.join(evaluation_path, 'free_energy_series.jpg'))

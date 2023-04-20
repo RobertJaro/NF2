@@ -11,10 +11,8 @@ from sunpy.map import Map, all_coordinates_from_map
 from nf2.potential.potential_field import get_potential_boundary
 
 
-def prep_b_data(b_cube, error_cube,
-                height, spatial_norm, b_norm,
-                potential_boundary=True, potential_strides=4,
-                plot=False, plot_path=None):
+def prep_b_data(b_cube, error_cube, height,
+                potential_boundary=True, potential_strides=4):
     # load coordinates
     mf_coords = np.stack(np.mgrid[:b_cube.shape[0], :b_cube.shape[1], :1], -1)
     # flatten data
@@ -37,20 +35,7 @@ def prep_b_data(b_cube, error_cube,
     values = values.astype(np.float32)
     err = err.astype(np.float32)
 
-    # normalize data
-    values = Normalize(-b_norm, b_norm, clip=False)(values) * 2 - 1
-    err = Normalize(0, b_norm, clip=False)(err)
-
-    # apply spatial normalization
-    coords = coords / spatial_norm
-
-    # stack to numpy array
-    data = np.stack([coords, values, err], 1)
-
-    if plot:
-        _plot_data(error_cube, b_cube, plot_path, b_norm)
-
-    return data
+    return coords, values, err
 
 
 def load_spherical_hmi_data(data_path):
