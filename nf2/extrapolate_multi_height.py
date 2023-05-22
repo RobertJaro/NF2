@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.module import NF2Module, save
-from nf2.train.data_loader import SHARPDataModule, SyntheticMultiHeightDataModule
+from nf2.train.data_loader import SHARPDataModule, SyntheticMultiHeightDataModule, VSMMultiHeightDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -28,7 +28,7 @@ with open(args.config) as config:
 # data parameters
 bin = int(args.bin)
 spatial_norm = 320 // bin
-height = 200 #320 // bin
+height = 320 // bin
 b_norm = 2500
 
 # model parameters
@@ -65,18 +65,18 @@ slice = args.slice if 'slice' in args else None
 logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
 logger.experiment.config.update(vars(args))
 
-data_module = SyntheticMultiHeightDataModule(data_path,
-                              height, spatial_norm, b_norm,
-                              work_directory, batch_size, batch_size * 2, iterations, num_workers,
-                              return_height_ranges=use_height_mapping, use_potential_boundary=use_potential_boundary,
-                              slice=slice, bin=bin)
+data_module = VSMMultiHeightDataModule(data_path,
+                                       height, spatial_norm, b_norm,
+                                       work_directory, batch_size, batch_size * 2, iterations, num_workers,
+                                       return_height_ranges=use_height_mapping, use_potential_boundary=use_potential_boundary,
+                                       slice=slice, bin=bin)
 
 validation_settings = {'cube_shape': data_module.cube_shape,
                        'gauss_per_dB': b_norm,
                        'Mm_per_ds': 320 * 360e-3}
 nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff, lambda_height_reg,
                 meta_path=args.meta_path, positional_encoding=positional_encoding,
-                use_vector_potential=use_vector_potential, use_height_mapping=use_height_mapping,)
+                use_vector_potential=use_vector_potential, use_height_mapping=use_height_mapping)
 
 save_callback = LambdaCallback(on_validation_end=lambda *args: save(save_path, nf2.model, data_module, nf2.height_mapping_model))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss',

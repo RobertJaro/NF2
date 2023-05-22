@@ -41,7 +41,9 @@ def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[
                                       indexing='ij'), -1)
         for i, c in enumerate(tau_surfaces):
             coords[:, :, i, 2] = c / resolution[2] * (bounds[5] - bounds[4]) + bounds[4]
-            sx = sy = 1 - c / resolution[2]
+            if c == 0: # no corrugation for photospheric layer
+                continue
+            sx = sy = c / resolution[2] + 0.5
             x, y = coords[:, :, i, 0], coords[:, :, i, 1]
             gaussian = np.exp(-(x**2. / (2. * sx**2.) + y **2. / (2. * sy**2.)))
             gaussian /= gaussian.max() # normalize

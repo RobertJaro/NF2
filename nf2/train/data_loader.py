@@ -81,14 +81,16 @@ class SHARPDataModule(LightningDataModule):
         err_npy_path = os.path.join(work_directory, 'err.npy')
         np.save(err_npy_path, err)
         # create data loaders
-        batches_path = [coords_npy_path, values_npy_path, err_npy_path]
+        batches_path = {'coords': coords_npy_path,
+                        'values': values_npy_path,
+                        'errors': err_npy_path}
         self.dataset = BatchesDataset(batches_path, batch_size)
         self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size)
         self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=batch_size)
-        self.batches_paths = batches_path
+        self.batches_path = batches_path
 
     def clear(self):
-        [os.remove(f) for f in self.batches_paths]
+        [os.remove(f) for f in self.batches_path.values()]
 
     def train_dataloader(self):
         data_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
@@ -150,6 +152,10 @@ class SyntheticMultiHeightDataModule(LightningDataModule):
             b_cube = b_cube[slice[0]:slice[1], slice[2]:slice[3], slice[4]:slice[5]]
         if bin > 1:
             b_cube = block_reduce(b_cube, (bin, bin, 1, 1), np.mean)
+
+        # set x and y to None for upper layers
+        b_cube[:, :, 1:, 0] = None
+        b_cube[:, :, 1:, 1] = None
 
         self.b_cube = b_cube
         self.meta_info = None
@@ -252,7 +258,7 @@ class SyntheticMultiHeightDataModule(LightningDataModule):
 class AnalyticDataModule(LightningDataModule):
 
     def __init__(self, case, height_slices, height, spatial_norm, b_norm, work_directory, batch_size, random_batch_size,
-                 iterations, num_workers, boundary="full", potential_strides=4, tau_surfaces=None):
+                 iterations, num_workers, boundary="full", potential_strides=4, tau_surfaces=None, use_LOS=True):
         super().__init__()
 
         # data parameters
@@ -313,6 +319,10 @@ class AnalyticDataModule(LightningDataModule):
             for i, h in enumerate(tau_surfaces):
                 coords[:, :, i, 2] = h / 2 # set to center of tau surface
                 ranges[:, :, i, 1] = h
+            #
+            if use_LOS:
+                b_cube[:, :, 1:, 0] = None
+                b_cube[:, :, 1:, 1] = None
             # flatten data
             coords = coords.reshape((-1, 3)).astype(np.float32)
             values = b_cube.reshape((-1, 3)).astype(np.float32)
@@ -370,13 +380,16 @@ class AnalyticDataModule(LightningDataModule):
                                      shuffle=False)
         return [cube_loader, boundary_loader]
 
+class VSMMultiHeightDataModule(LightningDataModule):
 
-class SynopticDataModule(LightningDataModule):
-
-    def __init__(self, data_path, b_norm, height, work_directory, batch_size, iterations, num_workers, bin=1):
+    def __init__(self, data_path, height, spatial_norm, b_norm, work_directory, batch_size, random_batch_size,
+                 iterations, num_workers, slice=None, bin=1, return_height_ranges=True,
+                 use_potential_boundary=False, potential_strides=4):
         """
         :param b_cube: magnetic field data (x, y, (Bp, -Bt, Br)).
         :param error_cube: associated error information.
+        :param height: height of simulation volume.
+        :param spatial_norm: normalization of coordinate axis.
         :param b_norm: normalization of magnetic field strength.
         :param use_potential_boundary: use potential field as boundary condition. If None use an open boundary.
         :param potential_strides: use binned potential field boundary condition. Only applies if use_potential_boundary = True.
@@ -384,6 +397,7 @@ class SynopticDataModule(LightningDataModule):
         super().__init__()
 
         # data parameters
+        self.spatial_norm = spatial_norm
         self.height = height
         self.b_norm = b_norm
 
@@ -394,55 +408,111 @@ class SynopticDataModule(LightningDataModule):
         os.makedirs(work_directory, exist_ok=True)
 
         # prepare data
-        coords, b_cube, meta_info = load_spherical_hmi_data(data_path)
-        if bin > 1:
-            b_cube = block_reduce(b_cube, (bin, bin, 1), np.mean)
-            coords = block_reduce(coords, (bin, bin, 1), np.mean)
+        # Tau slices file
+        # Bx, By, Bz, Babs: Gauss
+        # mu (inclination), azimuth: degrees
+        # dx, dy, dz, z_line: cm
+        # tau_lev: no units
+        # x is the vertical direction (64 km/pix)
+        # y, z are in the horizontal plane (192 km/pix)
+        # Dimensions: (nb_of_tau_levels, ny, nz)
+        dict_data = np.load(data_path, allow_pickle=True)
+        sharp_cube = dict_data.item().get('sharp')
+        vsm_cube = dict_data.item().get('vsm')
+        vsm_cube = np.stack([np.ones_like(vsm_cube) * np.nan, np.ones_like(vsm_cube) * np.nan, vsm_cube])
+        b_cube = np.stack([sharp_cube, vsm_cube], 1).T
 
-        # load dataset
-        b_cube = vector_spherical_to_cartesian(b_cube, coords)
-        coords = to_cartesian(coords)
-        b_cube /= b_norm
-        error_cube = np.zeros_like(b_cube)
+        if slice:
+            b_cube = b_cube[slice[0]:slice[1], slice[2]:slice[3], slice[4]:slice[5]]
+        if bin > 1:
+            b_cube = block_reduce(b_cube, (bin, bin, 1, 1), np.mean)
 
         self.b_cube = b_cube
-        self.error_cube = error_cube
-        self.meta_info = meta_info
+        self.meta_info = None
 
-        data = np.stack([b_cube.reshape((-1, 3)), error_cube.reshape((-1, 3)), coords.reshape((-1, 3))], axis=1)
+        for i in range(b_cube.shape[2]):
+            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+            axs[0].imshow(b_cube[..., i, 0].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
+            axs[1].imshow(b_cube[..., i, 1].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
+            axs[2].imshow(b_cube[..., i, 2].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
+            wandb.log({"Overview": fig})
+            plt.close('all')
+        # load dataset
+        coords = np.stack(np.mgrid[:b_cube.shape[0], :b_cube.shape[1], :b_cube.shape[2]], -1).astype(np.float32)
+        coords[:, :, 1, 2] = 2 / 360e-3 # 2 Mm --> pix
+
+        ranges = np.zeros((*coords.shape[:-1], 2))
+        ranges[:, :, 0, 1] = 0#1 / 360e-3
+        ranges[:, :, 1, 1] = 100 / 360e-3
+        # flatten data
+        coords = coords.reshape((-1, 3))
+        values = b_cube.reshape((-1, 3))
+        ranges = ranges.reshape((-1, 2))
+
+        coords = coords.astype(np.float32)
+        values = values.astype(np.float32)
+        ranges = ranges.astype(np.float32)
+
+        if use_potential_boundary:
+            b_bottom = b_cube[:, :, 0]
+            pf_coords, _, pf_values = _load_potential_field_data(b_bottom, height, potential_strides)
+            #
+            pf_ranges = np.zeros((*pf_coords.shape[:-1], 2), dtype=np.float32)
+            # concatenate pf data points
+            coords = np.concatenate([pf_coords, coords])
+            values = np.concatenate([pf_values, values])
+            ranges = np.concatenate([pf_ranges, ranges])
+
+        # normalize data
+        values = values / b_norm
+
+        # apply spatial normalization
+        coords /= spatial_norm
+        ranges /= spatial_norm
+
+        cube_shape = [*b_cube.shape[:-2], height]
+        self.cube_shape = cube_shape
 
         # prep dataset
         # shuffle data
-        r = np.random.permutation(data.shape[0])
-        data = data[r]
-        # adjust to batch size
-        pad = batch_size - data.shape[0] % batch_size
-        data = np.concatenate([data, data[:pad]])
-        # split data into batches
-        n_batches = data.shape[0] // batch_size
-        batches = np.array(np.split(data, n_batches), dtype=np.float32)
-        # store batches to disk
-        batches_path = os.path.join(work_directory, 'batches.npy')
-        np.save(batches_path, batches)
+        r = np.random.permutation(coords.shape[0])
+        coords = coords[r]
+        values = values[r]
+        ranges = ranges[r]
+        # store data to disk
+        coords_npy_path = os.path.join(work_directory, 'coords.npy')
+        np.save(coords_npy_path, coords)
+        values_npy_path = os.path.join(work_directory, 'values.npy')
+        np.save(values_npy_path, values)
+        ranges_npy_path = os.path.join(work_directory, 'ranges.npy')
+        np.save(ranges_npy_path, ranges)
         # create data loaders
-        self.dataset = BoundaryDataset(batches_path)
-        self.sphere_dataset = SphereDataset(height, batch_size=batch_size)
+        batches_path = {'coords': coords_npy_path,
+                        'values':values_npy_path}
+        if return_height_ranges:
+            batches_path['height_ranges'] = ranges_npy_path
+        self.dataset = BatchesDataset(batches_path, batch_size)
+        self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size)
+        self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=batch_size)
         self.batches_path = batches_path
 
     def clear(self):
-        os.remove(self.batches_path)
+        [os.remove(f) for f in self.batches_path.values()]
 
     def train_dataloader(self):
         data_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                  sampler=RandomSampler(self.dataset, replacement=True, num_samples=self.iterations))
-        return data_loader
+        random_loader = DataLoader(self.random_dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+                                   sampler=RandomSampler(self.dataset, replacement=True, num_samples=self.iterations))
+        return {'boundary': data_loader, 'random': random_loader}
 
     def val_dataloader(self):
-        cube_loader = DataLoader(self.sphere_dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+        cube_loader = DataLoader(self.cube_dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                  shuffle=False)
         boundary_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                      shuffle=False)
         return [cube_loader, boundary_loader]
+
 
 
 def vector_spherical_to_cartesian(v, c):

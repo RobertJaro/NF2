@@ -5,7 +5,7 @@ from nf2.evaluation.unpack import load_cube
 from nf2.potential.potential_field import get_potential
 from nf2.train.metric import vector_norm, curl, divergence
 
-base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_3tau'
+base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_4tau'
 
 # CASE 1
 B = get_analytic_b_field()

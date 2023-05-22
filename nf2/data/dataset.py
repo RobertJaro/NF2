@@ -14,7 +14,7 @@ class BatchesDataset(Dataset):
         self.batch_size = batch_size
 
     def __len__(self):
-        return np.ceil(np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(np.int)
+        return np.ceil(np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(np.int32)
 
     def __getitem__(self, idx):
         # lazy load data

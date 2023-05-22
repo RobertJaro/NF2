@@ -35,6 +35,7 @@ b_norm = 2500
 dim = args.dim
 
 # training parameters
+lambda_b = args.lambda_b
 lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
 n_gpus = torch.cuda.device_count()
@@ -55,19 +56,14 @@ work_directory = base_path if work_directory is None else work_directory
 os.makedirs(base_path, exist_ok=True)
 os.makedirs(work_directory, exist_ok=True)
 
-# init logging
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-for hdlr in log.handlers[:]:  # remove all old handlers
-    log.removeHandler(hdlr)
-log.addHandler(logging.FileHandler("{0}/{1}.log".format(base_path, "info_log")))  # set the new file handler
-log.addHandler(logging.StreamHandler())  # set the new console handler
-
 save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
 slice = args.slice if 'slice' in args else None
 
 # INIT TRAINING
+logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
+logger.experiment.config.update(vars(args))
+
 data_module = SHARPDataModule(data_path,
                               height, spatial_norm, b_norm,
                               work_directory, batch_size, batch_size * 2, iterations, num_workers,
@@ -78,20 +74,14 @@ validation_settings = {'cube_shape': data_module.cube_shape,
                  'gauss_per_dB': b_norm,
                  'Mm_per_ds': 320 * 360e-3}
 
-nf2 = NF2Module(validation_settings, dim, lambda_div, lambda_ff,
-                decay_iterations=decay_iterations, meta_path=args.meta_path,
-                positional_encoding=positional_encoding, use_vector_potential=use_vector_potential)
+nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff,
+                meta_path=args.meta_path, positional_encoding=positional_encoding, use_vector_potential=use_vector_potential)
 
 save_callback = LambdaCallback(on_validation_end=lambda *args: save(save_path, nf2.model, data_module))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss',
                                       every_n_train_steps=validation_interval, save_last=True)
-logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
-logger.experiment.config.update({'dim': dim, 'lambda_div': lambda_div, 'lambda_ff': lambda_ff,
-                                 'decay_iterations': decay_iterations, 'use_potential': potential,
-                                 'use_vector_potential': use_vector_potential})
 
-logging.info('Initialize trainer')
-trainer = Trainer(max_epochs=2,
+trainer = Trainer(max_epochs=1,
                   logger=logger,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
@@ -101,7 +91,6 @@ trainer = Trainer(max_epochs=2,
                   gradient_clip_val=0.1,
                   callbacks=[checkpoint_callback, save_callback])
 
-logging.info('Start model training')
 trainer.fit(nf2, data_module, ckpt_path='last')
 save(save_path, nf2.model, data_module)
 # clean up
