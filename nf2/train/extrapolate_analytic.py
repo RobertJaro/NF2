@@ -35,7 +35,6 @@ dim = args.dim
 lambda_b = args.lambda_b
 lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
-lambda_height_reg = args.lambda_height_reg if 'lambda_height_reg' in args else None
 n_gpus = torch.cuda.device_count()
 batch_size = int(args.batch_size)
 validation_interval = args.validation_interval
@@ -67,7 +66,7 @@ data_module = AnalyticDataModule(args.case, args.height_slices, height, spatial_
 validation_settings = {'cube_shape': data_module.cube_shape,
                        'gauss_per_dB': b_norm,
                        'Mm_per_ds': 320 * 360e-3}
-nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff, lambda_height_reg,
+nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff,
                 meta_path=args.meta_path, positional_encoding=positional_encoding,
                 use_vector_potential=use_vector_potential, use_height_mapping=use_height_mapping, )
 

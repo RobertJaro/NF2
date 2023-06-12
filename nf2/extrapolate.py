@@ -89,7 +89,7 @@ trainer = Trainer(max_epochs=1,
                   num_sanity_val_steps=0,
                   val_check_interval=validation_interval,
                   gradient_clip_val=0.1,
-                  callbacks=[checkpoint_callback, save_callback])
+                  callbacks=[checkpoint_callback, save_callback], profiler='simple')
 
 trainer.fit(nf2, data_module, ckpt_path='last')
 save(save_path, nf2.model, data_module)

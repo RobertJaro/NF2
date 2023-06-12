@@ -2,10 +2,10 @@ import numpy as np
 
 from nf2.data.analytical_field import get_analytic_b_field
 from nf2.evaluation.unpack import load_cube
-from nf2.potential.potential_field import get_potential
+from nf2.potential.potential_field import get_potential, get_potential_field
 from nf2.train.metric import vector_norm, curl, divergence
 
-base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_4tau'
+base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_4tau_emb'
 
 # CASE 1
 B = get_analytic_b_field()
@@ -28,7 +28,7 @@ result['E_m'] = 1 / M * (vector_norm(b - B) / vector_norm(B)).sum()
 
 result['eps'] = (vector_norm(b) ** 2).sum() / (vector_norm(B) ** 2).sum()
 
-B_potential = get_potential(B[:, :, 0, 2], 64)
+B_potential = get_potential_field(B[:, :, 0, 2], 64)
 
 result['eps_p'] = (vector_norm(b) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
 result['eps_p_ll'] = (vector_norm(B) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()

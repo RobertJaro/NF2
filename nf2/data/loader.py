@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import Normalize
 from sunpy.map import Map, all_coordinates_from_map
 
-from nf2.potential.potential_field import get_potential_boundary
+from nf2.potential.potential_field import get_potential_boundary, get_potential_top
 
 
 def prep_b_data(b_cube, error_cube, height,
@@ -75,12 +75,13 @@ def load_hmi_data(data_path):
     return hmi_cube, error_cube, Map(hmi_r).meta
 
 
-def _load_potential_field_data(hmi_cube, height, reduce):
+def _load_potential_field_data(hmi_cube, height, reduce, only_top=False):
     if reduce > 1:
         hmi_cube = block_reduce(hmi_cube, (reduce, reduce, 1), func=np.mean)
         height = height // reduce
     pf_batch_size = int(1024 * 512 ** 2 / np.prod(hmi_cube.shape[:2]))  # adjust batch to AR size
-    pf_coords, pf_values = get_potential_boundary(hmi_cube[:, :, 2], height, batch_size=pf_batch_size)
+    pf_coords, pf_values = get_potential_top(hmi_cube[:, :, 2], height, batch_size=pf_batch_size) \
+        if only_top else get_potential_boundary(hmi_cube[:, :, 2], height, batch_size=pf_batch_size)
     pf_values = np.array(pf_values, dtype=np.float32)
     pf_coords = np.array(pf_coords, dtype=np.float32) * reduce # expand to original coordinate spacing
     pf_err = np.zeros_like(pf_values)

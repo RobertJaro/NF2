@@ -8,7 +8,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.module import NF2Module, save
-from nf2.train.data_loader import SHARPDataModule, SyntheticMultiHeightDataModule, VSMMultiHeightDataModule
+from nf2.train.data_loader import SHARPDataModule, SyntheticMultiHeightDataModule, VSMMultiHeightDataModule, \
+    SSTDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -27,9 +28,11 @@ with open(args.config) as config:
 
 # data parameters
 bin = int(args.bin)
-spatial_norm = 320 // bin
-height = 320 // bin
-b_norm = 2500
+spatial_norm = args.spatial_norm
+height = args.height
+height_mapping = args.height_mapping if 'height_mapping' in args else None
+
+b_norm = args.b_norm
 
 # model parameters
 dim = args.dim
@@ -37,7 +40,7 @@ dim = args.dim
 lambda_b = args.lambda_b
 lambda_div = args.lambda_div
 lambda_ff = args.lambda_ff
-lambda_height_reg = args.lambda_height_reg if 'lambda_height_reg' in args else None
+lambda_height_reg = args.lambda_height_reg if 'lambda_height_reg' in args else 0
 
 n_gpus = torch.cuda.device_count()
 batch_size = int(args.batch_size)
@@ -65,15 +68,23 @@ slice = args.slice if 'slice' in args else None
 logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
 logger.experiment.config.update(vars(args))
 
-data_module = VSMMultiHeightDataModule(data_path,
-                                       height, spatial_norm, b_norm,
-                                       work_directory, batch_size, batch_size * 2, iterations, num_workers,
-                                       return_height_ranges=use_height_mapping, use_potential_boundary=use_potential_boundary,
-                                       slice=slice, bin=bin)
+# data_module = VSMMultiHeightDataModule(data_path, height_mapping,
+#                                        height, spatial_norm, b_norm,
+#                                        work_directory, batch_size, batch_size * 2, iterations, num_workers,
+#                                        return_height_ranges=use_height_mapping, use_potential_boundary=use_potential_boundary,
+#                                        slice=slice, bin=bin)
+# data_module = SSTDataModule(data_path,height_mapping,  height, spatial_norm, b_norm,
+#                             work_directory, batch_size, batch_size * 2, iterations, num_workers,
+#                             use_potential_boundary=use_potential_boundary, slice=slice, bin=bin)
+data_module = SyntheticMultiHeightDataModule(data_path, height, spatial_norm, b_norm, work_directory,
+                                             batch_size, batch_size * 2, iterations, num_workers, slice, bin,
+                                             use_potential_boundary=use_potential_boundary)
 
-validation_settings = {'cube_shape': data_module.cube_shape,
+
+validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': b_norm,
                        'Mm_per_ds': 320 * 360e-3}
+
 nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff, lambda_height_reg,
                 meta_path=args.meta_path, positional_encoding=positional_encoding,
                 use_vector_potential=use_vector_potential, use_height_mapping=use_height_mapping)

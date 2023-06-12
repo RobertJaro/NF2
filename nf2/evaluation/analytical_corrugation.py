@@ -7,7 +7,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from torch import nn
 from tqdm import tqdm
 
-base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_4tau'
+base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/analytical_3tau'
 model_path = f'{base_path}/extrapolation_result.nf2'
 result_path = f'{base_path}/evaluation'
 batch_size = 2048
@@ -42,6 +42,7 @@ for i, c in enumerate(ranges):
 
 tau *= spatial_norm
 
+height_diffs = []
 for i, (h, h_r) in enumerate(zip(heights, ranges)):
     coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], 0:1], -1).astype(np.float32)
     coords[:, :, :, 2] = h
@@ -68,13 +69,22 @@ for i, (h, h_r) in enumerate(zip(heights, ranges)):
     fig, axs = plt.subplots(1, 2, figsize=(8, 4))
     v_min = 0
     v_max = h_r
-    axs[0].imshow(tau[..., i, 2].T, origin='lower', vmin=v_min, vmax=v_max)
+    im = axs[0].imshow(tau[..., i, 2].T, origin='lower', vmin=v_min, vmax=v_max)
     axs[0].set_title('Analytic')
+    divider = make_axes_locatable(axs[0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='Height [pixels]')
     im = axs[1].imshow(cube[..., 0, 2].T, origin='lower', vmin=v_min, vmax=v_max)
     axs[1].set_title('PINN')
     divider = make_axes_locatable(axs[1])
     cax = divider.append_axes('right', size='5%', pad=0.05)
     [ax.set_axis_off() for ax in axs]
-    fig.colorbar(im, cax=cax, orientation='vertical')
+    fig.colorbar(im, cax=cax, orientation='vertical', label='Height [pixels]')
     fig.savefig(os.path.join(result_path, f'height_{h:.2f}.jpg'), dpi=300)
     plt.close(fig)
+
+    height_diffs += [np.abs(tau[..., i, 2] - cube[..., 0, 2]).mean()]
+
+# save height diffs to txt
+height_diffs = np.stack(height_diffs)
+np.savetxt(os.path.join(result_path, 'height_diffs.txt'), height_diffs.reshape((len(heights), -1)), fmt='%.4f')

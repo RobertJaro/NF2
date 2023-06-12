@@ -21,6 +21,50 @@ def load_cube(save_path, device=None, z=None, strides=1, **kwargs):
     return load_coords(model, cube_shape, state['spatial_norm'],
                        state['b_norm'], coords, device, **kwargs)
 
+def load_height_surface(save_path, height_mapping, device=None, strides=1, batch_size=1000, progress=False, **kwargs):
+    if device is None:
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    state = torch.load(save_path, map_location=device)
+    model = state['height_mapping_model']
+    assert model is not None, 'Requires height mapping model!'
+    model = nn.DataParallel(model)
+    cube_shape = state['cube_shape']
+    coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :len(height_mapping):], -1)
+    ranges = np.zeros((*coords.shape[:-1], 2))
+    for i, (h, min_h, max_h) in enumerate(height_mapping):
+        coords[:, :, i, 2] = h
+        ranges[:, :, i, 0] = min_h
+        ranges[:, :, i, 1] = max_h
+
+    # normalize and to tensor
+    coords = torch.tensor(coords / state['spatial_norm'], dtype=torch.float32)
+    coords_shape = coords.shape
+    coords = coords.view((-1, 3))
+
+    ranges = torch.tensor(ranges / state['spatial_norm'], dtype=torch.float32)
+    ranges = ranges.view((-1, 2))
+
+    slice = []
+    it = range(int(np.ceil(coords.shape[0] / batch_size)))
+    it = tqdm(it) if progress else it
+    for k in it:
+        coord = coords[k * batch_size: (k + 1) * batch_size]
+        coord = coord.to(device)
+        coord.requires_grad = True
+        #
+        r = ranges[k * batch_size: (k + 1) * batch_size]
+        r = r.to(device)
+        slice += [model(coord, r).detach().cpu()]
+
+    slice = torch.cat(slice) * state['spatial_norm']
+    slice = slice.view(*coords_shape).numpy()
+
+    cube = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)[..., 2]
+    contour_cube = np.zeros_like(cube)
+    for i in range(len(height_mapping)):
+        contour_cube[cube > slice[:, :, i:i+1, 2]] = i + 1
+    return contour_cube
+
 def load_shape(save_path, device=None):
     if device is None:
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

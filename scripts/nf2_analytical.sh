@@ -10,4 +10,4 @@
 
 module load python/pytorch-1.6.0
 cd /beegfs/home/robert.jarolim/projects/pub_NF2
-python3 -m nf2.train.extrapolate_analytic --config config/multi_height/3tau.json
+python3 -m nf2.train.extrapolate_analytic --config config/multi_height/4tau.json

@@ -27,17 +27,17 @@ flare_list_path = args.flare_list
 os.makedirs(evaluation_path, exist_ok=True)
 
 nf2_paths = sorted(glob.glob(os.path.join(series_base_path, '**', 'extrapolation_result.nf2')))
-Mm_per_pix = 360e-3 * args.strides
+Mm_per_pix = 360e-3 * args.strides * 2 # assuming bin 2 was used for the simulation
 cm_per_pix = (Mm_per_pix * 1e8)
-z_pixels = int(np.ceil(20 / (Mm_per_pix)))  # 20 Mm --> pixels; bin1
+z_pixels = int(np.ceil(20 / (360e-3 * 2)))  # 20 Mm --> pixels; bin2
 
 # save results as npy files
 free_energy_files = []
 for path in tqdm(nf2_paths):
     save_path = os.path.join(evaluation_path, '%s.npy' % path.split('/')[-2])
-    if os.path.exists(save_path):
-        free_energy_files += [save_path]
-        continue
+    # if os.path.exists(save_path):
+    #     free_energy_files += [save_path]
+    #     continue
     b = load_cube(path, progress=False, z=z_pixels, strides=args.strides, batch_size=100000 * torch.cuda.device_count())
     free_me = get_free_mag_energy(b, progress=False)
     np.save(save_path, free_me)
@@ -48,7 +48,7 @@ series_dates = [datetime.strptime(os.path.basename(f)[:14], '%Y%m%d_%H%M%S') for
 free_energy_series = []
 # plot the energy depletion
 me_history = [None] * 4
-for f, d in zip(free_energy_files, series_dates):
+for f, d in tqdm(zip(free_energy_files, series_dates)):
     free_me = np.load(f)
     prev_me = me_history.pop(0)
     if prev_me is None:

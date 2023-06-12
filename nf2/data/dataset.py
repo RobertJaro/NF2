@@ -47,6 +47,7 @@ class CubeDataset(Dataset):
 
     def __init__(self, cube_shape, spatial_norm, strides=1, batch_size=1024):
         coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)
+        self.coords_shape = coords.shape[:-1]
         coords = torch.tensor(coords / spatial_norm, dtype=torch.float32)
         coords = coords.view((-1, 3))
         self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))

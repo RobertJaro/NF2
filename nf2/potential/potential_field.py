@@ -54,6 +54,10 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
         potential = block_replicate(potential, strides, conserve_sum=False)
     return potential
 
+def get_potential_field(b_n, height, *args, **kwargs):
+    potential = get_potential(b_n, height, *args, **kwargs)
+    b = - 1 * np.stack(np.gradient(potential, axis=[0, 1, 2], edge_order=2), axis=-1)
+    return b
 
 def get_potential_boundary(b_n, height, batch_size=2048):
     assert not np.any(np.isnan(b_n)), 'Invalid data value'
@@ -66,6 +70,31 @@ def get_potential_boundary(b_n, height, batch_size=2048):
               np.stack(np.mgrid[:cube_shape[0], cube_shape[1] - 2:cube_shape[1] + 1, :cube_shape[2]], -1),
               np.stack(np.mgrid[-1:2, :cube_shape[1], :cube_shape[2]], -1),
               np.stack(np.mgrid[cube_shape[0] - 2:cube_shape[0] + 1, :cube_shape[1], :cube_shape[2]], -1), ]
+    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size)
+
+    fields = [fields[0][:, :, 1].reshape((-1, 3)),
+              fields[1][:, 1, :].reshape((-1, 3)), fields[2][:, 1, :].reshape((-1, 3)),
+              fields[3][1, :, :].reshape((-1, 3)), fields[4][1, :, :].reshape((-1, 3))]
+    coords = [coords[0][:, :, 1].reshape((-1, 3)),
+              coords[1][:, 1, :].reshape((-1, 3)), coords[2][:, 1, :].reshape((-1, 3)),
+              coords[3][1, :, :].reshape((-1, 3)), coords[4][1, :, :].reshape((-1, 3))]
+    return np.concatenate(coords), np.concatenate(fields)
+
+
+def get_potential_top(b_n, height, batch_size=2048):
+    assert not np.any(np.isnan(b_n)), 'Invalid data value'
+
+    cube_shape = (*b_n.shape, height)
+
+    b_n = b_n.reshape((-1)).astype(np.float32)
+    coords = [np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], cube_shape[2] - 2:cube_shape[2] + 1], -1)]
+    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size)
+
+    fields = [fields[0][:, :, 1].reshape((-1, 3)),]
+    coords = [coords[0][:, :, 1].reshape((-1, 3)),]
+    return np.concatenate(coords), np.concatenate(fields)
+
+def _compute_fields(coords, cube_shape, b_n, batch_size=2048):
     coords_shape = [c.shape[:-1] for c in coords]
     flat_coords = np.concatenate([c.reshape(((-1, 3))) for c in coords])
 
@@ -98,10 +127,4 @@ def get_potential_boundary(b_n, height, batch_size=2048):
         fields += [b]
         idx += np.prod(s)
 
-    fields = [fields[0][:, :, 1].reshape((-1, 3)),
-              fields[1][:, 1, :].reshape((-1, 3)), fields[2][:, 1, :].reshape((-1, 3)),
-              fields[3][1, :, :].reshape((-1, 3)), fields[4][1, :, :].reshape((-1, 3))]
-    coords = [coords[0][:, :, 1].reshape((-1, 3)),
-              coords[1][:, 1, :].reshape((-1, 3)), coords[2][:, 1, :].reshape((-1, 3)),
-              coords[3][1, :, :].reshape((-1, 3)), coords[4][1, :, :].reshape((-1, 3))]
-    return np.concatenate(coords), np.concatenate(fields)
+    return fields
