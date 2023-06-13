@@ -1,6 +1,7 @@
 import argparse
 import json
 import os
+import shutil
 
 import torch
 from pytorch_lightning import Trainer
@@ -8,17 +9,11 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.module import NF2Module, save
-from nf2.train.data_loader import SHARPDataModule, SyntheticMultiHeightDataModule, VSMMultiHeightDataModule, \
-    SSTDataModule
+from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
                     help='config file for the simulation')
-parser.add_argument('--num_workers', type=int, required=False, default=4)
-parser.add_argument('--meta_path', type=str, required=False, default=None)
-parser.add_argument('--positional_encoding', action='store_true')
-parser.add_argument('--use_vector_potential', action='store_true')
-parser.add_argument('--use_potential_boundary', action='store_true')
 args = parser.parse_args()
 
 with open(args.config) as config:
@@ -26,82 +21,61 @@ with open(args.config) as config:
     for key, value in info.items():
         args.__dict__[key] = value
 
-# data parameters
-bin = int(args.bin)
-spatial_norm = args.spatial_norm
-height = args.height
-height_mapping = args.height_mapping if 'height_mapping' in args else None
-
-b_norm = args.b_norm
-
-# model parameters
-dim = args.dim
-# training parameters
-lambda_b = args.lambda_b
-lambda_div = args.lambda_div
-lambda_ff = args.lambda_ff
-lambda_height_reg = args.lambda_height_reg if 'lambda_height_reg' in args else 0
-
-n_gpus = torch.cuda.device_count()
-batch_size = int(args.batch_size)
-validation_interval = args.validation_interval
-num_workers = args.num_workers if args.num_workers is not None else os.cpu_count()
-use_vector_potential = args.use_vector_potential
-positional_encoding = args.positional_encoding
-use_height_mapping = args.use_height_mapping
-use_potential_boundary = args.use_potential_boundary
-iterations = args.iterations
-
 base_path = args.base_path
-data_path = args.data_path
-work_directory = args.work_directory
-work_directory = base_path if work_directory is None else work_directory
-
 os.makedirs(base_path, exist_ok=True)
-os.makedirs(work_directory, exist_ok=True)
 
 save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
-slice = args.slice if 'slice' in args else None
+# init logging
+wandb_id = args.logging['wandb_id'] if 'wandb_id' in args.logging else None
+log_model = args.logging['wandb_log_model'] if 'wandb_log_model' in args.logging else False
+wandb_logger = WandbLogger(project=args.logging['wandb_project'], name=args.logging['wandb_name'], offline=False,
+                           entity=args.logging['wandb_entity'], id=wandb_id, dir=base_path, log_model=log_model)
+wandb_logger.experiment.config.update(vars(args), allow_val_change=True)
 
-# INIT TRAINING
-logger = WandbLogger(project=args.wandb_project, name=args.wandb_name, offline=False, entity="robert_jarolim")
-logger.experiment.config.update(vars(args))
+# restore model checkpoint from wandb
+if wandb_id is not None:
+    checkpoint_reference = f"{args.logging['wandb_entity']}/{args.logging['wandb_project']}/model-{args.logging['wandb_id']}:latest"
+    artifact = wandb_logger.use_artifact(checkpoint_reference, artifact_type="model")
+    artifact.download(root=base_path)
+    shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
+    args.data['plot_overview'] = False  # skip overview plot for restored model
 
-# data_module = VSMMultiHeightDataModule(data_path, height_mapping,
-#                                        height, spatial_norm, b_norm,
-#                                        work_directory, batch_size, batch_size * 2, iterations, num_workers,
-#                                        return_height_ranges=use_height_mapping, use_potential_boundary=use_potential_boundary,
-#                                        slice=slice, bin=bin)
-# data_module = SSTDataModule(data_path,height_mapping,  height, spatial_norm, b_norm,
-#                             work_directory, batch_size, batch_size * 2, iterations, num_workers,
-#                             use_potential_boundary=use_potential_boundary, slice=slice, bin=bin)
-data_module = SyntheticMultiHeightDataModule(data_path, height, spatial_norm, b_norm, work_directory,
-                                             batch_size, batch_size * 2, iterations, num_workers, slice, bin,
-                                             use_potential_boundary=use_potential_boundary)
-
+if args.data["type"] == 'numpy':
+    data_module = NumpyDataModule(**args.data)
+if args.data["type"] == 'sharp':
+    data_module = SHARPDataModule(**args.data)
+elif args.data["type"] == 'fits':
+    data_module = FITSDataModule(**args.data)
+elif args.data["type"] == 'solis':
+    data_module = SOLISDataModule(**args.data)
+elif args.data["type"] == 'analytical':
+    data_module = AnalyticDataModule(**args.data)
+else:
+    raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
-                       'gauss_per_dB': b_norm,
-                       'Mm_per_ds': 320 * 360e-3}
+                       'gauss_per_dB': args.data["b_norm"],
+                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"]}
 
-nf2 = NF2Module(validation_settings, dim, lambda_b, lambda_div, lambda_ff, lambda_height_reg,
-                meta_path=args.meta_path, positional_encoding=positional_encoding,
-                use_vector_potential=use_vector_potential, use_height_mapping=use_height_mapping)
+nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
-save_callback = LambdaCallback(on_validation_end=lambda *args: save(save_path, nf2.model, data_module, nf2.height_mapping_model))
-checkpoint_callback = ModelCheckpoint(dirpath=base_path, monitor='train/loss',
-                                      every_n_train_steps=validation_interval, save_last=True)
+save_callback = LambdaCallback(
+    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, nf2.height_mapping_model))
+checkpoint_callback = ModelCheckpoint(dirpath=base_path, every_n_train_steps=args.training["validation_interval"],
+                                      save_last=True)
 
+torch.set_float32_matmul_precision('medium')  # for A100 GPUs
+n_gpus = torch.cuda.device_count()
 trainer = Trainer(max_epochs=1,
-                  logger=logger,
+                  logger=wandb_logger,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
                   num_sanity_val_steps=0,
-                  val_check_interval=validation_interval,
+                  val_check_interval=args.training['validation_interval'],
                   gradient_clip_val=0.1,
-                  callbacks=[checkpoint_callback, save_callback])
+                  callbacks=[checkpoint_callback, save_callback], )
 
 trainer.fit(nf2, data_module, ckpt_path='last')
 save(save_path, nf2.model, data_module, height_mapping_model=nf2.height_mapping_model)

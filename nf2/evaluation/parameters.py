@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 from nf2.evaluation.unpack import load_cube
-from nf2.train.metric import normalized_divergence, weighted_sigma
+from nf2.train.metric import normalized_divergence, weighted_theta
 
 base_path = '/gpfs/gpfs0/robert.jarolim/nf2/parameter_study'
 
@@ -20,7 +20,7 @@ for nf2_file in tqdm(sorted(glob.glob(os.path.join(base_path, '**', '*.nf2')))):
     total_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     b = load_cube(nf2_file)
     div = normalized_divergence(b).mean()
-    sig = weighted_sigma(b).mean()
+    sig = weighted_theta(b).mean()
     #
     result += [(total_params, div, sig)]
 

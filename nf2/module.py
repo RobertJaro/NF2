@@ -14,7 +14,7 @@ class NF2Module(LightningModule):
 
     def __init__(self, validation_settings, dim=256, lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5},
                  lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-3, lambda_min_energy_nans=1e-3, meta_path=None,
-                 positional_encoding=False, use_vector_potential=False, use_height_mapping=False,):
+                 positional_encoding=False, use_vector_potential=False, use_height_mapping=False, **kwargs):
         """Magnetic field extrapolations trainer
 
         :param dim: number of neurons per layer (8 layers).
@@ -252,9 +252,12 @@ def calculate_loss(b, coords):
 
 
 def save(save_path, model, data_module, height_mapping_model=None):
-    torch.save({'model': model,
-                'cube_shape': data_module.cube_shape,
-                'b_norm': data_module.b_norm,
-                'spatial_norm': data_module.spatial_norm,
-                'meta_info': data_module.meta_info,
-                'height_mapping_model': height_mapping_model}, save_path)
+    save_state = {'model': model,
+              'cube_shape': data_module.cube_shape,
+              'b_norm': data_module.b_norm,
+              'spatial_norm': data_module.spatial_norm,
+              'meta_data': data_module.meta_data,
+              'height_mapping_model': height_mapping_model,
+              'height_mapping': data_module.height_mapping if hasattr(data_module, 'height_mapping') else None,
+              'Mm_per_pixel': data_module.Mm_per_pixel,}
+    torch.save(save_state, save_path)

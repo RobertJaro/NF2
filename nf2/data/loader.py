@@ -21,7 +21,7 @@ def prep_b_data(b_cube, error_cube, height,
     mf_err = error_cube.reshape((-1, 3))
     # load potential field
     if potential_boundary:
-        pf_coords, pf_err, pf_values = _load_potential_field_data(b_cube, height, potential_strides)
+        pf_coords, pf_err, pf_values = load_potential_field_data(b_cube, height, potential_strides)
         # concatenate pf data points
         coords = np.concatenate([pf_coords, mf_coords])
         values = np.concatenate([pf_values, mf_values])
@@ -58,24 +58,7 @@ def load_spherical_hmi_data(data_path):
     hmi_cube = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
     return coords, hmi_cube, r_map.meta
 
-
-def load_hmi_data(data_path):
-    if isinstance(data_path, str):
-        hmi_p = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))[0]  # x
-        hmi_t = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))[0]  # y
-        hmi_r = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))[0]  # z
-        err_p = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))[0]  # x
-        err_t = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))[0]  # y
-        err_r = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))[0]  # z
-    else:
-        hmi_p, err_p, hmi_r, err_r, hmi_t, err_t = data_path
-    # laod maps
-    hmi_cube = np.stack([Map(hmi_p).data, -Map(hmi_t).data, Map(hmi_r).data]).transpose()
-    error_cube = np.stack([Map(err_p).data, Map(err_t).data, Map(err_r).data]).transpose()
-    return hmi_cube, error_cube, Map(hmi_r).meta
-
-
-def _load_potential_field_data(hmi_cube, height, reduce, only_top=False):
+def load_potential_field_data(hmi_cube, height, reduce, only_top=False):
     if reduce > 1:
         hmi_cube = block_reduce(hmi_cube, (reduce, reduce, 1), func=np.mean)
         height = height // reduce

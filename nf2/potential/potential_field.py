@@ -112,8 +112,7 @@ def _compute_fields(coords, cube_shape, b_n, batch_size=2048):
         flat_coords = torch.tensor(flat_coords, dtype=torch.float32, )
 
         potential = []
-        for coord, in tqdm(DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2),
-                           desc='Potential Boundary'):
+        for coord, in DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2):
             coord = coord.to(device)
             p_batch = model(coord)
             potential += [p_batch.cpu()]

@@ -39,7 +39,7 @@ def normalized_divergence(b_field):
     return np.abs(divergence(b_field)) / (vector_norm(b_field) + 1e-7)
 
 
-def weighted_sigma(b, j=None):
+def weighted_theta(b, j=None):
     j = j if j is not None else curl(b)
     sigma = vector_norm(lorentz_force(b, j)) / vector_norm(b) / vector_norm(j)
     w_sigma = np.average((sigma), weights=vector_norm(j))
