@@ -8,3 +8,5 @@ astropy>=4.3.post1
 scikit-image>=0.18.2
 sunpy>=3.0.1
 setuptools>=49.6.0
+wandb>=0.13
+lightning==1.9.3
