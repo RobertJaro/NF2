@@ -6,6 +6,12 @@ def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s'):
     series, harpnum, time.isoformat('_', timespec='seconds'))
     donwload_ds(ds, dir, client)
 
+def download_HARP_series(harpnum, t_start, duration, download_dir, client, series='sharp_cea_720s', download_error=True):
+    segments = 'Br, Bp, Bt, Br_err, Bp_err, Bt_err' if download_error else 'Br, Bp, Bt'
+    ds = 'hmi.%s[%d][%s/%s]{%s}' % \
+         (series, harpnum, t_start.isoformat('_', timespec='seconds'), duration, segments)
+    donwload_ds(ds, download_dir, client)
+
 def donwload_ds(ds, dir, client):
     os.makedirs(dir, exist_ok=True)
     r = client.export(ds, protocol='fits')
