@@ -93,7 +93,7 @@ if __name__ == '__main__':
     x_dates = date2num(series_results['date'])
     date_format = DateFormatter('%d-%H:%M')
 
-    fig, full_axs = plt.subplots(5, 2, figsize=(8, 15), gridspec_kw={"width_ratios":[1,0.05]})
+    fig, full_axs = plt.subplots(5, 2, figsize=(8, 12), gridspec_kw={"width_ratios":[1,0.05]})
     axs = full_axs[:, 0]
     [ax.axis('off') for ax in full_axs[:, 1]]
     # make date axis
@@ -157,12 +157,21 @@ if __name__ == '__main__':
     # j_map
     j_maps = np.array(series_results['j_map'])
     images = [cm.get_cmap('viridis')(Normalize(vmin=0, vmax=j_maps.max())(j_map.T)) for j_map in j_maps]
+    images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'j_maps.mp4'), images)
     # free_energy_map
     free_energy_maps = np.array(series_results['free_energy_map'])
     images = [cm.get_cmap('jet')(Normalize(vmin=0, vmax=free_energy_maps.max())(free_energy_map.T)) for free_energy_map in free_energy_maps]
+    images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'free_energy_maps.mp4'), images)
+    # free_energy_change_map
+    free_energy_change_maps = np.gradient(np.array(series_results['free_energy_map']), axis=0)
+    v_min_max = np.max(np.abs(free_energy_change_maps))
+    images = [cm.get_cmap('seismic')(Normalize(vmin=-v_min_max, vmax=v_min_max)(free_energy_change_map.T)) for free_energy_change_map in free_energy_change_maps]
+    images = np.flip(images, axis=1)
+    imageio.mimsave(os.path.join(result_path, 'free_energy_change_maps.mp4'), images)
     # jxb_map
     jxb_maps = np.array(series_results['jxb_map'])
     images = [cm.get_cmap('plasma')(Normalize(vmin=0, vmax=jxb_maps.max())(jxb_map.T)) for jxb_map in jxb_maps]
+    images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'jxb_maps.mp4'), images)

@@ -8,7 +8,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.module import NF2Module, save
+from nf2.train.module import NF2Module, save
 from nf2.train.data_loader import SHARPSeriesDataModule
 
 parser = argparse.ArgumentParser()
@@ -57,9 +57,10 @@ validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
 nf2 = NF2Module(validation_settings, meta_path=meta_path, **args.model, **args.training)
 
 # callback
-save_callback = LambdaCallback(on_validation_epoch_end=lambda *args: save(
+config = {'data': args.data, 'model': args.model, 'training': args.training}
+save_callback = LambdaCallback(on_train_epoch_end=lambda *args: save(
     os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch][0]).split('.')[-3] + '.nf2'),
-    nf2.model, data_module, nf2.height_mapping_model))
+    nf2.model, data_module, config, nf2.height_mapping_model))
 
 trainer = Trainer(max_epochs=len(data_paths),
                   logger=wandb_logger,
@@ -67,5 +68,6 @@ trainer = Trainer(max_epochs=len(data_paths),
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
                   num_sanity_val_steps=0, callbacks=[save_callback],
-                  gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=1)
+                  gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=1,
+                  check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1,)
 trainer.fit(nf2, data_module)

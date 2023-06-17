@@ -59,7 +59,7 @@ def get_potential_field(b_n, height, *args, **kwargs):
     b = - 1 * np.stack(np.gradient(potential, axis=[0, 1, 2], edge_order=2), axis=-1)
     return b
 
-def get_potential_boundary(b_n, height, batch_size=2048):
+def get_potential_boundary(b_n, height, batch_size=2048, **kwargs):
     assert not np.any(np.isnan(b_n)), 'Invalid data value'
 
     cube_shape = (*b_n.shape, height)
@@ -70,7 +70,7 @@ def get_potential_boundary(b_n, height, batch_size=2048):
               np.stack(np.mgrid[:cube_shape[0], cube_shape[1] - 2:cube_shape[1] + 1, :cube_shape[2]], -1),
               np.stack(np.mgrid[-1:2, :cube_shape[1], :cube_shape[2]], -1),
               np.stack(np.mgrid[cube_shape[0] - 2:cube_shape[0] + 1, :cube_shape[1], :cube_shape[2]], -1), ]
-    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size)
+    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
 
     fields = [fields[0][:, :, 1].reshape((-1, 3)),
               fields[1][:, 1, :].reshape((-1, 3)), fields[2][:, 1, :].reshape((-1, 3)),
@@ -81,20 +81,20 @@ def get_potential_boundary(b_n, height, batch_size=2048):
     return np.concatenate(coords), np.concatenate(fields)
 
 
-def get_potential_top(b_n, height, batch_size=2048):
+def get_potential_top(b_n, height, batch_size=2048, **kwargs):
     assert not np.any(np.isnan(b_n)), 'Invalid data value'
 
     cube_shape = (*b_n.shape, height)
 
     b_n = b_n.reshape((-1)).astype(np.float32)
     coords = [np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], cube_shape[2] - 2:cube_shape[2] + 1], -1)]
-    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size)
+    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
 
     fields = [fields[0][:, :, 1].reshape((-1, 3)),]
     coords = [coords[0][:, :, 1].reshape((-1, 3)),]
     return np.concatenate(coords), np.concatenate(fields)
 
-def _compute_fields(coords, cube_shape, b_n, batch_size=2048):
+def _compute_fields(coords, cube_shape, b_n, batch_size=2048, progress=False):
     coords_shape = [c.shape[:-1] for c in coords]
     flat_coords = np.concatenate([c.reshape(((-1, 3))) for c in coords])
 
@@ -112,7 +112,9 @@ def _compute_fields(coords, cube_shape, b_n, batch_size=2048):
         flat_coords = torch.tensor(flat_coords, dtype=torch.float32, )
 
         potential = []
-        for coord, in DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2):
+        iter = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2)
+        iter = iter if progress else tqdm(iter, desc='Potential Field')
+        for coord, in iter:
             coord = coord.to(device)
             p_batch = model(coord)
             potential += [p_batch.cpu()]

@@ -251,13 +251,15 @@ def calculate_loss(b, coords):
     return divergence_loss, force_loss
 
 
-def save(save_path, model, data_module, height_mapping_model=None):
+def save(save_path, model, data_module, config, height_mapping_model=None):
     save_state = {'model': model,
               'cube_shape': data_module.cube_shape,
               'b_norm': data_module.b_norm,
               'spatial_norm': data_module.spatial_norm,
               'meta_data': data_module.meta_data,
+              'config': config,
               'height_mapping_model': height_mapping_model,
               'height_mapping': data_module.height_mapping if hasattr(data_module, 'height_mapping') else None,
-              'Mm_per_pixel': data_module.Mm_per_pixel,}
+              'Mm_per_pixel': data_module.Mm_per_pixel if hasattr(data_module, 'Mm_per_pixel') else None,
+                  }
     torch.save(save_state, save_path)

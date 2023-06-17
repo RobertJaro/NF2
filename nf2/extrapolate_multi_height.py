@@ -8,7 +8,7 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.module import NF2Module, save
+from nf2.train.module import NF2Module, save
 from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule
 
 parser = argparse.ArgumentParser()
@@ -43,7 +43,7 @@ if wandb_id is not None:
 
 if args.data["type"] == 'numpy':
     data_module = NumpyDataModule(**args.data)
-if args.data["type"] == 'sharp':
+elif args.data["type"] == 'sharp':
     data_module = SHARPDataModule(**args.data)
 elif args.data["type"] == 'fits':
     data_module = FITSDataModule(**args.data)
@@ -60,8 +60,9 @@ validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
 
 nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
+config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
-    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, nf2.height_mapping_model))
+    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config, nf2.height_mapping_model))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path, every_n_train_steps=args.training["validation_interval"],
                                       save_last=True)
 
@@ -78,6 +79,6 @@ trainer = Trainer(max_epochs=1,
                   callbacks=[checkpoint_callback, save_callback], )
 
 trainer.fit(nf2, data_module, ckpt_path='last')
-save(save_path, nf2.model, data_module, height_mapping_model=nf2.height_mapping_model)
+save(save_path, nf2.model, data_module, config, height_mapping_model=nf2.height_mapping_model)
 # clean up
 data_module.clear()

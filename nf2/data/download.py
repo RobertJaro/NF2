@@ -6,7 +6,6 @@ def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s'):
     series, harpnum, time.isoformat('_', timespec='seconds'))
     donwload_ds(ds, dir, client)
 
-
 def donwload_ds(ds, dir, client):
     os.makedirs(dir, exist_ok=True)
     r = client.export(ds, protocol='fits')
@@ -25,3 +24,9 @@ def find_HARP(start_time, noaa_nums, client):
         if len(harpnum) > 0:
             return harpnum.iloc[0]
     return None
+
+
+def download_euv(start_time, end_time, dir, client):
+    ds = f'aia.lev1_euv_12s[{start_time.isoformat("_", timespec="seconds")} / {(end_time - start_time).total_seconds()}s@60s][94]{{image}}'
+    euv_files = donwload_ds(ds, dir, client).download
+    return euv_files
