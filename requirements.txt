@@ -6,5 +6,8 @@ tqdm>=4.61.2
 matplotlib>=3.4.3
 astropy>=4.3.post1
 scikit-image>=0.18.2
-sunpy>=3.0.1
+sunpy[all]>=3.0.1
 setuptools>=49.6.0
+wandb>=0.13
+lightning==1.9.3
+pytorch_lightning==1.9.3

@@ -1,25 +1,26 @@
 import numpy as np
-from torch.utils.data import Dataset
+import torch
+from torch.utils.data import Dataset, IterableDataset
 
 
-class BoundaryDataset(Dataset):
+class BatchesDataset(Dataset):
 
-    def __init__(self, coords, field, error, norm):
-        self.norm = norm
-        self.error = error
-        self.coordinates = coords
-        self.field = field
+    def __init__(self, batches_file_paths, batch_size):
+        """Data set for lazy loading a pre-batched numpy data array.
+
+        :param batches_path: path to the numpy array.
+        """
+        self.batches_file_paths = batches_file_paths
+        self.batch_size = batch_size
 
     def __len__(self):
-        return self.coordinates.shape[0]
+        return np.ceil(np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(np.int32)
 
     def __getitem__(self, idx):
-        coord = self.coordinates[idx]
-        field = self.field[idx]
-        err = self.error[idx]
-        scaled_coord = [c / self.norm for c in coord]
-        return np.array([scaled_coord[0], scaled_coord[1], scaled_coord[2]], np.float32), field, err  # coord = (x, y, z)
-
+        # lazy load data
+        data = {k: np.copy(np.load(bf, mmap_mode='r')[idx * self.batch_size: (idx + 1) * self.batch_size])
+                for k, bf in self.batches_file_paths.items()}
+        return data
 
 class ImageDataset(Dataset):
 
@@ -44,25 +45,36 @@ class ImageDataset(Dataset):
 
 class CubeDataset(Dataset):
 
-    def __init__(self, cube_shape, norm, block_shape=(32, 32, 32), coords=[], strides=1):
-        self.cube_shape = cube_shape
-        self.block_shape = block_shape
-        self.coords = coords
-        self.strides = strides
-        self.norm = norm
+    def __init__(self, cube_shape, spatial_norm, strides=1, batch_size=1024):
+        coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)
+        self.coords_shape = coords.shape[:-1]
+        coords = torch.tensor(coords / spatial_norm, dtype=torch.float32)
+        coords = coords.view((-1, 3))
+        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
         return len(self.coords)
 
     def __getitem__(self, idx):
         coord = self.coords[idx]
-        return self.getCube(coord)
+        return coord
 
-    def getCube(self, coord):
-        coord_cube = np.stack(np.mgrid[coord[0]:coord[0] + self.block_shape[0]:self.strides,
-                              coord[1]:coord[1] + self.block_shape[1]:self.strides,
-                              coord[2]:coord[2] + self.block_shape[2]:self.strides, ], -1)
-        coord_cube = np.stack([coord_cube[..., 0] / self.norm,
-                               coord_cube[..., 1] / self.norm,
-                               coord_cube[..., 2] / self.norm, ], -1)
-        return coord_cube.astype(np.float32)
+
+class RandomCoordinateDataset(Dataset):
+
+    def __init__(self, cube_shape, spatial_norm, batch_size):
+        super().__init__()
+        self.cube_shape = cube_shape
+        self.spatial_norm = spatial_norm
+        self.batch_size = batch_size
+        self.float_tensor = torch.FloatTensor
+
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, item):
+        random_coords = self.float_tensor(self.batch_size, 3).uniform_()
+        random_coords[:, 0] *= (self.cube_shape[0] - 1) / self.spatial_norm
+        random_coords[:, 1] *= (self.cube_shape[1] - 1) / self.spatial_norm
+        random_coords[:, 2] *= (self.cube_shape[2] - 1) / self.spatial_norm
+        return random_coords
