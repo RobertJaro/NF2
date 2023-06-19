@@ -47,7 +47,8 @@ ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
 meta_path = ckpts[-1] if len(ckpts) > 0 else args.meta_path  # reload last savepoint
 data_paths = data_paths[len(ckpts):]  # select remaining extrapolations
 
-# initial training
+if 'work_directory' not in args.data or args.data['work_directory'] is None:
+    args.data['work_directory'] = base_path
 data_module = SHARPSeriesDataModule(data_paths, **args.data)
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': args.data["b_norm"],

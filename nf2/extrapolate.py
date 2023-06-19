@@ -41,6 +41,8 @@ if wandb_id is not None:
     shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
     args.data['plot_overview'] = False  # skip overview plot for restored model
 
+if 'work_directory' not in args.data or args.data['work_directory'] is None:
+    args.data['work_directory'] = base_path
 if args.data["type"] == 'numpy':
     data_module = NumpyDataModule(**args.data)
 elif args.data["type"] == 'sharp':
