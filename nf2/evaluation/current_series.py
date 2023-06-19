@@ -8,7 +8,7 @@ from matplotlib.colors import LogNorm
 from tqdm import tqdm
 
 from nf2.evaluation.unpack import load_cube
-from nf2.train.metric import curl, vector_norm
+from nf2.evaluation.metric import curl, vector_norm
 
 result_path = '/gpfs/gpfs0/robert.jarolim/nf2/6975/j_maps'
 model_paths = sorted(

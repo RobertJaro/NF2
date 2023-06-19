@@ -7,7 +7,7 @@ import torch
 from tqdm import tqdm
 
 from nf2.evaluation.unpack import load_cube
-from nf2.train.metric import normalized_divergence, weighted_theta
+from nf2.evaluation.metric import normalized_divergence, weighted_theta
 
 base_path = '/gpfs/gpfs0/robert.jarolim/nf2/parameter_study'
 

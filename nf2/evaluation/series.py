@@ -1,27 +1,21 @@
 import argparse
 import glob
 import os
-import tarfile
 
-import cv2
 import imageio
 import numpy as np
-import numpy as np
-import pandas as pd
 import torch.cuda
 from dateutil.parser import parse
 from matplotlib import pyplot as plt, cm
-import matplotlib.animation as animation
-from matplotlib.colors import Normalize, to_rgb, hsv_to_rgb
+from matplotlib.colors import Normalize
 from matplotlib.dates import date2num, DateFormatter
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.net import Fido
 from sunpy.net import attrs as a
 from tqdm import tqdm
 
 from nf2.evaluation.energy import get_free_mag_energy
+from nf2.evaluation.metric import energy, curl, vector_norm, divergence, weighted_theta
 from nf2.evaluation.unpack import load_cube
-from nf2.train.metric import energy, curl, vector_norm, divergence, weighted_theta
 
 
 def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
@@ -93,7 +87,7 @@ if __name__ == '__main__':
     x_dates = date2num(series_results['date'])
     date_format = DateFormatter('%d-%H:%M')
 
-    fig, full_axs = plt.subplots(5, 2, figsize=(8, 12), gridspec_kw={"width_ratios":[1,0.05]})
+    fig, full_axs = plt.subplots(5, 2, figsize=(8, 12), gridspec_kw={"width_ratios": [1, 0.05]})
     axs = full_axs[:, 0]
     [ax.axis('off') for ax in full_axs[:, 1]]
     # make date axis
@@ -161,13 +155,15 @@ if __name__ == '__main__':
     imageio.mimsave(os.path.join(result_path, 'j_maps.mp4'), images)
     # free_energy_map
     free_energy_maps = np.array(series_results['free_energy_map'])
-    images = [cm.get_cmap('jet')(Normalize(vmin=0, vmax=free_energy_maps.max())(free_energy_map.T)) for free_energy_map in free_energy_maps]
+    images = [cm.get_cmap('jet')(Normalize(vmin=0, vmax=free_energy_maps.max())(free_energy_map.T)) for free_energy_map
+              in free_energy_maps]
     images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'free_energy_maps.mp4'), images)
     # free_energy_change_map
     free_energy_change_maps = np.gradient(np.array(series_results['free_energy_map']), axis=0)
     v_min_max = np.max(np.abs(free_energy_change_maps))
-    images = [cm.get_cmap('seismic')(Normalize(vmin=-v_min_max, vmax=v_min_max)(free_energy_change_map.T)) for free_energy_change_map in free_energy_change_maps]
+    images = [cm.get_cmap('seismic')(Normalize(vmin=-v_min_max, vmax=v_min_max)(free_energy_change_map.T)) for
+              free_energy_change_map in free_energy_change_maps]
     images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'free_energy_change_maps.mp4'), images)
     # jxb_map
