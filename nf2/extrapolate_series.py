@@ -30,9 +30,7 @@ wandb_logger = WandbLogger(project=args.logging['wandb_project'], name=args.logg
                            entity=args.logging['wandb_entity'], id=wandb_id, dir=base_path, log_model='all')
 wandb_logger.experiment.config.update(vars(args), allow_val_change=True)
 
-# general training parameters
-torch.set_float32_matmul_precision('medium')  # for A100 GPUs
-n_gpus = torch.cuda.device_count()
+
 
 data_path = args.data['paths']
 hmi_p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
@@ -61,6 +59,10 @@ config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(on_train_epoch_end=lambda *args: save(
     os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch][0]).split('.')[-3] + '.nf2'),
     nf2.model, data_module, config, nf2.height_mapping_model))
+
+# general training parameters
+torch.set_float32_matmul_precision('medium')  # for A100 GPUs
+n_gpus = torch.cuda.device_count()
 
 trainer = Trainer(max_epochs=len(data_paths),
                   logger=wandb_logger,

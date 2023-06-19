@@ -1,7 +1,7 @@
 import numpy as np
 
 from nf2.potential.potential_field import get_potential, get_potential_field
-from nf2.train.metric import energy
+from nf2.evaluation.metric import energy
 
 
 def get_free_mag_energy(b, **kwargs):

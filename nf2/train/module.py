@@ -13,7 +13,8 @@ from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappin
 class NF2Module(LightningModule):
 
     def __init__(self, validation_settings, dim=256, lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5},
-                 lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-3, lambda_min_energy_nans=1e-3, meta_path=None,
+                 lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-3, lambda_min_energy_nans=1e-3,
+                 lr_params = {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}, meta_path=None,
                  positional_encoding=False, use_vector_potential=False, use_height_mapping=False, **kwargs):
         """Magnetic field extrapolations trainer
 
@@ -38,6 +39,7 @@ class NF2Module(LightningModule):
             self.height_mapping_model = None
         self.model = model
         self.validation_settings = validation_settings
+        self.lr_params = lr_params
 
         # load meta state
         if meta_path:
@@ -46,10 +48,15 @@ class NF2Module(LightningModule):
             model.load_state_dict(state_dict)
             logging.info('Loaded meta state: %s' % meta_path)
         # init
-        self.register_buffer('lambda_B', torch.tensor(lambda_b['start'], dtype=torch.float32))
-        self.register_buffer('lambda_B_gamma', torch.tensor((lambda_b['end'] / lambda_b['start']) ** (1 / lambda_b['iterations']) \
-            if lambda_b['iterations'] > 0 else 0, dtype=torch.float32))
-        self.register_buffer('lambda_B_end', torch.tensor(lambda_b['end'], dtype=torch.float32))
+        if isinstance(lambda_b, dict):
+            self.register_buffer('lambda_B', torch.tensor(lambda_b['start'], dtype=torch.float32))
+            self.register_buffer('lambda_B_gamma', torch.tensor((lambda_b['end'] / lambda_b['start']) ** (1 / lambda_b['iterations']) \
+                if lambda_b['iterations'] > 0 else 0, dtype=torch.float32))
+            self.register_buffer('lambda_B_end', torch.tensor(lambda_b['end'], dtype=torch.float32))
+        else:
+            self.register_buffer('lambda_B', torch.tensor(lambda_b, dtype=torch.float32))
+            self.register_buffer('lambda_B_gamma', torch.tensor(1, dtype=torch.float32))
+            self.register_buffer('lambda_B_end', torch.tensor(lambda_b, dtype=torch.float32))
         self.register_buffer('lambda_div', torch.tensor(lambda_div, dtype=torch.float32))
         self.register_buffer('lambda_ff', torch.tensor(lambda_ff, dtype=torch.float32))
         self.register_buffer('lambda_height_reg', torch.tensor(lambda_height_reg, dtype=torch.float32))
@@ -62,8 +69,16 @@ class NF2Module(LightningModule):
         parameters = list(self.model.parameters())
         if self.use_height_mapping:
             parameters += list(self.height_mapping_model.parameters())
-        self.optimizer = torch.optim.Adam(parameters, lr=5e-4)
-        self.scheduler = ExponentialLR(self.optimizer, gamma=(5e-5 / 5e-4) ** (1 / 1e5))  # decay over 1e5 iterations
+        if isinstance(self.lr_params, dict):
+            lr_start = self.lr_params['start']
+            lr_end = self.lr_params['end']
+            decay_iterations = self.lr_params['decay_iterations']
+        else:
+            lr_start = self.lr_params
+            lr_end = self.lr_params
+            decay_iterations = 1
+        self.optimizer = torch.optim.Adam(parameters, lr=lr_start)
+        self.scheduler = ExponentialLR(self.optimizer, gamma=(lr_end / lr_start) ** (1 / decay_iterations))
 
         return [self.optimizer], [self.scheduler]
 
