@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from torch.nn import Embedding
 
 
 class Sine(nn.Module):
@@ -10,6 +11,30 @@ class Sine(nn.Module):
     def forward(self, x):
         return torch.sin(self.w0 * x)
 
+class HeightMappingModel(nn.Module):
+
+    def __init__(self, in_coords, dim, positional_encoding=True):
+        super().__init__()
+        if positional_encoding:
+            posenc = PositionalEncoding(8, 20)
+            d_in = nn.Linear(in_coords * 40, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
+        else:
+            self.d_in = nn.Linear(in_coords, dim)
+        lin = [nn.Linear(dim, dim) for _ in range(4)]
+        self.linear_layers = nn.ModuleList(lin)
+        self.d_out = nn.Linear(dim, 1)
+        self.activation = Sine()
+
+    def forward(self, x, range):
+        input_coords = x
+        x = self.activation(self.d_in(x))
+        for l in self.linear_layers:
+            x = self.activation(l(x))
+        z_coords = torch.sigmoid(self.d_out(x)) * (range[:, 1:2] - range[:, 0:1]) + range[:, 0:1]
+        # shifted_z_coords = input_coords[:, 2:3] * (1 + z_shift) # max shift in dependence of height estimate
+        output_coords = torch.cat([input_coords[:, :2], z_coords], -1)
+        return output_coords
 
 class BModel(nn.Module):
 
@@ -104,8 +129,7 @@ class PositionalEncoding(nn.Module):
 def jacobian(output, coords):
     jac_matrix = [torch.autograd.grad(output[:, i], coords,
                                       grad_outputs=torch.ones_like(output[:, i]).to(output),
-                                      retain_graph=True,
-                                      create_graph=True)[0]
+                                      retain_graph=True, create_graph=True, allow_unused=True)[0]
                   for i in range(output.shape[1])]
     jac_matrix = torch.stack(jac_matrix, dim=1)
     return jac_matrix

@@ -2,7 +2,7 @@ import numpy as np
 from tvtk.api import tvtk, write_data
 
 
-def save_vtk(vec, path, name, Mm_per_pix=720e-3):
+def save_vtk(vec, path, name, scalar=None, scalar_name='scalar', Mm_per_pix=720e-3):
     """Save numpy array as VTK file
 
     :param vec: numpy array of the vector field (x, y, z, c)
@@ -20,7 +20,15 @@ def save_vtk(vec, path, name, Mm_per_pix=720e-3):
     pts = pts.reshape((-1, 3))
     vectors = vec.transpose(2, 1, 0, 3)
     vectors = vectors.reshape((-1, 3))
+
     sg = tvtk.StructuredGrid(dimensions=dim, points=pts)
     sg.point_data.vectors = vectors
     sg.point_data.vectors.name = name
+    if scalar is not None:
+        scalars = scalar.transpose(2, 1, 0)
+        scalars = scalars.reshape((-1))
+        sg.point_data.add_array(scalars)
+        sg.point_data.get_array(1).name = scalar_name
+        sg.point_data.update()
+
     write_data(sg, path)

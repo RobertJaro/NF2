@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from astropy.io import fits
 from matplotlib import pyplot as plt
+from sunpy.map import Map
 from torch import nn
 from tqdm import tqdm
 
@@ -20,6 +21,60 @@ def load_cube(save_path, device=None, z=None, strides=1, **kwargs):
     coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :z:strides], -1)
     return load_coords(model, cube_shape, state['spatial_norm'],
                        state['b_norm'], coords, device, **kwargs)
+
+def load_height_surface(save_path, device=None, strides=1, batch_size=1000, progress=False, **kwargs):
+    if device is None:
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    state = torch.load(save_path, map_location=device)
+    model = state['height_mapping_model']
+    height_mapping = state['height_mapping']
+    assert model is not None, 'Requires height mapping model!'
+    model = nn.DataParallel(model)
+    cube_shape = state['cube_shape']
+    coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :len(height_mapping['z']):], -1)
+    ranges = np.zeros((*coords.shape[:-1], 2))
+    for i, (z, z_min, z_max) in enumerate(zip(height_mapping['z'], height_mapping['z_min'], height_mapping['z_max'])):
+        coords[:, :, i, 2] = z
+        ranges[:, :, i, 0] = z_min
+        ranges[:, :, i, 1] = z_max
+
+    # normalize and to tensor
+    coords = torch.tensor(coords / state['spatial_norm'], dtype=torch.float32)
+    coords_shape = coords.shape
+    coords = coords.view((-1, 3))
+
+    ranges = torch.tensor(ranges / state['spatial_norm'], dtype=torch.float32)
+    ranges = ranges.view((-1, 2))
+
+    slices = []
+    it = range(int(np.ceil(coords.shape[0] / batch_size)))
+    it = tqdm(it) if progress else it
+    for k in it:
+        coord = coords[k * batch_size: (k + 1) * batch_size]
+        coord = coord.to(device)
+        coord.requires_grad = True
+        #
+        r = ranges[k * batch_size: (k + 1) * batch_size]
+        r = r.to(device)
+        slices += [model(coord, r).detach().cpu()]
+
+    slices = torch.cat(slices) * state['spatial_norm']
+    slices = slices.view(*coords_shape).numpy()
+    return slices
+
+def load_height_cube(save_path, *args, device=None, strides=1, **kwargs):
+    if device is None:
+        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    state = torch.load(save_path, map_location=device)
+    cube_shape = state['cube_shape']
+
+    slice = load_height_surface(save_path, *args, device=device, strides=strides, **kwargs)
+
+    cube = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)[..., 2]
+    contour_cube = np.zeros_like(cube)
+    for i in range(slice.shape[2]):
+        contour_cube[cube > slice[:, :, i:i+1, 2]] = i + 1
+    return contour_cube
 
 def load_shape(save_path, device=None):
     if device is None:
@@ -81,6 +136,12 @@ def load_coords(model, cube_shape, spatial_norm, b_norm, coords, device, batch_s
         with torch.no_grad():
             return _load(coords)
 
+def load_B_map(nf2_file, component=2):
+    state = torch.load(nf2_file)
+    meta = state['meta_data']
+    mag_data = load_slice(nf2_file, z=0)
+    mag_map = Map(mag_data[:, :, 0, component].T, meta)
+    return mag_map
 
 
 def save_fits(vec, path, prefix, meta_info={}):
