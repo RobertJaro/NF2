@@ -55,24 +55,22 @@ axs[2].plot(E_n, heights, label=label, color=c)
 axs[3].plot(E_m, heights, label=label, color=c)
 axs[4].plot(eps, heights, label=label, color=c)
 
-for path, label, c in zip(['/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_v3',
-                            # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_potential_v1',
-                           '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed_v2',
-                           '/gpfs/gpfs0/robert.jarolim/multi_height/muram_l1e-1',
-                           '/gpfs/gpfs0/robert.jarolim/multi_height/muram_realistic_v10',
-                           # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_realistic_bz_potential_v9',
-                           '/gpfs/gpfs0/robert.jarolim/multi_height/muram_realistic_bz_v11',
-                           # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_realistic_bz_combined_v8',
-                           ], ['Extrapolation',
-                               # 'Extrapolation (potential)',
-                               'Fixed Heights',
-                               'Mapped Heights (ideal)',
-                               r'Mapped Heights ($\tau = 10^{-4}$)',
-                               r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only)',
-                               # r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only, open)',
-                               # r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only, combined)'
+for path, label, c in zip([
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bz_v3',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bz_v4',
+                           ], [
+    'Extrapolation',
+    'Fixed Heights',
+    'Mapped Heights (ideal)',
+    r'Mapped Heights ($\tau = 10^{-4}$)',
+    r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only)',
+    r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only, initialized)',
                                ],
-                          ['C1', 'C2', 'C3', 'C4', 'C5']):
+                          ['C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8','C9']):
     # for path, label, c in zip(['/gpfs/gpfs0/robert.jarolim/multi_height/muram_l1e-0',
     #                         '/gpfs/gpfs0/robert.jarolim/multi_height/muram_l1e-1',
     #                         '/gpfs/gpfs0/robert.jarolim/multi_height/muram_l1e-2',

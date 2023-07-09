@@ -52,6 +52,7 @@ class SlicesDataModule(LightningDataModule):
                 plt.close('all')
 
         # load dataset
+        assert len(height_mapping['z']) == b_slices.shape[2], 'Invalid height mapping configuration: z must have the same length as the number of slices'
         coords = np.stack(np.mgrid[:b_slices.shape[0], :b_slices.shape[1], :b_slices.shape[2]], -1).astype(np.float32)
         for i, h in enumerate(height_mapping['z']):
             coords[:, :, i, 2] = h
@@ -61,10 +62,11 @@ class SlicesDataModule(LightningDataModule):
             z1 = height_mapping['z_max']
             # set to lower boundary if not specified
             z0 = height_mapping['z_min'] if 'z_min' in height_mapping else np.zeros_like(z1)
+            assert len(z0) == len(z1) == len(height_mapping['z']), \
+                'Invalid height mapping configuration: z_min, z_max and z must have the same length'
             for i, (h_min, h_max) in enumerate(zip(z0, z1)):
                 ranges[:, :, i, 0] = h_min
                 ranges[:, :, i, 1] = h_max
-
         # flatten data
         coords = coords.reshape((-1, 3)).astype(np.float32)
         values = b_slices.reshape((-1, 3)).astype(np.float32)

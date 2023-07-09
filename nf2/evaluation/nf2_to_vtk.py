@@ -22,3 +22,5 @@ tau = load_height_cube(nf2_path, device=device, progress=True, strides=strides)
 
 save_vtk(b, vtk_path, 'B', scalar=tau, scalar_name='tau',
          Mm_per_pix=torch.load(nf2_path)['Mm_per_pixel'])
+
+save_vtk(b, vtk_path, 'B',   Mm_per_pix=torch.load(nf2_path)['Mm_per_pixel'])

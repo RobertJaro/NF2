@@ -21,32 +21,41 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 dict_data = dict(np.load(data_path))
 
+b_cube = np.stack([dict_data['By'], dict_data['Bz'], dict_data['Bx']], -1) * np.sqrt(4 * np.pi)
+b_cube = np.moveaxis(b_cube, 0, -2)
+b_cube = block_reduce(b_cube, (2, 2, 1, 1), np.mean)  # reduce to HMI resolution
+
+
 height_maps = dict_data['z_line'] / (dict_data['dy'] * 2) - 20
+
+
+height_maps = height_maps[[0, -2]]
+b_cube = b_cube[:, :, [0, -2]]
+
 height_maps = block_reduce(height_maps, (1, 2, 2), np.mean)
 average_heights = np.median(height_maps, axis=(1, 2))  # use spatial scaling of horizontal field
 max_heights = np.max(height_maps, axis=(1, 2))
 
+print('Average heights', average_heights)
+print('Max heights', max_heights)
+
 print('Fixed heights avg distance:', np.mean(np.abs(average_heights[:, None, None] - height_maps), (1, 2)) * (0.192 * 2),
       np.mean(np.abs(average_heights[:, None, None] - height_maps), (1, 2)) / height_maps.max((1,2)) * 100 )
 
-b_cube = np.stack([dict_data['By'], dict_data['Bz'], dict_data['Bx']], -1) * np.sqrt(4 * np.pi)
-b_cube = np.moveaxis(b_cube, 0, -2)
-b_cube = block_reduce(b_cube, (2, 2, 1, 1), np.mean)  # reduce to HMI resolution
+
 
 state = torch.load(model_path, map_location=device)
 model = nn.DataParallel(state['height_mapping_model'])
 cube_shape = state['cube_shape']
 spatial_norm = state['spatial_norm']
 
-height_maps = [height_maps[-2],height_maps[-2]]
-average_heights = [3,3]
-max_heights = [50,50]
+height_mapping = state['height_mapping']
 
 fig, axs = plt.subplots(len(height_maps), 3, figsize=(12, 3 * len(height_maps)))
 
 height_diffs = []
 height_diffs_relative = []
-for i, (h, h_max, height_map) in enumerate(zip(average_heights, max_heights, height_maps)):
+for i, (h, h_min, h_max, height_map) in enumerate(zip(height_mapping['z'], height_mapping['z_min'], height_mapping['z_max'], height_maps)):
     coords = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], 0:1], -1).astype(np.float32)
     coords[:, :, :, 2] = h
     #
@@ -61,6 +70,7 @@ for i, (h, h_max, height_map) in enumerate(zip(average_heights, max_heights, hei
         coord = coord.to(device)
         # init range
         r = torch.zeros(coord.shape[0], 2)
+        r[:, 0] = h_min / spatial_norm
         r[:, 1] = h_max / spatial_norm
         r = r.to(device)
         #

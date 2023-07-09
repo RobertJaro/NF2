@@ -25,13 +25,19 @@ np.save(output, b_cube)
 
 height_maps = dict_data['z_line'] / (dict_data['dy'] * 2) # use spatial scaling of horizontal field
 height_maps -= 20 # shift 0 to photosphere
+height_maps = block_reduce(height_maps, (1, 2, 2), np.mean)  # reduce to HMI resolution
 # set first map fixed to photosphere
-height_maps[0, :, :] = 0
+# height_maps[0, :, :] = 0
 # adjust for slices
 # height_maps = height_maps[:b_cube.shape[2]]
 average_heights = np.median(height_maps, axis=(1, 2))
 max_heights = np.max(height_maps, axis=(1, 2))
 
-# save height information to txt file with pandas (using two decimal places)
+# print average heights with 3 decimal places
+print('Average heights', np.round(average_heights, 3))
+# print max heights with 3 decimal places
+print('Max heights', np.round(max_heights, 3))
+
+# save height information to txt file with pandas (using three decimal places)
 df = pd.DataFrame({'average_heights': average_heights, 'max_heights': max_heights})
-df.to_csv(output.replace('.npy', '.txt'), index=False, sep=' ', float_format='%.2f')
+df.to_csv(output.replace('.npy', '.txt'), index=False, sep=' ', float_format='%.3f')

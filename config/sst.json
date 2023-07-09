@@ -1,0 +1,48 @@
+{
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/sst_v2",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "multi-height",
+    "wandb_name": "sst"
+  },
+
+  "data": {
+    "type": "fits",
+    "fits_paths": [
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/nb_6173_2018-09-30_mosaic_Bvec_cea.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/nb_8542_2018-09-30_mosaic_Bvec_cea.fits"
+     ],
+    "mask_path": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/nb_6173_2018-09-30_mosaic_Bvec_cea_mask.fits",
+    "height_mapping": {
+      "z":  [0.000, 50],
+      "z_min": [0.000, 0.000],
+      "z_max": [0.000, 250]
+    },
+    "Mm_per_pixel": 0.36,
+    "boundary": {"type":  "potential", "strides":  4},
+    "b_norm": 2500,
+    "bin": 4,
+    "spatial_norm": 539.5,
+    "height": 539.5,
+    "batch_size": {"boundary":  1e4, "random":  2e4},
+    "iterations": 1e5,
+    "work_directory": "/tmp/nf2/sst",
+    "num_workers": 8,
+    "validation_strides": 2
+  },
+
+  "model": {
+    "dim": 256,
+    "use_height_mapping": true,
+    "use_vector_potential": true
+  },
+
+  "training": {
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_div": 1e-1,
+    "lambda_ff": 1e-1,
+    "lambda_height_reg": 1e-3,
+    "validation_interval": 1e4,
+    "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
+  }
+}
