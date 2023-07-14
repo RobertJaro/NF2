@@ -72,7 +72,7 @@ torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
 trainer = Trainer(max_epochs=1,
                   logger=wandb_logger,
-                  devices=n_gpus,
+                  devices=n_gpus if n_gpus > 0 else None,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
                   num_sanity_val_steps=0,
