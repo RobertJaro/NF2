@@ -224,21 +224,33 @@ class SOLISDataModule(SlicesDataModule):
 
 class FITSDataModule(SlicesDataModule):
 
-    def __init__(self, fits_paths, mask_path=None, bin=1, *args, **kwargs):
+    def __init__(self, data_paths, mask_path=None, bin=1, flip_sign=None, *args, **kwargs):
+        # check if single height layer
+        if isinstance(data_paths, dict):
+            data_paths = [data_paths]
+        # load all heights
         b_slices = []
-        for f in fits_paths:
-            b_slices += [fits.getdata(f).T]
+        meta_data = None
+        for data_path in data_paths:
+            if isinstance(data_path, dict):
+                data_dict = data_path
+                b = np.stack([fits.getdata(data_dict['x']).T,
+                              fits.getdata(data_dict['y']).T,
+                              fits.getdata(data_dict['z']).T], -1)
+                meta_data = fits.getheader(data_dict['x'])
+            else:
+                b = fits.getdata(data_path).T
+                meta_data = fits.getheader(data_path)
+            b_slices += [b]
         b_slices = np.stack(b_slices, 2)
-        b_slices[..., 1] *= -1  # -t component
+        if flip_sign is not None:
+            b_slices[..., flip_sign] *= -1  # -t component
 
         if mask_path is not None:
             mask = fits.getdata(mask_path).T
             b_slices[mask == 0, :, :] = np.nan
         if bin > 1:
             b_slices = block_reduce(b_slices, (bin, bin, 1, 1), np.mean)
-
-        meta_data = fits.getheader(fits_paths[0])
-
         super().__init__(b_slices, meta_data=meta_data, *args, **kwargs)
 
 
