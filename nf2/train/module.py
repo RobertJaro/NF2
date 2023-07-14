@@ -107,7 +107,7 @@ class NF2Module(LightningModule):
         b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         # minimum energy for nan components
-        min_energy_NaNs_regularization = (boundary_b * torch.isnan(b_true)).pow(2).sum(-1).sum() / (torch.isnan(b_true).sum() + 1e-6)
+        min_energy_NaNs_regularization = (boundary_b * torch.isnan(b_true)).pow(2).sum(-1).sum() / (torch.isnan(b_true).max(-1).values.sum() + 1e-6)
 
         # compute div and ff loss
         divergence_loss, force_loss = calculate_loss(b, coords)
@@ -119,7 +119,7 @@ class NF2Module(LightningModule):
         if self.use_height_mapping:
             height_diff = torch.abs(boundary_coords[:, 2] - original_coords[:, 2])
             normalization = (boundary_batch['height_ranges'][:, 1] - boundary_batch['height_ranges'][:, 0]) + 1e-6
-            height_regularization = (height_diff / normalization).mean()
+            height_regularization = torch.true_divide(height_diff, normalization).mean()
             loss += self.lambda_height_reg * height_regularization
             return {'loss': loss, 'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
                     'min_energy_NaNs_regularization': min_energy_NaNs_regularization, 'height_regularization': height_regularization,}

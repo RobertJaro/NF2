@@ -1,0 +1,40 @@
+{
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_series_377_v2",
+  "meta_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_377/extrapolation_result.nf2",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "multi-height",
+    "wandb_name": "hmi_series_377",
+    "wandb_id": null
+  },
+  
+  "data": {
+    "type": "sharp",
+    "paths": "/gpfs/gpfs0/robert.jarolim/data/nf2/series",
+    "slice": [66,658,9,377],
+    "bin": 2,
+    "height_mapping": {"z":  [0.000]},
+    "Mm_per_pixel": 0.72,
+    "boundary": {"type":  "potential", "strides":  4},
+    "height": 160,
+    "b_norm": 2500,
+    "spatial_norm": 160,
+    "batch_size": {"boundary":  1e4, "random":  2e4},
+    "iterations": 2e3,
+    "work_directory": "/tmp/nf2/hmi_series_377",
+    "num_workers": 12
+  },
+
+  "model": {
+    "dim": 256,
+    "use_height_mapping": false
+  },
+
+  "training": {
+    "lambda_b": 1,
+    "lambda_div": 1e-1,
+    "lambda_ff": 1e-1,
+    "lr_params": 5e-4,
+    "check_val_every_n_epoch": 100
+  }
+}

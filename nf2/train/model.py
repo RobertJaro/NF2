@@ -26,12 +26,12 @@ class HeightMappingModel(nn.Module):
         self.d_out = nn.Linear(dim, 1)
         self.activation = Sine()
 
-    def forward(self, x, range):
+    def forward(self, x, height_range):
         input_coords = x
         x = self.activation(self.d_in(x))
         for l in self.linear_layers:
             x = self.activation(l(x))
-        z_coords = torch.sigmoid(self.d_out(x)) * (range[:, 1:2] - range[:, 0:1]) + range[:, 0:1]
+        z_coords = torch.sigmoid(self.d_out(x)) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
         # shifted_z_coords = input_coords[:, 2:3] * (1 + z_shift) # max shift in dependence of height estimate
         output_coords = torch.cat([input_coords[:, :2], z_coords], -1)
         return output_coords

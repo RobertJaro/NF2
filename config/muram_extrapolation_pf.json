@@ -1,0 +1,40 @@
+{
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "muram_multi_height",
+    "wandb_name": "muram_extrapolation_pf",
+    "wandb_id": null
+  },
+  
+  "data": {
+    "type": "numpy",
+    "data_path": "/gpfs/gpfs0/robert.jarolim/data/nf2/multi_height/muram_slices.npy",
+    "slices": [0],
+    "height_mapping": {
+      "z":  [0.0]
+    },
+    "Mm_per_pixel": 0.384,
+    "boundary": {"type":  "potential", "strides": 4},
+    "height": 150,
+    "b_norm": 2500,
+    "spatial_norm": 320,
+    "batch_size": {"boundary":  1e4, "random":  2e4},
+    "iterations": 1e5,
+    "work_directory": "/tmp/nf2/muram_extrapolation_pf",
+    "num_workers": 8
+  },
+
+  "model": {
+    "dim": 256,
+    "use_height_mapping": false
+  },
+
+  "training": {
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_div": 1e-1,
+    "lambda_ff": 1e-1,
+    "validation_interval": 1e4,
+    "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
+  }
+}
