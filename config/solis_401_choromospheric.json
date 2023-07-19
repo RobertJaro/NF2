@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_chromospheric_v2",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_chromospheric_v3",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "solis",
@@ -12,7 +12,7 @@
     "height_mapping": {
       "z":  [0.000, 5.55],
       "z_min": [0.000, 0.000],
-      "z_max": [0.000, 277.77]
+      "z_max": [0.000, 27.778]
     },
     "Mm_per_pixel": 0.36,
     "boundary": {"type":  "open"},

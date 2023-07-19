@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_photospheric",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_photospheric_v2",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "solis",
