@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_v2",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "muram_multi_height",

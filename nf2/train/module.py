@@ -107,7 +107,7 @@ class NF2Module(LightningModule):
         b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         # minimum energy for nan components
-        min_energy_NaNs_regularization = (boundary_b * torch.isnan(b_true)).pow(2).sum(-1).sum() / (torch.isnan(b_true).max(-1).values.sum() + 1e-6)
+        min_energy_NaNs_regularization = boundary_b[torch.isnan(b_true)].pow(2).sum() / (torch.isnan(b_true).sum() + 1e-6)
 
         # compute div and ff loss
         divergence_loss, force_loss = calculate_loss(b, coords)

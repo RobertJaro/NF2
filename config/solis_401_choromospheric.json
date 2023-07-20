@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_chromospheric_v3",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_chromospheric_v5",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "solis",
@@ -21,7 +21,7 @@
     "spatial_norm": 320,
     "batch_size": {"boundary":  1e4, "random":  2e4},
     "iterations": 1e5,
-    "work_directory": "/tmp/nf2/solis_401_chromospheric",
+    "work_directory": "/tmp/nf2/solis_401_chromospheric_v5",
     "num_workers": 8
   },
 
@@ -34,6 +34,7 @@
     "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
     "lambda_div": 1e-1,
     "lambda_ff": 1e-1,
+    "lambda_min_energy_nans": 1e-2,
     "lambda_height_reg": 1e-3,
     "validation_interval": 1e4,
     "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
