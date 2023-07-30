@@ -104,7 +104,7 @@ class NF2Module(LightningModule):
         # compute boundary loss
         boundary_b = b[:n_boundary_coords]
         b_diff = torch.clip(torch.abs(boundary_b - b_true) - b_err, 0)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+        b_diff = torch.mean(torch.nanmean(b_diff.pow(2), -1) * 3)
 
         # minimum energy for nan components
         min_energy_NaNs_regularization = boundary_b[torch.isnan(b_true)].pow(2).sum() / (torch.isnan(b_true).sum() + 1e-6)

@@ -1,8 +1,8 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal_v3",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal",
   "logging": {
     "wandb_entity": "robert_jarolim",
-    "wandb_project": "muram_multi_height",
+    "wandb_project": "muram_comparison",
     "wandb_name": "muram_ideal",
     "wandb_id": null
   },
@@ -17,7 +17,7 @@
       "z_max": [0.960, 1.579, 3.882,  11.622, 19.378, 59.592]
     },
     "Mm_per_pixel": 0.384,
-    "boundary": {"type":  "open"},
+    "boundary": {"type":  "potential", "strides": 4},
     "height": 150,
     "b_norm": 2500,
     "spatial_norm": 320,
@@ -33,7 +33,7 @@
   },
 
   "training": {
-    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 1e5},
     "lambda_div": 1e-1,
     "lambda_ff": 1e-1,
     "lambda_height_reg": 1e-3,

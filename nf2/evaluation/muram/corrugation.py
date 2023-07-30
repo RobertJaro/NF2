@@ -9,7 +9,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from torch import nn
 from tqdm import tqdm
 
-base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/muram_realistic_bz_v11'
+base_path = '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal'
 data_path = '/gpfs/gpfs0/robert.jarolim/data/nf2/multi_height/tau_slices_B_extrapolation.npz'
 model_path = f'{base_path}/extrapolation_result.nf2'
 result_path = f'{base_path}/evaluation'
@@ -29,8 +29,8 @@ b_cube = block_reduce(b_cube, (2, 2, 1, 1), np.mean)  # reduce to HMI resolution
 height_maps = dict_data['z_line'] / (dict_data['dy'] * 2) - 20
 
 
-height_maps = height_maps[[0, -2]]
-b_cube = b_cube[:, :, [0, -2]]
+# height_maps = height_maps[[0, -2]]
+# b_cube = b_cube[:, :, [0, -2]]
 
 height_maps = block_reduce(height_maps, (1, 2, 2), np.mean)
 average_heights = np.median(height_maps, axis=(1, 2))  # use spatial scaling of horizontal field
@@ -81,11 +81,11 @@ for i, (h, h_min, h_max, height_map) in enumerate(zip(height_mapping['z'], heigh
     #
     b = b_cube[:, :, i, 2]
     #
-    axs[i, 0].set_title(fr'$\tau = 10^{{-{i + 1}}}$')
+    axs[i, 0].set_title(fr'$\tau = 10^{{-{i + 1}}}$', fontsize=20)
     im = axs[i, 0].imshow(b.T, origin='lower', vmin=-1500, vmax=1500, cmap='gray')
     divider = make_axes_locatable(axs[i, 0])
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='$B_z$ [Gauss]')
+    fig.colorbar(im, cax=cax, orientation='vertical').set_label(label='$B_z$ [Gauss]', size=18)
     #
     v_min = 0
     v_max = np.max(height_map) * (0.192 * 2)
@@ -93,12 +93,12 @@ for i, (h, h_min, h_max, height_map) in enumerate(zip(height_mapping['z'], heigh
     im = axs[i, 1].imshow(height_map.T * (0.192 * 2), origin='lower', vmin=v_min, vmax=v_max)
     divider = make_axes_locatable(axs[i, 1])
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='Height [Mm]')
+    fig.colorbar(im, cax=cax, orientation='vertical').set_label(label='Height [Mm]', size=18)
     #
     im = axs[i, 2].imshow(cube[..., 0, 2].T * (0.192 * 2), origin='lower', vmin=v_min, vmax=v_max)
     divider = make_axes_locatable(axs[i, 2])
     cax = divider.append_axes('right', size='5%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='Height [Mm]')
+    fig.colorbar(im, cax=cax, orientation='vertical').set_label(label='Height [Mm]', size=18)
     #
     height_diffs += [np.abs(height_map - cube[..., 0, 2]).mean() * (0.192 * 2)]
     height_diffs_relative += [np.abs(height_map - cube[..., 0, 2]).mean() / height_map.max() * 100]

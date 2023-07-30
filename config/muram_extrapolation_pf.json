@@ -2,7 +2,7 @@
   "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf",
   "logging": {
     "wandb_entity": "robert_jarolim",
-    "wandb_project": "muram_multi_height",
+    "wandb_project": "muram_comparison",
     "wandb_name": "muram_extrapolation_pf",
     "wandb_id": null
   },
@@ -31,7 +31,7 @@
   },
 
   "training": {
-    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 1e5},
     "lambda_div": 1e-1,
     "lambda_ff": 1e-1,
     "validation_interval": 1e4,

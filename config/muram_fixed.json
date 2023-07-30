@@ -2,7 +2,7 @@
   "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed",
   "logging": {
     "wandb_entity": "robert_jarolim",
-    "wandb_project": "muram_multi_height",
+    "wandb_project": "muram_comparison",
     "wandb_name": "muram_fixed",
     "wandb_id": null
   },
@@ -15,7 +15,7 @@
       "z":   [0.000, 1.018, 1.381, 1.806, 2.685, 4.854]
     },
     "Mm_per_pixel": 0.384,
-    "boundary": {"type":  "open"},
+    "boundary": {"type":  "potential", "strides":  4},
     "height": 150,
     "b_norm": 2500,
     "spatial_norm": 320,
@@ -31,7 +31,7 @@
   },
 
   "training": {
-    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 1e5},
     "lambda_div": 1e-1,
     "lambda_ff": 1e-1,
     "lambda_height_reg": 1e-3,
