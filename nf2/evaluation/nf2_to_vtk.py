@@ -18,9 +18,12 @@ vtk_path = args.vtk_path
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 b = load_cube(nf2_path, device, progress=True, strides=strides)
-tau = load_height_cube(nf2_path, device=device, progress=True, strides=strides)
+
+state = torch.load(nf2_path, map_location=device)
+if state['height_mapping_model'] is not None:
+    tau = load_height_cube(nf2_path, device=device, progress=True, strides=strides)
+else:
+    tau = None
 
 save_vtk(b, vtk_path, 'B', scalar=tau, scalar_name='tau',
-         Mm_per_pix=torch.load(nf2_path)['Mm_per_pixel'])
-
-save_vtk(b, vtk_path, 'B',   Mm_per_pix=torch.load(nf2_path)['Mm_per_pixel'])
+         Mm_per_pix=state['Mm_per_pixel'] * strides)

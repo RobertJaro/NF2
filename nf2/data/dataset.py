@@ -62,8 +62,16 @@ class CubeDataset(Dataset):
 
 class RandomCoordinateDataset(Dataset):
 
-    def __init__(self, cube_shape, spatial_norm, batch_size):
+    def __init__(self, cube_shape, spatial_norm, batch_size, buffer=None):
         super().__init__()
+        cube_shape = np.array([[0, cube_shape[0] - 1], [0, cube_shape[1] - 1], [0, cube_shape[2] - 1]])
+        if buffer:
+            buffer_x = (cube_shape[0, 1] - cube_shape[0, 0]) * buffer
+            buffer_y = (cube_shape[1, 1] - cube_shape[1, 0]) * buffer
+            cube_shape[0, 0] -= buffer_x
+            cube_shape[0, 1] += buffer_x
+            cube_shape[1, 0] -= buffer_y
+            cube_shape[1, 1] += buffer_y
         self.cube_shape = cube_shape
         self.spatial_norm = spatial_norm
         self.batch_size = batch_size
@@ -74,7 +82,8 @@ class RandomCoordinateDataset(Dataset):
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] *= (self.cube_shape[0] - 1) / self.spatial_norm
-        random_coords[:, 1] *= (self.cube_shape[1] - 1) / self.spatial_norm
-        random_coords[:, 2] *= (self.cube_shape[2] - 1) / self.spatial_norm
+        random_coords[:, 0] = (random_coords[:, 0] * (self.cube_shape[0, 1] - self.cube_shape[0, 0]) + self.cube_shape[0, 0])
+        random_coords[:, 1] = (random_coords[:, 1] * (self.cube_shape[1, 1] - self.cube_shape[1, 0]) + self.cube_shape[1, 0])
+        random_coords[:, 2] = (random_coords[:, 2] * (self.cube_shape[2, 1] - self.cube_shape[2, 0]) + self.cube_shape[2, 0])
+        random_coords /= self.spatial_norm
         return random_coords

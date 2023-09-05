@@ -13,7 +13,7 @@ from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappin
 class NF2Module(LightningModule):
 
     def __init__(self, validation_settings, dim=256, lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5},
-                 lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-3, lambda_min_energy_nans=1e-3,
+                 lambda_div=0.1, lambda_ff=0.1, lambda_height_reg=1e-3, lambda_min_energy_nans=1e-3, lambda_min_energy=0,
                  lr_params = {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}, meta_path=None,
                  positional_encoding=False, use_vector_potential=False, use_height_mapping=False, **kwargs):
         """Magnetic field extrapolations trainer
@@ -61,6 +61,7 @@ class NF2Module(LightningModule):
         self.register_buffer('lambda_ff', torch.tensor(lambda_ff, dtype=torch.float32))
         self.register_buffer('lambda_height_reg', torch.tensor(lambda_height_reg, dtype=torch.float32))
         self.register_buffer('lambda_min_energy_nans', torch.tensor(lambda_min_energy_nans, dtype=torch.float32))
+        self.register_buffer('lambda_min_energy', torch.tensor(lambda_min_energy, dtype=torch.float32))
         #
         self.use_vector_potential = use_vector_potential
         self.use_height_mapping = use_height_mapping
@@ -104,10 +105,12 @@ class NF2Module(LightningModule):
         # compute boundary loss
         boundary_b = b[:n_boundary_coords]
         b_diff = torch.clip(torch.abs(boundary_b - b_true) - b_err, 0)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+        b_diff = torch.mean(torch.nanmean(b_diff.pow(2), -1) * 3) # b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         # minimum energy for nan components
-        min_energy_NaNs_regularization = (boundary_b * torch.isnan(b_true)).pow(2).sum(-1).sum() / (torch.isnan(b_true).max(-1).values.sum() + 1e-6)
+        min_energy_NaNs_regularization = boundary_b[torch.isnan(b_true)].pow(2).sum() / (torch.isnan(b_true).sum() + 1e-6)
+
+        min_energy_regularization = torch.mean(torch.nansum(b[n_boundary_coords:].pow(2), -1))
 
         # compute div and ff loss
         divergence_loss, force_loss = calculate_loss(b, coords)
@@ -115,16 +118,20 @@ class NF2Module(LightningModule):
         loss = b_diff * self.lambda_B + \
                divergence_loss * self.lambda_div + \
                force_loss * self.lambda_ff + \
-               min_energy_NaNs_regularization * self.lambda_min_energy_nans
+               min_energy_NaNs_regularization * self.lambda_min_energy_nans + \
+               min_energy_regularization * self.lambda_min_energy
+        loss_dict = {'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
+                     'min_energy_NaNs_regularization': min_energy_NaNs_regularization,
+                     'min_energy_regularization': min_energy_regularization, }
         if self.use_height_mapping:
             height_diff = torch.abs(boundary_coords[:, 2] - original_coords[:, 2])
             normalization = (boundary_batch['height_ranges'][:, 1] - boundary_batch['height_ranges'][:, 0]) + 1e-6
             height_regularization = torch.true_divide(height_diff, normalization).mean()
             loss += self.lambda_height_reg * height_regularization
-            return {'loss': loss, 'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
-                    'min_energy_NaNs_regularization': min_energy_NaNs_regularization, 'height_regularization': height_regularization,}
-        return {'loss': loss, 'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
-                'min_energy_NaNs': min_energy_NaNs_regularization,}
+            loss_dict['height_regularization'] = height_regularization
+
+        loss_dict['loss'] = loss
+        return loss_dict
 
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
         # update training parameters and log

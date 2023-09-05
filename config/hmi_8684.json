@@ -1,0 +1,46 @@
+{
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_8684",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "sst_campaign",
+    "wandb_name": "hmi_8684",
+    "wandb_id": null
+  },
+  
+  "data": {
+    "type": "sharp",
+    "data_path": [
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Bp.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Bp_err.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Bt.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Bt_err.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Br.fits",
+    "/gpfs/gpfs0/robert.jarolim/data/nf2/8684/hmi.sharp_cea_720s_nrt.8684.20230731_060000_TAI.Br_err.fits"
+    ],
+    "bin": 2,
+    "height_mapping": {"z":  [0.000]},
+    "Mm_per_pixel": 0.72,
+    "boundary": {"type":  "potential", "strides":  4},
+    "height": 160,
+    "b_norm": 2500,
+    "spatial_norm": 160,
+    "batch_size": {"boundary":  1e4, "random":  2e4},
+    "iterations": 1e5,
+    "work_directory": "/tmp/nf2/hmi_8684",
+    "num_workers": 8
+  },
+
+  "model": {
+    "dim": 256,
+    "use_height_mapping": false
+  },
+
+  "training": {
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_div": 1e-1,
+    "lambda_ff": 1e-1,
+    "lambda_height_reg": 1e-3,
+    "validation_interval": 1e4,
+    "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
+  }
+}

@@ -11,3 +11,4 @@ setuptools>=49.6.0
 wandb>=0.13
 lightning==1.9.3
 pytorch_lightning==1.9.3
+mayavi

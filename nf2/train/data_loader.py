@@ -23,7 +23,8 @@ class SlicesDataModule(LightningDataModule):
                  iterations=1e5, num_workers=None,
                  error_slices=None, height_mapping={'z': [0]}, boundary={"type": "open"},
                  validation_strides = 1,
-                 meta_data=None, plot_overview=True, Mm_per_pixel=None, **kwargs):
+                 meta_data=None, plot_overview=True, Mm_per_pixel=None, buffer=None,
+                 **kwargs):
         super().__init__()
 
         # data parameters
@@ -72,6 +73,15 @@ class SlicesDataModule(LightningDataModule):
         values = b_slices.reshape((-1, 3)).astype(np.float32)
         ranges = ranges.reshape((-1, 2)).astype(np.float32)
         errors = error_slices.reshape((-1, 3)).astype(np.float32) if error_slices is not None else np.zeros_like(values)
+
+        # filter nan entries
+        nan_mask = np.all(np.isnan(values), -1)
+        if nan_mask.sum() > 0:
+            print(f'Filtering {nan_mask.sum()} nan entries')
+            coords = coords[~nan_mask]
+            values = values[~nan_mask]
+            ranges = ranges[~nan_mask]
+            errors = errors[~nan_mask]
 
         if boundary['type'] == 'potential':
             b_bottom = b_slices[:, :, 0]
@@ -154,7 +164,7 @@ class SlicesDataModule(LightningDataModule):
 
         # create data loaders
         self.dataset = BatchesDataset(batches_path, boundary_batch_size)
-        self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size)
+        self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size, buffer=buffer)
         self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=boundary_batch_size, strides=validation_strides)
         self.batches_path = batches_path
 
@@ -272,7 +282,7 @@ class SHARPSeriesDataModule(SHARPDataModule):
 
 class NumpyDataModule(SlicesDataModule):
 
-    def __init__(self, data_path, slices=None, bin=1, use_bz=False, *args, **kwargs):
+    def __init__(self, data_path, slices=None, bin=1, use_bz=False, components=False, *args, **kwargs):
         b_slices = np.load(data_path)
         if slices:
             b_slices = b_slices[:, :, slices]
@@ -281,6 +291,10 @@ class NumpyDataModule(SlicesDataModule):
         if use_bz:
             b_slices[:, :, 1:, 0] = None
             b_slices[:, :, 1:, 1] = None
+        if components:
+            for i, c in enumerate(components):
+                filter = [i for i in [0, 1, 2] if i not in c]
+                b_slices[:, :, i, filter] = None
         super().__init__(b_slices, *args, **kwargs)
 
 
