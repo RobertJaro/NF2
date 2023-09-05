@@ -68,7 +68,7 @@ save_callback = LambdaCallback(
 checkpoint_callback = ModelCheckpoint(dirpath=base_path, every_n_train_steps=args.training["validation_interval"],
                                       save_last=True)
 
-torch.set_float32_matmul_precision('high')  # for A100 GPUs
+torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
 trainer = Trainer(max_epochs=2,
                   logger=wandb_logger,

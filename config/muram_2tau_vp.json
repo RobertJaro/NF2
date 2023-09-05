@@ -1,40 +1,43 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_vp",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "muram_comparison",
-    "wandb_name": "muram_extrapolation_pf",
+    "wandb_name": "muram_2tau_vp",
     "wandb_id": null
   },
   
   "data": {
     "type": "numpy",
     "data_path": "/gpfs/gpfs0/robert.jarolim/data/nf2/multi_height/muram_slices.npy",
-    "slices": [0],
+    "slices": [0, -2],
     "height_mapping": {
-      "z":  [0.0]
+      "z":  [0.0, 3.0],
+      "z_min": [0.0, 0.0],
+      "z_max": [0.0, 30.0]
     },
     "Mm_per_pixel": 0.384,
-    "boundary": {"type":  "potential", "strides": 4},
+    "boundary": {"type":  "potential", "strides":  4},
     "height": 150,
     "b_norm": 2500,
     "spatial_norm": 320,
     "batch_size": {"boundary":  1e4, "random":  2e4},
     "iterations": 1e5,
-    "work_directory": "/tmp/nf2/muram_extrapolation_pf",
+    "work_directory": "/tmp/nf2/muram_2tau_vp",
     "num_workers": 8
   },
 
   "model": {
     "dim": 256,
-    "use_height_mapping": false,
+    "use_height_mapping": true,
     "use_vector_potential": true
   },
 
   "training": {
     "lambda_b": {"start": 1e3, "end": 1, "iterations" : 1e5},
-    "lambda_div": 1e-1,
+    "lambda_div": 0,
     "lambda_ff": 1e-1,
+    "lambda_height_reg": 1e-3,
     "validation_interval": 1e4,
     "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
   }

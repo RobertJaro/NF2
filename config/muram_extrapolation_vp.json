@@ -1,9 +1,9 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_vp",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "muram_comparison",
-    "wandb_name": "muram_extrapolation_pf",
+    "wandb_name": "muram_extrapolation_vp",
     "wandb_id": null
   },
   

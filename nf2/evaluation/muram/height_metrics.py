@@ -35,25 +35,39 @@ avg_heights = np.array([0.960, 1.579, 3.882,  11.622, 19.378, 59.592]) * Mm_per_
 axs[-1].axvline(1, linestyle='--', color='black')
 
 ckpt_paths = [
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal/extrapolation_result.nf2',
     '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau/extrapolation_result.nf2',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bxyz_split/extrapolation_result.nf2',
     '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bz_2epochs/extrapolation_result.nf2',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
 ]
 labels = [
-    'Extrapolation',
-    'Extrapolation - PF boundary',
-    'Fixed Heights',
-    'Mapped Heights (ideal)',
-    r'Mapped Heights ($\tau = 10^{-4}$)',
-    r'Mapped Heights ($\tau = 10^{-4}$, $B_z$ only)',
+    # 'Extrapolation',
+    # 'Extrapolation - PB',
+    # 'Fixed Heights',
+    # 'Mapped Heights',
+    r'Realistic vector',
+    r'Realistic split',
+    r'Realistic LOS',
+    'Extrapolation - PB',
 ]
 
-linestyle = [':', ':',
-             '--', '--',
-             '-', '-']
+linestyle = [
+            # ':', ':',
+             # '--', '--',
+             'dashdot', 'dashdot',
+             'dashdot',
+             ':',
+             ]
+
+# assert same length
+assert len(ckpt_paths) == len(labels) == len(linestyle)
+
+# colors = [f'C{i + 1}' for i in range(len(ckpt_paths))]
+colors = ['C5', 'C6', 'C7', 'C2']
 
 def _plot(b, label, c, ls):
     c_vec = np.sum((B * b).sum(-1), (0, 1)) / np.sqrt((B ** 2).sum(-1).sum((0, 1)) * (b ** 2).sum(-1).sum((0, 1)))
@@ -71,7 +85,7 @@ def _plot(b, label, c, ls):
     axs[3].plot(E_m, heights, label=label, color=c, linestyle=ls)
     axs[4].plot(eps, heights, label=label, color=c, linestyle=ls)
 
-for path, label, c, ls in zip(ckpt_paths, labels, [f'C{i + 1}' for i in range(len(ckpt_paths))], linestyle):
+for path, label, c, ls in zip(ckpt_paths, labels, colors, linestyle):
     b = load_cube(path)
     b = b[:, :, :B.shape[2]]  # crop to shape
     #
@@ -83,7 +97,7 @@ _plot(b, 'Potential Field', 'C0', '-')
 
 # plot legend centered at bottom of figure with 3 columns
 handles, labels = axs[0].get_legend_handles_labels()
-fig.legend(handles, labels, loc='lower center', ncol=4, bbox_to_anchor=(0.5, 0.), fancybox=True, shadow=True)
+fig.legend(handles, labels, loc='lower center', ncol=3, bbox_to_anchor=(0.5, 0.), fancybox=True, shadow=True)
 
 axs[0].set_ylabel('Height [Mm]')
 
