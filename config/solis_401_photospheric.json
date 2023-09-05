@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_photospheric",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/solis_401_photospheric_v3",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "solis",
@@ -14,7 +14,7 @@
     },
     "slices": [0],
     "Mm_per_pixel": 0.36,
-    "boundary": {"type":  "open"},
+    "boundary": {"type":  "potential", "strides":  4},
     "height": 320,
     "b_norm": 2500,
     "spatial_norm": 320,

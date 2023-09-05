@@ -70,7 +70,7 @@ checkpoint_callback = ModelCheckpoint(dirpath=base_path, every_n_train_steps=arg
 
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
-trainer = Trainer(max_epochs=1,
+trainer = Trainer(max_epochs=2,
                   logger=wandb_logger,
                   devices=n_gpus if n_gpus > 0 else None,
                   accelerator='gpu' if n_gpus >= 1 else None,

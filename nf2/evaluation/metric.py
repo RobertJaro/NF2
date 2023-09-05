@@ -65,15 +65,15 @@ def evaluate(b, B):
 
     result['eps'] = (vector_norm(b) ** 2).sum() / (vector_norm(B) ** 2).sum()
 
-    B_potential = get_potential_field(B[:, :, 0, 2], 64)
-
-    result['eps_p'] = (vector_norm(b) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
-    result['eps_p_ll'] = (vector_norm(B) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
+    # B_potential = get_potential_field(B[:, :, 0, 2], 64)
+    #
+    # result['eps_p'] = (vector_norm(b[:, :, :64]) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
+    # result['eps_p_ll'] = (vector_norm(B[:, :, :64]) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
 
     j = curl(b)
-    result['sig_J'] = (vector_norm(np.cross(j, b, -1)) / vector_norm(b)).sum() / vector_norm(j).sum() * 1e2
+    result['sig_J'] = (vector_norm(np.cross(j, b, -1)) / vector_norm(b)).sum() / (vector_norm(j).sum() + 1e-6) * 1e2
     J = curl(B)
-    result['sig_J_ll'] = (vector_norm(np.cross(J, B, -1)) / vector_norm(B)).sum() / vector_norm(J).sum() * 1e2
+    result['sig_J_ll'] = (vector_norm(np.cross(J, B, -1)) / vector_norm(B)).sum() / (vector_norm(J).sum() + 1e-6) * 1e2
 
     result['L1'] = (vector_norm(np.cross(j, b, -1)) ** 2 / vector_norm(b) ** 2).mean()
     result['L2'] = (divergence(b) ** 2).mean()
@@ -81,7 +81,7 @@ def evaluate(b, B):
     result['L1_B'] = (vector_norm(np.cross(curl(B), B, -1)) ** 2 / vector_norm(B) ** 2).mean()
     result['L2_B'] = (divergence(B) ** 2).mean()
 
-    result['L2n'] = (np.abs(divergence(b)) / vector_norm(b)).mean() * 1e2
-    result['L2n_B'] = (np.abs(divergence(B)) / vector_norm(B)).mean() * 1e2
+    result['L2n'] = (np.abs(divergence(b)) / (vector_norm(b) + 1e-8)).mean() * 1e2
+    result['L2n_B'] = (np.abs(divergence(B)) / (vector_norm(B) + 1e-8)).mean() * 1e2
 
     return result

@@ -1,9 +1,10 @@
 import os
 
 
-def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s'):
-    ds = 'hmi.%s[%d][%s]{Br, Bp, Bt, Br_err, Bp_err, Bt_err}' % (
-    series, harpnum, time.isoformat('_', timespec='seconds'))
+def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s', download_error=True):
+    segments = 'Br, Bp, Bt, Br_err, Bp_err, Bt_err' if download_error else 'Br, Bp, Bt'
+    ds = 'hmi.%s[%d][%s]{%s}' % (
+    series, harpnum, time.isoformat('_', timespec='seconds'), segments)
     donwload_ds(ds, dir, client)
 
 def download_HARP_series(harpnum, t_start, duration, download_dir, client, series='sharp_cea_720s', download_error=True):

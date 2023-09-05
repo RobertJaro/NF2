@@ -1,7 +1,7 @@
 import argparse
 
 import torch
-from sunpy.io import fits
+from astropy.io import fits
 
 from nf2.evaluation.unpack import load_cube
 
