@@ -36,28 +36,6 @@ def prep_b_data(b_cube, error_cube, height,
 
     return coords, values, err
 
-
-def load_spherical_hmi_data(data_path):
-    if isinstance(data_path, str):
-        hmi_p = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))[0]  # x
-        hmi_t = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))[0]  # y
-        hmi_r = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))[0]  # z
-    else:
-        hmi_p, hmi_r, hmi_t = data_path
-
-    p_map = Map(hmi_p)  # use as coordinate reference
-    t_map = Map(hmi_t)
-    r_map = Map(hmi_r)
-
-    coords = all_coordinates_from_map(p_map)
-    coords = np.stack([np.deg2rad(coords.lon.value),
-                       np.pi / 2 + np.deg2rad(coords.lat.value),
-                       coords.radius.value]).transpose()
-
-    hmi_cube = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
-    return coords, hmi_cube, r_map.meta
-
-
 def load_potential_field_data(hmi_cube, height, reduce, only_top=False, pf_error=0.0, **kwargs):
     if reduce > 1:
         hmi_cube = block_reduce(hmi_cube, (reduce, reduce, 1), func=np.mean)

@@ -1,6 +1,8 @@
 import numpy as np
 import torch
-from torch.utils.data import Dataset, IterableDataset
+from torch.utils.data import Dataset
+
+from nf2.data.util import spherical_to_cartesian
 
 
 class BatchesDataset(Dataset):
@@ -14,13 +16,16 @@ class BatchesDataset(Dataset):
         self.batch_size = batch_size
 
     def __len__(self):
-        return np.ceil(np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(np.int32)
+        return np.ceil(
+            np.load(list(self.batches_file_paths.values())[0], mmap_mode='r').shape[0] / self.batch_size).astype(
+            np.int32)
 
     def __getitem__(self, idx):
         # lazy load data
         data = {k: np.copy(np.load(bf, mmap_mode='r')[idx * self.batch_size: (idx + 1) * self.batch_size])
                 for k, bf in self.batches_file_paths.items()}
         return data
+
 
 class ImageDataset(Dataset):
 
@@ -60,6 +65,56 @@ class CubeDataset(Dataset):
         return coord
 
 
+class RandomSphericalCoordinateDataset(Dataset):
+
+    def __init__(self, height_range, batch_size):
+        self.height_range = height_range
+        self.batch_size = batch_size
+        self.float_tensor = torch.FloatTensor
+
+    def __len__(self):
+        return 1
+
+    def __getitem__(self, item):
+        random_coords = self.float_tensor(self.batch_size, 3).uniform_()
+        random_coords[:, 0] = random_coords[:, 0] * 2 * np.pi  # phi [0, 2pi]
+        random_coords[:, 1] = random_coords[:, 1] * np.pi  # theta [0, pi]
+        random_coords[:, 2] = self.height_range[0] + random_coords[:, 2] * (self.height_range[1] - self.height_range[0])  # r [1, height]
+        random_coords = self.to_cartesian(random_coords)
+        return random_coords
+
+    def to_cartesian(self, c):
+        sin = torch.sin
+        cos = torch.cos
+        p, t, r = c[..., 0], c[..., 1], c[..., 2]
+        x = r * sin(t) * cos(p)
+        y = r * sin(t) * sin(p)
+        z = r * cos(t)
+        return torch.stack([x, y, z], -1)
+
+
+class SphereDataset(Dataset):
+
+    def __init__(self, height, resolution=256, batch_size=1024):
+        coords = np.stack(
+            np.meshgrid(np.linspace(0, 2 * np.pi, 2 * resolution),
+                        np.linspace(0, np.pi, resolution),
+                        np.linspace(1, height, resolution), indexing='ij'), -1)
+        self.coords_shape = coords.shape[:-1]
+
+        coords = spherical_to_cartesian(coords)
+        coords = torch.tensor(coords, dtype=torch.float32)
+        coords = coords.view((-1, 3))
+        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+
+    def __len__(self):
+        return len(self.coords)
+
+    def __getitem__(self, idx):
+        coord = self.coords[idx]
+        return coord
+
+
 class RandomCoordinateDataset(Dataset):
 
     def __init__(self, cube_shape, spatial_norm, batch_size, buffer=None):
@@ -82,8 +137,11 @@ class RandomCoordinateDataset(Dataset):
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] = (random_coords[:, 0] * (self.cube_shape[0, 1] - self.cube_shape[0, 0]) + self.cube_shape[0, 0])
-        random_coords[:, 1] = (random_coords[:, 1] * (self.cube_shape[1, 1] - self.cube_shape[1, 0]) + self.cube_shape[1, 0])
-        random_coords[:, 2] = (random_coords[:, 2] * (self.cube_shape[2, 1] - self.cube_shape[2, 0]) + self.cube_shape[2, 0])
+        random_coords[:, 0] = (
+                    random_coords[:, 0] * (self.cube_shape[0, 1] - self.cube_shape[0, 0]) + self.cube_shape[0, 0])
+        random_coords[:, 1] = (
+                    random_coords[:, 1] * (self.cube_shape[1, 1] - self.cube_shape[1, 0]) + self.cube_shape[1, 0])
+        random_coords[:, 2] = (
+                    random_coords[:, 2] * (self.cube_shape[2, 1] - self.cube_shape[2, 0]) + self.cube_shape[2, 0])
         random_coords /= self.spatial_norm
         return random_coords

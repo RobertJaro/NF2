@@ -9,7 +9,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.train.module import NF2Module, save
-from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule
+from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule, \
+    SphericalDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -53,30 +54,35 @@ elif args.data["type"] == 'solis':
     data_module = SOLISDataModule(**args.data)
 elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
+elif args.data["type"] == 'spherical':
+    data_module = SphericalDataModule(**args.data)
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': args.data["b_norm"],
-                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"]}
+                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"] if "spatial_norm" in args.data else 1,}
 
 nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
     on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config, nf2.height_mapping_model))
-checkpoint_callback = ModelCheckpoint(dirpath=base_path, every_n_train_steps=args.training["validation_interval"],
+checkpoint_callback = ModelCheckpoint(dirpath=base_path,
+                                      every_n_train_steps=args.training["validation_interval"] if "validation_interval" in args.training else None,
+                                      every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                                       save_last=True)
 
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
-trainer = Trainer(max_epochs=2,
+trainer = Trainer(max_epochs=args.training['epochs'] if 'epochs' in args.training else 1,
                   logger=wandb_logger,
                   devices=n_gpus if n_gpus > 0 else None,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
                   num_sanity_val_steps=0,
-                  val_check_interval=args.training['validation_interval'],
+                  val_check_interval=args.training['validation_interval'] if 'validation_interval' in args.training else None,
+                  check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                   gradient_clip_val=0.1,
                   callbacks=[checkpoint_callback, save_callback], )
 
