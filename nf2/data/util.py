@@ -2,7 +2,7 @@ import numpy as np
 
 
 def spherical_to_cartesian_matrix(c):
-    p, t, r = c[..., 0], c[..., 1], c[..., 2]
+    r, t, p = c[..., 0], c[..., 1], c[..., 2]
     sin = np.sin
     cos = np.cos
     #
@@ -14,8 +14,9 @@ def spherical_to_cartesian_matrix(c):
     #
     return matrix
 
+
 def cartesian_to_spherical_matrix(c):
-    p, t, r = c[..., 0], c[..., 1], c[..., 2]
+    r, t, p = c[..., 0], c[..., 1], c[..., 2]
     sin = np.sin
     cos = np.cos
     #
@@ -27,9 +28,10 @@ def cartesian_to_spherical_matrix(c):
     #
     return matrix
 
+
 def vector_spherical_to_cartesian(v, c):
-    vp, vt, vr = v[..., 0], v[..., 1], v[..., 2]
-    p, t, r = c[..., 0], c[..., 1], c[..., 2]
+    vr, vt, vp = v[..., 0], v[..., 1], v[..., 2]
+    r, t, p = c[..., 0], c[..., 1], c[..., 2]
     sin = np.sin
     cos = np.cos
     #
@@ -39,9 +41,10 @@ def vector_spherical_to_cartesian(v, c):
     #
     return np.stack([vx, vy, vz], -1)
 
+
 def vector_cartesian_to_spherical(v, c):
     vx, vy, vz = v[..., 0], v[..., 1], v[..., 2]
-    p, t, r = c[..., 0], c[..., 1], c[..., 2]
+    r, t, p = c[..., 0], c[..., 1], c[..., 2]
     sin = np.sin
     cos = np.cos
     #
@@ -49,23 +52,25 @@ def vector_cartesian_to_spherical(v, c):
     vt = vx * cos(t) * cos(p) + vy * cos(t) * sin(p) - vz * sin(t)
     vp = - vx * sin(p) + vy * cos(p)
     #
-    return np.stack([vp, vt, vr], -1)
+    return np.stack([vr, vt, vp], -1)
+
 
 def spherical_to_cartesian(v):
     sin = np.sin
     cos = np.cos
-    p, t, r = v[..., 0], v[..., 1], v[..., 2]
+    r, t, p = v[..., 0], v[..., 1], v[..., 2]
     x = r * sin(t) * cos(p)
     y = r * sin(t) * sin(p)
     z = r * cos(t)
     return np.stack([x, y, z], -1)
 
+
 def cartesian_to_spherical(v):
     x, y, z = v[..., 0], v[..., 1], v[..., 2]
     xy = x ** 2 + y ** 2
 
-    r = np.sqrt(xy + z**2)
+    r = np.sqrt(xy + z ** 2)
     t = np.arctan2(np.sqrt(xy), z)
     p = np.arctan2(y, x)
 
-    return np.stack([p, t, r], -1)
+    return np.stack([r, t, p], -1)

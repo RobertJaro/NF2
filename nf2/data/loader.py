@@ -73,16 +73,16 @@ class RandomSphericalCoordinateSampler():
 
     def load_sample(self):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] = random_coords[:, 0] * 2 * np.pi  # phi [0, 2pi]
+        random_coords[:, 0] = 1 + random_coords[:, 0] * (self.height - 1)  # r [1, height]
         random_coords[:, 1] = random_coords[:, 1] * np.pi  # theta [0, pi]
-        random_coords[:, 2] = 1 + random_coords[:, 2] * (self.height - 1)  # r [1, height]
+        random_coords[:, 2] = random_coords[:, 1] * 2 * np.pi  # phi [0, 2pi]
         random_coords = self.to_cartesian(random_coords)
         return random_coords
 
     def to_cartesian(self, v):
         sin = torch.sin
         cos = torch.cos
-        p, t, r = v[..., 0], v[..., 1], v[..., 2]
+        r, t, p = v[..., 0], v[..., 1], v[..., 2]
         x = r * sin(t) * cos(p)
         y = r * sin(t) * sin(p)
         z = r * cos(t)

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import wandb
+from matplotlib.colors import LogNorm
 from pytorch_lightning import LightningModule
 from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
@@ -80,6 +81,7 @@ class NF2Module(LightningModule):
         self.use_vector_potential = use_vector_potential
         self.use_height_mapping = use_height_mapping
         self.spherical = spherical
+        self.validation_outputs = {}
 
     def configure_optimizers(self):
         parameters = list(self.model.parameters())
@@ -102,7 +104,7 @@ class NF2Module(LightningModule):
         boundary_batch = batch['boundary']
         boundary_coords = boundary_batch['coords']
         b_true = boundary_batch['values']
-        transform = boundary_batch['transform']
+        transform = boundary_batch['transform']  if 'transform' in batch else None
         b_err = boundary_batch['error'] if 'error' in boundary_batch else 0
         boundary_coords.requires_grad = True
         if self.use_height_mapping:
@@ -121,24 +123,24 @@ class NF2Module(LightningModule):
 
         # compute boundary loss
         boundary_b = b[:n_boundary_coords]
-        transformed_b = transform @ boundary_b[:, :, None]
-        transformed_b = transformed_b[:, :, 0]
+        transformed_b = torch.einsum('ijk,ik->ij', transform, boundary_b) if transform is not None else boundary_b
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
-        b_diff = torch.mean(
-            torch.nanmean(b_diff.pow(2), -1) * 3)  # b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         # minimum energy regularization for nan components
         if torch.isnan(b_true).sum() == 0:
-            min_energy_NaNs_regularization = 0
+            min_energy_NaNs_regularization = torch.zeros((1,), device=b_true.device)
         else:
             min_energy_NaNs_regularization = boundary_b[torch.isnan(b_true)].pow(2).sum() / torch.isnan(b_true).sum()
 
+        # radial distance weight
+        radius_weight = random_coords.pow(2).sum(-1).pow(0.5) - 1
+
         # min energy regularization
-        min_energy_regularization = torch.mean(torch.nansum(b[n_boundary_coords:].pow(2), -1))
+        min_energy_regularization = torch.mean(torch.nansum(b[n_boundary_coords:].pow(2), -1) * radius_weight)
 
         # radial regularization
         normalization = torch.norm(b[n_boundary_coords:], dim=-1) * torch.norm(random_coords, dim=-1) + 1e-8
-        radius_weight = random_coords.pow(2).sum(-1).pow(0.5) - 1
         dot_product = (b[n_boundary_coords:] * random_coords).sum(-1)
         radial_regularization = 1 - (dot_product / normalization).abs()
         radial_regularization = (radial_regularization * radius_weight).mean()
@@ -188,6 +190,23 @@ class NF2Module(LightningModule):
     @torch.enable_grad()
     def validation_step(self, batch, batch_nb, dataloader_idx):
         if dataloader_idx == 0:
+            boundary_coords = batch['coords']
+            b_true = batch['values']
+            b_err = batch['error'] if 'error' in batch else 0
+            boundary_coords.requires_grad = True
+            transform = batch['transform'] if 'transform' in batch else None
+            if self.use_height_mapping:
+                boundary_coords = self.height_mapping_model(boundary_coords, batch['height_ranges'])
+            b = self.model(boundary_coords)
+            b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
+
+            # compute boundary loss
+            b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
+            b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
+            b_diff = torch.abs(b - b_true)
+            b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
+            return {'b_diff_error': b_diff_error.detach(), 'b_diff': b_diff.detach()}
+        else:
             coords = batch
             coords.requires_grad = True
 
@@ -213,35 +232,15 @@ class NF2Module(LightningModule):
             div = torch.abs(dBx_dx + dBy_dy + dBz_dz)
 
             return {'b': b.detach(), 'j': j.detach(), 'div': div.detach(), 'coords': coords.detach()}
-        if dataloader_idx == 1:
-            boundary_coords = batch['coords']
-            b_true = batch['values']
-            b_err = batch['error'] if 'error' in batch else 0
-            boundary_coords.requires_grad = True
-            transform = batch['transform']
-            if self.use_height_mapping:
-                boundary_coords = self.height_mapping_model(boundary_coords, batch['height_ranges'])
-            b = self.model(boundary_coords)
-            b = transform @ b[:, :, None]
-            b = b[:, :, 0]
-
-            # compute boundary loss
-            b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
-            b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
-            b_diff = torch.abs(b - b_true)
-            b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
-            return {'b_diff_error': b_diff_error.detach(), 'b_diff': b_diff.detach()}
-        else:
-            raise NotImplementedError('Validation data loader not supported!')
 
     def validation_epoch_end(self, outputs_list):
-        if len(outputs_list) == 0:
+        if len(outputs_list) == 0 or any([len(o) == 0 for o in outputs_list]):
             return  # skip invalid validation steps
-        outputs = outputs_list[0]  # unpack data loader 0
+        outputs = outputs_list[1]  # unpack data loader 1
         # stack magnetic field and unnormalize
         b = torch.cat([o['b'] for o in outputs]) * self.validation_settings['gauss_per_dB']
-        j = torch.cat([o['j'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / self.validation_settings[
-            'Mm_per_ds']
+        j = torch.cat([o['j'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / \
+            self.validation_settings['Mm_per_ds']
         div = torch.cat([o['div'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / \
               self.validation_settings['Mm_per_ds']
         coords = torch.cat([o['coords'] for o in outputs])
@@ -256,19 +255,20 @@ class NF2Module(LightningModule):
         ff_loss = torch.cross(j, b, dim=-1).pow(2).sum(-1).pow(0.5) / b_norm
         ff_loss = ff_loss.mean()
 
-        outputs = outputs_list[1]  # unpack data loader 1
+        outputs = outputs_list[0]  # unpack data loader 0
         b_diff = torch.stack([o['b_diff'] for o in outputs]).mean() * self.validation_settings['gauss_per_dB']
         b_diff_error = torch.stack([o['b_diff_error'] for o in outputs]).mean() * self.validation_settings[
             'gauss_per_dB']
 
-        b_cube = b.reshape([*self.validation_settings['cube_shape'], 3]).cpu().numpy()
-        c_cube = coords.reshape([*self.validation_settings['cube_shape'], 3]).cpu().numpy()
-
-        if self.spherical:
-            c_cube = cartesian_to_spherical(c_cube)
-            b_cube = vector_cartesian_to_spherical(b_cube, c_cube)
-
-        self.plot_sample(b_cube)
+        self.validation_outputs = {} # reset validation outputs
+        for name, outputs in zip(self.validation_settings['names'], outputs_list[2:]):
+            b = torch.cat([o['b'] for o in outputs]) * self.validation_settings['gauss_per_dB']
+            j = torch.cat([o['j'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / \
+                self.validation_settings['Mm_per_ds']
+            div = torch.cat([o['div'] for o in outputs]) * self.validation_settings['gauss_per_dB'] / \
+                  self.validation_settings['Mm_per_ds']
+            coords = torch.cat([o['coords'] for o in outputs])
+            self.validation_outputs[name] = {'b': b, 'j': j, 'div': div, 'coords': coords}
 
         self.log("Validation B_diff", b_diff)
         self.log("Validation B_diff_error", b_diff_error)
@@ -279,21 +279,15 @@ class NF2Module(LightningModule):
         return {'progress_bar': {'b_diff': b_diff, 'div': div_loss, 'ff': ff_loss, 'sigma': weighted_sig},
                 'log': {'val/b_diff': b_diff, 'val/div': div_loss, 'val/ff': ff_loss, 'val/sig': weighted_sig}}
 
-    def plot_sample(self, b, n_samples=10):
-        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
-        heights = np.linspace(0, 1, n_samples) ** 2 * (b.shape[2] - 1)  # more samples from lower heights
-        heights = heights.astype(np.int32)
-        for i in range(3):
-            for j, h in enumerate(heights):
-                v_min_max = np.max(np.abs(b[:, :, h]))
-                axs[i, j].imshow(b[:, :, h, i].transpose(), cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                 origin='lower')
-                axs[i, j].set_axis_off()
-        for j, h in enumerate(heights):
-            axs[0, j].set_title('%.01f' % h)
-        fig.tight_layout()
-        wandb.log({"Slices": fig})
-        plt.close('all')
+    def on_load_checkpoint(self, checkpoint):
+        # keep new lambdas
+        for k, v in self.lambdas.items():
+            checkpoint_v = checkpoint["state_dict"][f"lambdas.{k}"]
+            if k in self.scheduled_lambdas or checkpoint_v == v: # skip scheduled lambdas or same values
+                continue
+            print(f'Update lambda {k}: {checkpoint_v} --> {v.data}')
+            checkpoint['state_dict'][f'lambdas.{k}'] = v
+        super().on_load_checkpoint(checkpoint)
 
 def calculate_loss(b, coords):
     jac_matrix = jacobian(b, coords)

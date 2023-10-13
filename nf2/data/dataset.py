@@ -67,26 +67,41 @@ class CubeDataset(Dataset):
 
 class RandomSphericalCoordinateDataset(Dataset):
 
-    def __init__(self, height_range, batch_size):
+    def __init__(self, height_range, batch_size,
+                 latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi),
+                 radial_weighted_sampling=False):
         self.height_range = height_range
+        self.latitude_range = latitude_range
+        self.longitude_range = longitude_range
         self.batch_size = batch_size
         self.float_tensor = torch.FloatTensor
+        self.radial_weighted_sampling = radial_weighted_sampling
 
     def __len__(self):
         return 1
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] = random_coords[:, 0] * 2 * np.pi  # phi [0, 2pi]
-        random_coords[:, 1] = random_coords[:, 1] * np.pi  # theta [0, pi]
-        random_coords[:, 2] = self.height_range[0] + random_coords[:, 2] * (self.height_range[1] - self.height_range[0])  # r [1, height]
+        # r [1, height]
+        h_r = self.height_range
+        if self.radial_weighted_sampling:
+            random_coords[:, 0] = h_r[0] + random_coords[:, 0] ** 2 * (h_r[1] - h_r[0])
+        else:
+            random_coords[:, 0] = h_r[0] + random_coords[:, 0] * (h_r[1] - h_r[0])
+        # theta [0, pi]
+        lat_r = self.latitude_range
+        random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
+        # phi [0, 2pi]
+        lon_r = self.longitude_range
+        random_coords[:, 2] = lon_r[0] + random_coords[:, 2] * (lon_r[1] - lon_r[0])
+        # convert to cartesian
         random_coords = self.to_cartesian(random_coords)
         return random_coords
 
     def to_cartesian(self, c):
         sin = torch.sin
         cos = torch.cos
-        p, t, r = c[..., 0], c[..., 1], c[..., 2]
+        r, t, p = c[..., 0], c[..., 1], c[..., 2]
         x = r * sin(t) * cos(p)
         y = r * sin(t) * sin(p)
         z = r * cos(t)
@@ -95,16 +110,19 @@ class RandomSphericalCoordinateDataset(Dataset):
 
 class SphereDataset(Dataset):
 
-    def __init__(self, height, resolution=256, batch_size=1024):
+    def __init__(self, height_range, resolution=256, batch_size=1024, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi)):
+        ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
+        resolution_lat = int(resolution * ratio)
         coords = np.stack(
-            np.meshgrid(np.linspace(0, 2 * np.pi, 2 * resolution),
-                        np.linspace(0, np.pi, resolution),
-                        np.linspace(1, height, resolution), indexing='ij'), -1)
+            np.meshgrid(np.linspace(height_range[0], height_range[1], resolution),
+                        np.linspace(latitude_range[0], latitude_range[1], resolution_lat),
+                        np.linspace(longitude_range[0], longitude_range[1], resolution),
+                        indexing='ij')).T
         self.coords_shape = coords.shape[:-1]
 
         coords = spherical_to_cartesian(coords)
         coords = torch.tensor(coords, dtype=torch.float32)
-        coords = coords.view((-1, 3))
+        coords = coords.reshape((-1, 3))
         self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
@@ -114,6 +132,29 @@ class SphereDataset(Dataset):
         coord = self.coords[idx]
         return coord
 
+class SphereSlicesDataset(Dataset):
+
+    def __init__(self, radius_range=(1.0, 2.0), latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+        ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
+        resolution_lat = int(longitude_resolution * ratio)
+        coords = np.stack(
+            np.meshgrid(np.linspace(radius_range[0], radius_range[1], n_slices),
+                        np.linspace(latitude_range[0], latitude_range[1], resolution_lat),
+                        np.linspace(longitude_range[0], longitude_range[1], longitude_resolution),
+                        indexing='ij')).T
+        self.cube_shape = coords.shape[:-1]
+
+        coords = spherical_to_cartesian(coords)
+        coords = torch.tensor(coords, dtype=torch.float32)
+        coords = coords.reshape((-1, 3))
+        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+
+    def __len__(self):
+        return len(self.coords)
+
+    def __getitem__(self, idx):
+        coord = self.coords[idx]
+        return coord
 
 class RandomCoordinateDataset(Dataset):
 

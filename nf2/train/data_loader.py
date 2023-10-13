@@ -5,22 +5,21 @@ from copy import copy
 import numpy as np
 import pfsspy
 import wandb
+from astropy import units as u
+from astropy.coordinates import SkyCoord
 from astropy.io import fits
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from pytorch_lightning import LightningDataModule
 from sunpy.coordinates import frames
-from sunpy.map import Map, all_coordinates_from_map, make_heliographic_header
+from sunpy.map import Map, all_coordinates_from_map
 from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.analytical_field import get_analytic_b_field
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset, RandomSphericalCoordinateDataset, \
-    SphereDataset
+    SphereDataset, SphereSlicesDataset
 from nf2.data.loader import prep_b_data, load_potential_field_data
-from astropy import units as u
-
-from nf2.data.util import vector_spherical_to_cartesian, spherical_to_cartesian, vector_cartesian_to_spherical, \
-    cartesian_to_spherical_matrix
+from nf2.data.util import vector_spherical_to_cartesian, spherical_to_cartesian, cartesian_to_spherical_matrix
 
 
 class SlicesDataModule(LightningDataModule):
@@ -190,8 +189,7 @@ class SlicesDataModule(LightningDataModule):
                                  shuffle=False)
         boundary_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                      shuffle=False)
-        return [cube_loader, boundary_loader]
-
+        return [boundary_loader, cube_loader]
 
 
 class SphericalDataModule(LightningDataModule):
@@ -199,9 +197,10 @@ class SphericalDataModule(LightningDataModule):
     def __init__(self, synoptic_files, full_disk_files, height, b_norm, work_directory,
                  batch_size={"boundary": 1e4, "random": 2e4},
                  iterations=1e5, num_workers=None,
-                 error_slices=None, height_mapping={'z': [0]}, boundary={"type": "open"},
-                 validation_resolution = 256,
-                 meta_data=None, plot_overview=True, Mm_per_pixel=None, buffer=None,
+                 height_mapping={'z': [0]}, boundary={"type": "open"},
+                 validation_resolution=256,
+                 meta_data=None, plot_overview=True, slice=None,
+                 plot_settings=[],
                  **kwargs):
         super().__init__()
 
@@ -211,7 +210,7 @@ class SphericalDataModule(LightningDataModule):
         self.b_norm = b_norm
         self.height_mapping = height_mapping
         self.meta_data = meta_data
-        self.Mm_per_pixel = Mm_per_pixel
+        assert boundary['type'] in ['open', 'potential'], 'Unknown boundary type. Implemented types are: open, potential'
 
         # train parameters
         self.iterations = int(iterations)
@@ -226,14 +225,15 @@ class SphericalDataModule(LightningDataModule):
 
         synchronic_spherical_coords = all_coordinates_from_map(synoptic_r_map)
         synchronic_spherical_coords = np.stack([
-            np.deg2rad(synchronic_spherical_coords.lon.value),
-            np.pi / 2 + np.deg2rad(synchronic_spherical_coords.lat.value),
-            synchronic_spherical_coords.radius.value]).transpose()
+            synchronic_spherical_coords.radius.value,
+            np.pi / 2 + synchronic_spherical_coords.lat.to(u.rad).value,
+            synchronic_spherical_coords.lon.to(u.rad).value,
+        ]).transpose()
         synchronic_coords = spherical_to_cartesian(synchronic_spherical_coords)
 
-        synchronic_b_spherical = np.stack([synoptic_p_map.data, -synoptic_t_map.data, synoptic_r_map.data]).transpose()
+        synchronic_b_spherical = np.stack([synoptic_r_map.data, -synoptic_t_map.data, synoptic_p_map.data]).transpose()
         synchronic_b = vector_spherical_to_cartesian(synchronic_b_spherical, synchronic_spherical_coords)
-        synchronic_transform = cartesian_to_spherical_matrix(synchronic_coords)
+        synchronic_transform = cartesian_to_spherical_matrix(synchronic_spherical_coords)
 
         # load full disk map
         full_disk_r_map = Map(full_disk_files['Br'])
@@ -243,18 +243,19 @@ class SphericalDataModule(LightningDataModule):
         full_disk_spherical_coords = all_coordinates_from_map(full_disk_r_map)
         full_disk_spherical_coords = full_disk_spherical_coords.transform_to(frames.HeliographicCarrington)
         full_disk_spherical_coords = np.stack([
-            np.deg2rad(full_disk_spherical_coords.lon.value),
-            np.pi / 2 + np.deg2rad(full_disk_spherical_coords.lat.value),
-            full_disk_spherical_coords.radius.to(u.solRad).value]).transpose()
+            full_disk_spherical_coords.radius.to(u.solRad).value,
+            np.pi / 2 + full_disk_spherical_coords.lat.to(u.rad).value,
+            full_disk_spherical_coords.lon.to(u.rad).value,
+        ]).transpose()
         full_disk_coords = spherical_to_cartesian(full_disk_spherical_coords)
-        full_disk_transform = cartesian_to_spherical_matrix(full_disk_coords)
+        full_disk_transform = cartesian_to_spherical_matrix(full_disk_spherical_coords)
 
-
-        full_disk_b_spherical = np.stack([full_disk_p_map.data, -full_disk_t_map.data, full_disk_r_map.data]).transpose()
+        full_disk_b_spherical = np.stack(
+            [full_disk_r_map.data, -full_disk_t_map.data, full_disk_p_map.data]).transpose()
         full_disk_b = vector_spherical_to_cartesian(full_disk_b_spherical, full_disk_spherical_coords)
 
         # mask overlap
-        synoptic_r_map.meta['date-obs'] = full_disk_r_map.meta['date-obs'] # set constant background
+        synoptic_r_map.meta['date-obs'] = full_disk_r_map.meta['date-obs']  # set constant background
         reprojected_map = full_disk_r_map.reproject_to(synoptic_r_map.wcs)
         mask = ~np.isnan(reprojected_map.data).T
         synchronic_b_spherical[mask] = np.nan
@@ -265,6 +266,74 @@ class SphericalDataModule(LightningDataModule):
         coords = [synchronic_coords, full_disk_coords]
         spherical_coords = [synchronic_spherical_coords, full_disk_spherical_coords]
         transform = [synchronic_transform, full_disk_transform]
+
+        if boundary['type'] == 'potential':
+            source_surface_height = boundary['source_surface_height'] if 'source_surface_height' in boundary else 2.5
+            resample = boundary['resample'] if 'resample' in boundary else [360, 180]
+            sampling_points = boundary['sampling_points'] if 'sampling_points' in boundary else 100
+            assert source_surface_height >= height, 'Source surface height must be greater than height (set source_surface_height to >height)'
+
+            # PFSS extrapolation
+            potential_r_map = Map(boundary['Br'])
+            potential_r_map = potential_r_map.resample(resample * u.pix)
+            pfss_in = pfsspy.Input(potential_r_map, sampling_points, source_surface_height)
+            pfss_out = pfsspy.pfss(pfss_in)
+
+            # load B field
+            ref_coords = all_coordinates_from_map(potential_r_map)
+            spherical_boundary_coords = SkyCoord(lon=ref_coords.lon, lat=ref_coords.lat, radius=height * u.solRad, frame=ref_coords.frame)
+            potential_shape = spherical_boundary_coords.shape # required workaround for pfsspy spherical reshape
+            spherical_boundary_values = pfss_out.get_bvec(spherical_boundary_coords.reshape((-1,)))
+            spherical_boundary_values = spherical_boundary_values.reshape((*potential_shape, 3)).value
+            spherical_boundary_values[..., 1] *= -1 # flip B_theta
+            spherical_boundary_values = np.stack([spherical_boundary_values[..., 0],
+                                                  spherical_boundary_values[..., 1],
+                                                  spherical_boundary_values[..., 2]]).T
+
+            # load coordinates
+            spherical_boundary_coords = np.stack([
+                spherical_boundary_coords.radius.value,
+                np.pi / 2 + spherical_boundary_coords.lat.to(u.rad).value,
+                spherical_boundary_coords.lon.to(u.rad).value]).T
+
+            # convert to spherical coordinates
+            boundary_values = vector_spherical_to_cartesian(spherical_boundary_values, spherical_boundary_coords)
+            boundary_coords = spherical_to_cartesian(spherical_boundary_coords)
+            boundary_transform = cartesian_to_spherical_matrix(spherical_boundary_coords)
+
+            b_spherical_slices += [spherical_boundary_values]
+            b_slices += [boundary_values]
+            coords += [boundary_coords]
+            spherical_coords += [spherical_boundary_coords]
+            transform += [boundary_transform]
+
+        dataset_kwargs = {}
+        if slice:
+            if slice['frame'] == 'helioprojective':
+                bottom_left = SkyCoord(slice['Tx'][0] * u.arcsec, slice['Ty'][0] * u.arcsec,
+                                       frame=full_disk_r_map.coordinate_frame)
+                top_right = SkyCoord(slice['Tx'][1] * u.arcsec, slice['Ty'][1] * u.arcsec,
+                                     frame=full_disk_r_map.coordinate_frame)
+                bottom_left = bottom_left.transform_to(frames.HeliographicCarrington)
+                top_right = top_right.transform_to(frames.HeliographicCarrington)
+                slice_lon = np.array([bottom_left.lon.to(u.rad).value, top_right.lon.to(u.rad).value])
+                slice_lat = np.array([bottom_left.lat.to(u.rad).value, top_right.lat.to(u.rad).value]) + np.pi / 2
+            elif slice['frame'] == 'heliographic_carrington':
+                slice_lon = slice['longitude']
+                slice_lat = slice['latitude']
+            else:
+                raise ValueError(f"Unknown slice type '{slice['type']}'")
+            # set values outside lat lon range to nan
+            for b, c in zip(b_slices, spherical_coords):
+                mask =  (c[..., 1] > slice_lat[0]) &\
+                        (c[..., 1] < slice_lat[1]) &\
+                        (c[..., 2] > slice_lon[0]) &\
+                        (c[..., 2] < slice_lon[1])
+                b[~mask] = np.nan
+                c[~mask] = np.nan
+            dataset_kwargs['latitude_range'] = slice_lat
+            dataset_kwargs['longitude_range'] = slice_lon
+            self.sampling_range = [[1, height], slice_lat, slice_lon]
 
         if plot_overview:
             for b in b_slices:
@@ -321,7 +390,11 @@ class SphericalDataModule(LightningDataModule):
         # flatten data
         coords = np.concatenate([c.reshape((-1, 3)) for c in coords]).astype(np.float32)
         transform = np.concatenate([t.reshape((-1, 3, 3)) for t in transform]).astype(np.float32)
-        values = np.concatenate([b.reshape((-1, 3)) for b in b_spherical_slices]).astype(np.float32)
+        transform[..., :, :] = 0
+        transform[..., 0, 0] = 1
+        transform[..., 1, 1] = 1
+        transform[..., 2, 2] = 1
+        values = np.concatenate([b.reshape((-1, 3)) for b in b_slices]).astype(np.float32)
         # ranges = ranges.reshape((-1, 2)).astype(np.float32)
         # errors = error_slices.reshape((-1, 3)).astype(np.float32) if error_slices is not None else np.zeros_like(values)
 
@@ -335,48 +408,22 @@ class SphericalDataModule(LightningDataModule):
             # ranges = ranges[~nan_mask]
             # errors = errors[~nan_mask]
 
-        if boundary['type'] == 'potential':
-            potential_map = synoptic_r_map.resample(boundary['resample'] * u.pix)
-            pfss_in = pfsspy.Input(potential_map, 50, height)
-            pfss_out = pfsspy.pfss(pfss_in)
-            boundary_values = pfss_out.bg[:, :, -1].value
-
-            boundary_coords = all_coordinates_from_map(pfss_out.source_surface_br)
-            boundary_coords = np.stack([
-                np.deg2rad(boundary_coords.lon.value),
-                np.pi / 2 + np.deg2rad(boundary_coords.lat.value),
-                boundary_coords.radius.value]).transpose()
-            boundary_transform = cartesian_to_spherical_matrix(boundary_coords)
-
-            # log upper boundary
-            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-            potential_norm = np.max(np.abs(boundary_values))
-            axs[0].imshow(boundary_values[..., 0].transpose(), vmin=-potential_norm, vmax=potential_norm, cmap='gray', origin='lower')
-            axs[1].imshow(boundary_values[..., 1].transpose(), vmin=-potential_norm, vmax=potential_norm, cmap='gray', origin='lower')
-            axs[2].imshow(boundary_values[..., 2].transpose(), vmin=-potential_norm, vmax=potential_norm, cmap='gray', origin='lower')
-            wandb.log({"Potential boundary": fig})
-            plt.close('all')
-            #
-            values = np.concatenate([boundary_values.reshape((-1, 3)), values])
-            coords = np.concatenate([boundary_coords.reshape((-1, 3)), coords])
-            transform = np.concatenate([boundary_transform.reshape((-1, 3, 3)), transform])
-
-        elif boundary['type'] == 'stress_free':
-            boundary_values = np.zeros_like(synchronic_b, dtype=np.float32)
-            boundary_coords = np.copy(synchronic_spherical_coords)
-            boundary_values[..., 2] = np.nan # arbitrary z value
-            boundary_coords[..., 2] = height # top boundary
-            boundary_transform = cartesian_to_spherical_matrix(boundary_coords)
-            boundary_coords = spherical_to_cartesian(boundary_coords)
-            # concatenate boundary data points
-            strides = boundary['strides'] if 'strides' in boundary else 1
-            values = np.concatenate([boundary_values[::strides, ::strides].reshape((-1, 3)), values])
-            coords = np.concatenate([boundary_coords[::strides, ::strides].reshape((-1, 3)), coords])
-            transform = np.concatenate([boundary_transform[::strides, ::strides].reshape((-1, 3, 3)), transform])
-        elif boundary['type'] == 'open':
-            pass
-        else:
-            raise ValueError('Unknown boundary type')
+        # if boundary['type'] == 'stress_free':
+        #     boundary_values = np.zeros_like(synchronic_b, dtype=np.float32)
+        #     boundary_coords = np.copy(synchronic_spherical_coords)
+        #     boundary_values[..., 2] = np.nan  # arbitrary z value
+        #     boundary_coords[..., 2] = height  # top boundary
+        #     boundary_transform = cartesian_to_spherical_matrix(boundary_coords)
+        #     boundary_coords = spherical_to_cartesian(boundary_coords)
+        #     # concatenate boundary data points
+        #     strides = boundary['strides'] if 'strides' in boundary else 1
+        #     values = np.concatenate([boundary_values[::strides, ::strides].reshape((-1, 3)), values])
+        #     coords = np.concatenate([boundary_coords[::strides, ::strides].reshape((-1, 3)), coords])
+        #     transform = np.concatenate([boundary_transform[::strides, ::strides].reshape((-1, 3, 3)), transform])
+        # elif boundary['type'] == 'open':
+        #     pass
+        # else:
+        #     raise ValueError('Unknown boundary type')
 
         # normalize data
         values = values / b_norm
@@ -387,6 +434,8 @@ class SphericalDataModule(LightningDataModule):
 
         self.cube_shape = {'type': 'spherical', 'height': height}
 
+        # check data
+        assert len(coords) == len(transform) == len(values), 'Data length mismatch'
         # prep dataset
         # shuffle data
         r = np.random.permutation(coords.shape[0])
@@ -405,7 +454,8 @@ class SphericalDataModule(LightningDataModule):
 
         batches_path = {'coords': coords_npy_path,
                         'values': values_npy_path,
-                        'transform': transform_npy_path}
+                        # 'transform': transform_npy_path
+                        }
 
         # add height ranges if provided
         # if use_height_range:
@@ -424,8 +474,10 @@ class SphericalDataModule(LightningDataModule):
 
         # create data loaders
         self.dataset = BatchesDataset(batches_path, boundary_batch_size)
-        self.random_dataset = RandomSphericalCoordinateDataset([1, height], random_batch_size)
-        self.cube_dataset = SphereDataset(height, batch_size=boundary_batch_size, resolution=validation_resolution)
+        self.random_dataset = RandomSphericalCoordinateDataset([1, height], random_batch_size, **dataset_kwargs)
+        self.cube_dataset = SphereDataset([1, height], batch_size=boundary_batch_size, resolution=validation_resolution, **dataset_kwargs)
+        self.slices_datasets = {settings['name']: SphereSlicesDataset(**settings)
+                                for settings in plot_settings if settings['type'] == 'slices'}
         self.batches_path = batches_path
 
     def clear(self):
@@ -442,8 +494,9 @@ class SphericalDataModule(LightningDataModule):
                                  shuffle=False)
         boundary_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                      shuffle=False)
-        return [cube_loader, boundary_loader]
-
+        slices_loaders = [DataLoader(ds, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+                                     shuffle=False) for ds in self.slices_datasets.values()]
+        return boundary_loader, cube_loader, *slices_loaders
 
 
 class SHARPDataModule(SlicesDataModule):
@@ -459,7 +512,7 @@ class SHARPDataModule(SlicesDataModule):
         else:
             hmi_p, err_p, hmi_t, err_t, hmi_r, err_r = data_path
         # laod maps
-        p_map, t_map, r_map = Map(hmi_p),Map(hmi_t),Map(hmi_r)
+        p_map, t_map, r_map = Map(hmi_p), Map(hmi_t), Map(hmi_r)
         p_error_map, t_error_map, r_error_map = Map(err_p), Map(err_t), Map(err_r)
 
         maps = [p_map, t_map, r_map, p_error_map, t_error_map, r_error_map]
@@ -478,6 +531,7 @@ class SHARPDataModule(SlicesDataModule):
 
         super().__init__(b_slices, *args, error_slices=error_slices, meta_data=meta_data, **kwargs)
 
+
 class SOLISDataModule(SlicesDataModule):
 
     def __init__(self, data_path, slices=None, *args, **kwargs):
@@ -494,34 +548,96 @@ class SOLISDataModule(SlicesDataModule):
 
 class FITSDataModule(SlicesDataModule):
 
-    def __init__(self, data_paths, mask_path=None, bin=1, flip_sign=None, *args, **kwargs):
+    def __init__(self, data, *args, **kwargs):
         # check if single height layer
-        if isinstance(data_paths, dict):
-            data_paths = [data_paths]
+        if not isinstance(data, list):
+            data = [data]
         # load all heights
-        b_slices = []
-        meta_data = None
-        for data_path in data_paths:
-            if isinstance(data_path, dict):
-                data_dict = data_path
-                b = np.stack([fits.getdata(data_dict['x']).T,
-                              fits.getdata(data_dict['y']).T,
-                              fits.getdata(data_dict['z']).T], -1)
-                meta_data = fits.getheader(data_dict['x'])
-            else:
-                b = fits.getdata(data_path).T
-                meta_data = fits.getheader(data_path)
-            b_slices += [b]
-        b_slices = np.stack(b_slices, 2)
-        if flip_sign is not None:
-            b_slices[..., flip_sign] *= -1  # -t component
+        b_list, range_list, error_list, reference_pixel_list, scale_list = [], [], [], [], []
+        height_mapping = []
+        for d in data:
+            # LOAD B and COORDS
+            # use center coordinate of first map
+            b, meta_data = self.load_B(d['B'])
+            error = self.load_error(d['B'])
+            # FLIP SIGN
+            if 'flip_sign' in d:
+                b[..., d['flip_sign']] *= -1
+            # APPLY MASK
+            if "mask" in d:
+                mask = self.load_mask(d["mask"])
+                b[mask] = np.nan
+            # LOAD HEIGHT MAPPING
+            z, z_min, z_max = self.get_height_mapping(d)
+            # flatten data
+            b_list += [b]
+            error_list += [error]
+            height_mapping += [{'z': z, 'z_min': z_min, 'z_max': z_max}]
 
-        if mask_path is not None:
-            mask = fits.getdata(mask_path).T
-            b_slices[mask == 0, :, :] = np.nan
-        if bin > 1:
-            b_slices = block_reduce(b_slices, (bin, bin, 1, 1), np.mean)
-        super().__init__(b_slices, meta_data=meta_data, *args, **kwargs)
+
+        # stack data
+        b_slices = np.stack(b_list, axis=2)
+        error_slices = np.stack(error_list, axis=2) if None not in error_list else None
+        height_mapping = {'z': [h['z'] for h in height_mapping],
+                          'z_min': [h['z_min'] for h in height_mapping],
+                          'z_max': [h['z_max'] for h in height_mapping]}
+        super().__init__(b_slices, meta_data=meta_data, height_mapping=height_mapping, error_slices=error_slices, *args, **kwargs)
+
+    def load_B(self, b_data):
+        if isinstance(b_data, dict):
+            x_map = Map(b_data['x']) if 'x' in b_data else None
+            y_map = Map(b_data['y']) if 'y' in b_data else None
+            z_map = Map(b_data['z']) if 'z' in b_data else None
+        elif isinstance(b_data, str):
+            data = fits.getdata(b_data)
+            meta = fits.getheader(b_data)
+            meta['naxis'] = 2
+            x_map = Map(data[0], meta)
+            y_map = Map(data[1], meta)
+            z_map = Map(data[2], meta)
+        else:
+            raise NotImplementedError(f'Unknown data format for B: {type(b_data)}')
+        # add missing components as NaNs
+        maps = [x_map, y_map, z_map]
+        ref_map = [m for m in maps if m is not None][0]
+        nan_data = np.ones_like(ref_map.data) * np.nan
+
+        x_data = x_map.data if x_map is not None else nan_data
+        y_data = y_map.data if y_map is not None else nan_data
+        z_data = z_map.data if z_map is not None else nan_data
+
+        b = np.stack([x_data, y_data, z_data]).T
+        meta_data = ref_map.meta
+        return b, meta_data
+
+    def load_error(self, b_data, target_scale=None):
+        if isinstance(b_data, dict) and 'x_error' in b_data:
+            x_map = Map(b_data['x_error'])
+            y_map = Map(b_data['y_error'])
+            z_map = Map(b_data['z_error'])
+        elif 'error' in b_data:
+            data = fits.getdata(b_data['error'])
+            meta = fits.getheader(b_data['error'])
+            x_map = Map(data, meta)
+            y_map = Map(data, meta)
+            z_map = Map(data, meta)
+        else:
+            return None
+        b_error = np.stack([x_map.data, y_map.data, z_map.data]).T
+        return b_error
+
+    def get_height_mapping(self, d):
+        if 'height_mapping' in d:
+            z = d['height_mapping']['z']
+            z_min = d['height_mapping']['z_min']
+            z_max = d['height_mapping']['z_max']
+        else:
+            z, z_min, z_max = 0, 0, 0
+        return z, z_min, z_max
+
+    def load_mask(self, mask_data):
+        mask = fits.getdata(mask_data).T
+        return mask == 0
 
 
 class SHARPSeriesDataModule(SHARPDataModule):
@@ -536,7 +652,7 @@ class SHARPSeriesDataModule(SHARPDataModule):
     def train_dataloader(self):
         # re-initialize
         super().__init__(self.file_paths[0], *self.args, **self.kwargs)
-        del self.file_paths[0] # continue with next file in list
+        del self.file_paths[0]  # continue with next file in list
         return super().train_dataloader()
 
 
@@ -625,11 +741,12 @@ class AnalyticDataModule(LightningDataModule):
             coords = np.stack(np.mgrid[:b_cube.shape[0], :b_cube.shape[1], :b_cube.shape[2]], -1).astype(np.float32)
             ranges = np.zeros((*coords.shape[:3], 2), dtype=np.float32)
 
-            height_mapping = {"z":  [h / 2 for h in tau_surfaces],
-                                   "z_min": [0] * len(tau_surfaces),
-                                   "z_max": [h for h in tau_surfaces]}
+            height_mapping = {"z": [h / 2 for h in tau_surfaces],
+                              "z_min": [0] * len(tau_surfaces),
+                              "z_max": [h for h in tau_surfaces]}
             self.height_mapping = height_mapping
-            for i, (z, z_min, z_max) in enumerate(zip(height_mapping["z"], height_mapping["z_min"], height_mapping["z_max"])):
+            for i, (z, z_min, z_max) in enumerate(
+                    zip(height_mapping["z"], height_mapping["z_min"], height_mapping["z_max"])):
                 ranges[:, :, i, 0] = z_min
                 ranges[:, :, i, 1] = z_max
                 coords[:, :, i, 2] = z
@@ -643,7 +760,6 @@ class AnalyticDataModule(LightningDataModule):
             ranges = ranges.reshape((-1, 2)).astype(np.float32)
         else:
             raise Exception(f'Invalid boundary condition: {boundary}. Available options: ["full", "potential", "open"]')
-
 
         # normalize data
         values = values / b_norm
@@ -696,7 +812,3 @@ class AnalyticDataModule(LightningDataModule):
         boundary_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                      shuffle=False)
         return [cube_loader, boundary_loader]
-
-
-
-

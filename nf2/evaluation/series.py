@@ -1,14 +1,17 @@
 import argparse
 import glob
 import os
+import pickle
 
 import imageio
 import numpy as np
+import pandas as pd
 import torch.cuda
 from dateutil.parser import parse
 from matplotlib import pyplot as plt, cm
 from matplotlib.colors import Normalize
 from matplotlib.dates import date2num, DateFormatter
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.net import Fido
 from sunpy.net import attrs as a
 from tqdm import tqdm
@@ -26,8 +29,11 @@ def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
     free_me = get_free_mag_energy(b, progress=False)
     theta = weighted_theta(b, j)
 
+    # check free magnetic energy is positive
+    assert free_me.sum() > 0, f'free magnetic energy is negative: {free_me.sum()}'
+    date_str = nf2_file.split('/')[-2].split('_')
     result = {
-        'date': parse(os.path.basename(nf2_file).split('.')[0][:-4].replace('_', 'T')),
+        'date': parse(date_str[0] + 'T' + date_str[1]),
         # torch.load(nf2_file)['meta_data']['DATE-OBS'],
         # bottom boundary
         'b_0': b[:, :, 0, 2],
@@ -66,15 +72,15 @@ if __name__ == '__main__':
                         default=None)
     args = parser.parse_args()
 
-    nf2_files = sorted(glob.glob(os.path.join(args.nf2_path, '*.nf2')))
+    nf2_files = sorted(glob.glob(os.path.join(args.nf2_path, '**', '*.nf2')))
     result_path = args.result_path
     os.makedirs(result_path, exist_ok=True)
 
     batch_size = int(1e5 * torch.cuda.device_count())
 
     # load simulation scaling
-    Mm_per_pix = .72  # torch.load(nf2_files[0])['Mm_per_pix']
-    z_pixels = int(np.ceil(20 / (Mm_per_pix)))  # 20 Mm --> pixels
+    Mm_per_pix = torch.load(nf2_files[0])['Mm_per_pix'] if 'Mm_per_pix' in torch.load(nf2_files[0]) else 0.36
+    z_pixels = int(np.ceil(20 / Mm_per_pix))  # 20 Mm --> pixels
 
     # adjust scale to strides
     Mm_per_pix *= args.strides
@@ -82,6 +88,20 @@ if __name__ == '__main__':
 
     # evaluate series
     series_results = evaluate_nf2_series(nf2_files, z_pixels, cm_per_pix, args.strides, batch_size)
+
+    # save with pickle
+    with open(os.path.join(result_path, 'results.pkl'), 'wb') as f:
+        pickle.dump(series_results, f)
+
+    # restore from pickle
+    with open(os.path.join(result_path, 'results.pkl'), 'rb') as f:
+        series_results = pickle.load(f)
+
+    # save results as csv
+    df = pd.DataFrame({'date': series_results['date'],
+                       'energy [ergs]' : series_results['total_energy'], 'free_energy [ergs]' : series_results['total_free_energy'],
+                       'div': series_results['total_div'], 'jxb': series_results['total_jxb'], 'theta': series_results['theta']})
+    df.to_csv(os.path.join(result_path, 'series.csv'))
 
     # plot integrated quantities
     x_dates = date2num(series_results['date'])
@@ -171,3 +191,49 @@ if __name__ == '__main__':
     images = [cm.get_cmap('plasma')(Normalize(vmin=0, vmax=jxb_maps.max())(jxb_map.T)) for jxb_map in jxb_maps]
     images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'jxb_maps.mp4'), images)
+
+    # create video of free energy with timeline
+    video_path = os.path.join(result_path, 'free_energy_video')
+    os.makedirs(video_path, exist_ok=True)
+    for date, free_energy_map in zip(series_results['date'], series_results['free_energy_map']):
+        fig, axs = plt.subplots(2, 1, figsize=(5, 5))
+        ax = axs[0]
+        im = ax.imshow(free_energy_map.T, vmin=0, vmax=free_energy_maps.max(),
+                       origin='lower', cmap='jet',
+                       extent=np.array([0, free_energy_map.shape[0], 0, free_energy_map.shape[1]]) * Mm_per_pix)
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
+        ax.set_title(date)
+        # add locatable colorbar
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="2%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax, label='Free Energy Density\n' + r'[erg $cm^{-2}]$')
+        #
+        ax = axs[1]
+        ax.plot(x_dates, np.array(series_results['total_free_energy']) * 1e-32)
+        ax.set_ylabel('Free Energy\n[$10^{32}$ erg]')
+        ax.xaxis_date()
+        ax.set_xlim(x_dates[0], x_dates[-1])
+        ax.xaxis.set_major_formatter(date_format)
+        # tilt x-axis labels
+        fig.autofmt_xdate()
+        # add flares
+        if args.add_flares:
+            for t, goes_class in zip(flares['event_peaktime'], flares['fl_goescls']):
+                flare_intensity = np.log10(float(goes_class[1:]) * goes_mapping[goes_class[0]])
+                if flare_intensity >= np.log10(1 * 10 ** 2):
+                    ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='black')
+                if flare_intensity >= np.log10(1 * 10 ** 3):
+                    ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='red')
+        # add vertical line
+        ax.axvline(x=date2num(date), linestyle='solid', c='red')
+        #
+        plt.tight_layout()
+        plt.savefig(os.path.join(video_path, 'free_energy_map_' + str(date) + '.jpg'))
+        plt.close()
+
+    images = [plt.imread(image) for image in sorted(glob.glob(os.path.join(video_path, '*.jpg')))]
+    imageio.mimsave(os.path.join(result_path, 'free_energy_series.mp4'), images)
+
+
+
