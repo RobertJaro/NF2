@@ -16,7 +16,10 @@
     "full_disk_files": {
       "Bp": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Bp.fits",
       "Br": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Br.fits",
-      "Bt": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Bt.fits"
+      "Bt": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Bt.fits",
+      "Bp_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Bp_err.fits",
+      "Br_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Br_err.fits",
+      "Bt_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2173/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
     },
     "boundary": {
       "type": "potential",
@@ -39,9 +42,9 @@
     "use_positional_encoding": false
   },
   "training": {
-    "epochs": 1000,
+    "epochs": 1e5,
     "lambda_b": {
-      "start": 1e3,
+      "start": 1e2,
       "end": 10,
       "iterations": 2e5
     },
@@ -62,8 +65,8 @@
       "name": "subframe",
       "longitude_range": [2.356194490192345, 3.141592653589793],
       "latitude_range": [1.2566370614359172, 1.8849555921538759],
-      "radius_range": [1.0, 1.5],
-      "n_slices": 5,
+      "radius_range": [1.0, 1.2],
+      "n_slices": 10,
       "plot_currents": true
     },
     {

@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2106_subframe_vp_v2",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2106_subframe_vp_v6",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "full_disk",
@@ -17,11 +17,13 @@
     "full_disk_files": {
       "Bp":  "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Bp.fits",
       "Br":  "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Br.fits",
-      "Bt":  "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Bt.fits"
+      "Bt":  "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Bt.fits",
+      "Bp_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Bp_err.fits",
+      "Br_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Br_err.fits",
+      "Bt_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.b_720s.20110215_000000_TAI.Bt_err.fits"
     },
     "boundary": {
-      "type": "potential",
-      "Br": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2106/hmi.synoptic_mr_polfil_720s.2106.Mr_polfil.fits"
+      "type": "open"
     },
     "height": 1.2,
     "slice": {
@@ -31,7 +33,7 @@
     },
     "b_norm": 2000,
     "batch_size": {"boundary":  8192, "random":  16384},
-    "work_directory": "/tmp/nf2/2106_subframe_vp_v2",
+    "work_directory": "/tmp/nf2/2106_subframe_vp_v6",
     "num_workers": 8
   },
 
@@ -40,17 +42,18 @@
     "use_height_mapping": false,
     "spherical": true,
     "use_vector_potential": true,
-    "use_positional_encoding": false
+    "use_positional_encoding": true
   },
 
   "training": {
     "epochs": 1e6,
-    "lambda_b": {"start": 1e3, "end": 10, "iterations" : 1e5},
+    "lambda_b": {"start": 1e2, "end": 10, "iterations" : 1e5},
     "lambda_div": 0,
-    "lambda_ff": 1e-2,
+    "lambda_ff": 1e-1,
     "lambda_min_energy": 0,
     "lambda_radial_reg": 0,
-    "check_val_every_n_epoch": 10,
+    "lambda_energy_gradient_reg": 1e-2,
+    "check_val_every_n_epoch": 20,
     "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
   },
 

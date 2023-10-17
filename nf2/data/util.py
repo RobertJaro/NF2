@@ -65,12 +65,12 @@ def spherical_to_cartesian(v):
     return np.stack([x, y, z], -1)
 
 
-def cartesian_to_spherical(v):
+def cartesian_to_spherical(v, f=np):
     x, y, z = v[..., 0], v[..., 1], v[..., 2]
     xy = x ** 2 + y ** 2
 
-    r = np.sqrt(xy + z ** 2)
-    t = np.arctan2(np.sqrt(xy), z)
-    p = np.arctan2(y, x)
+    r = f.sqrt(xy + z ** 2)
+    t = f.arctan2(f.sqrt(xy), z)
+    p = f.arctan2(y, x)
 
-    return np.stack([r, t, p], -1)
+    return f.stack([r, t, p], -1)

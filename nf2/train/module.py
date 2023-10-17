@@ -18,6 +18,7 @@ class NF2Module(LightningModule):
     def __init__(self, validation_settings, dim=256, lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5},
                  lambda_div=0.1, lambda_ff=0.1,
                  lambda_height_reg=0, lambda_min_energy_nans=0, lambda_min_energy=0, lambda_radial_reg=0,
+                 lambda_energy_gradient_reg = 0,
                  lr_params={"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}, meta_path=None,
                  use_positional_encoding=False, use_vector_potential=False, use_height_mapping=False, spherical=False,
                  **kwargs):
@@ -65,7 +66,8 @@ class NF2Module(LightningModule):
         lambdas = {}
         for k, v in {'lambda_b': lambda_b, 'lambda_div': lambda_div, 'lambda_ff': lambda_ff,
                      'lambda_height_reg': lambda_height_reg, 'lambda_min_energy_nans': lambda_min_energy_nans,
-                     'lambda_min_energy': lambda_min_energy, 'lambda_radial_reg': lambda_radial_reg}.items():
+                     'lambda_min_energy': lambda_min_energy, 'lambda_radial_reg': lambda_radial_reg,
+                     'lambda_energy_gradient_reg': lambda_energy_gradient_reg}.items():
             if isinstance(v, dict):
                 value = torch.tensor(v['start'], dtype=torch.float32)
                 gamma = torch.tensor((v['end'] / v['start']) ** (1 / v['iterations']), dtype=torch.float32)
@@ -104,8 +106,8 @@ class NF2Module(LightningModule):
         boundary_batch = batch['boundary']
         boundary_coords = boundary_batch['coords']
         b_true = boundary_batch['values']
-        transform = boundary_batch['transform']  if 'transform' in batch else None
-        b_err = boundary_batch['error'] if 'error' in boundary_batch else 0
+        transform = boundary_batch['transform'] if 'transform' in boundary_batch else None
+        b_err = boundary_batch['errors'] if 'errors' in boundary_batch else 0
         boundary_coords.requires_grad = True
         if self.use_height_mapping:
             original_coords = boundary_coords
@@ -146,19 +148,36 @@ class NF2Module(LightningModule):
         radial_regularization = (radial_regularization * radius_weight).mean()
 
         # compute div and ff loss
-        divergence_loss, force_loss = calculate_loss(b, coords)
+        divergence_loss, force_loss  = calculate_loss(b, coords)
         divergence_loss, force_loss = divergence_loss.mean(), force_loss.mean()
+
+        # magnetic energy radial decrease
+        E = b[n_boundary_coords:].pow(2).sum(-1)
+        dE_dxyz = torch.autograd.grad(E[:, None], random_coords,
+                                      grad_outputs=torch.ones_like(E[:, None]).to(E),
+                                      retain_graph=True, create_graph=True, allow_unused=True)[0]
+        coords_spherical = cartesian_to_spherical(random_coords, f=torch)
+        t = coords_spherical[:, 1]
+        p = coords_spherical[:, 2]
+        dE_dr = (torch.sin(t) * torch.cos(p)) * dE_dxyz[:, 0] + \
+                (torch.sin(t) * torch.sin(p)) * dE_dxyz[:, 1] + \
+                torch.cos(p) * dE_dxyz[:, 2]
+        energy_gradient_regularization = (torch.relu(dE_dr) * radius_weight).mean()
+
         loss = b_diff * self.lambdas['lambda_b'] + \
                divergence_loss * self.lambdas['lambda_div'] + \
                force_loss * self.lambdas['lambda_ff'] + \
                min_energy_NaNs_regularization * self.lambdas['lambda_min_energy_nans'] + \
                min_energy_regularization * self.lambdas['lambda_min_energy'] + \
-               radial_regularization * self.lambdas['lambda_radial_reg']
+               radial_regularization * self.lambdas['lambda_radial_reg'] + \
+               energy_gradient_regularization * self.lambdas['lambda_energy_gradient_reg']
+
 
         loss_dict = {'b_diff': b_diff, 'divergence': divergence_loss, 'force-free': force_loss,
                      'min_energy_NaNs_regularization': min_energy_NaNs_regularization,
                      'min_energy_regularization': min_energy_regularization,
-                     'radial_regularization': radial_regularization}
+                     'radial_regularization': radial_regularization,
+                     'energy_gradient_regularization': energy_gradient_regularization}
         if self.use_height_mapping:
             height_diff = torch.abs(boundary_coords[:, 2] - original_coords[:, 2])
             normalization = (boundary_batch['height_ranges'][:, 1] - boundary_batch['height_ranges'][:, 0]) + 1e-6
@@ -192,7 +211,7 @@ class NF2Module(LightningModule):
         if dataloader_idx == 0:
             boundary_coords = batch['coords']
             b_true = batch['values']
-            b_err = batch['error'] if 'error' in batch else 0
+            b_err = batch['errors'] if 'errors' in batch else 0
             boundary_coords.requires_grad = True
             transform = batch['transform'] if 'transform' in batch else None
             if self.use_height_mapping:

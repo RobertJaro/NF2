@@ -254,6 +254,16 @@ class SphericalDataModule(LightningDataModule):
             [full_disk_r_map.data, -full_disk_t_map.data, full_disk_p_map.data]).transpose()
         full_disk_b = vector_spherical_to_cartesian(full_disk_b_spherical, full_disk_spherical_coords)
 
+        if 'Br_err' in full_disk_files and 'Bt_err' in full_disk_files and 'Bp_err' in full_disk_files:
+            full_disk_r_error_map = Map(full_disk_files['Br_err'])
+            full_disk_t_error_map = Map(full_disk_files['Bt_err'])
+            full_disk_p_error_map = Map(full_disk_files['Bp_err'])
+            full_disk_b_error = np.stack([full_disk_r_error_map.data,
+                                          full_disk_t_error_map.data,
+                                          full_disk_p_error_map.data]).transpose()
+        else:
+            full_disk_b_error = np.zeros_like(full_disk_b)
+
         # mask overlap
         synoptic_r_map.meta['date-obs'] = full_disk_r_map.meta['date-obs']  # set constant background
         reprojected_map = full_disk_r_map.reproject_to(synoptic_r_map.wcs)
@@ -263,6 +273,7 @@ class SphericalDataModule(LightningDataModule):
 
         b_spherical_slices = [synchronic_b_spherical, full_disk_b_spherical]
         b_slices = [synchronic_b, full_disk_b]
+        error_slices = [np.zeros_like(synchronic_b), full_disk_b_error]
         coords = [synchronic_coords, full_disk_coords]
         spherical_coords = [synchronic_spherical_coords, full_disk_spherical_coords]
         transform = [synchronic_transform, full_disk_transform]
@@ -303,6 +314,7 @@ class SphericalDataModule(LightningDataModule):
 
             b_spherical_slices += [spherical_boundary_values]
             b_slices += [boundary_values]
+            error_slices += [np.zeros_like(boundary_values)]
             coords += [boundary_coords]
             spherical_coords += [spherical_boundary_coords]
             transform += [boundary_transform]
@@ -324,7 +336,7 @@ class SphericalDataModule(LightningDataModule):
             else:
                 raise ValueError(f"Unknown slice type '{slice['type']}'")
             # set values outside lat lon range to nan
-            for b, c in zip(b_slices, spherical_coords):
+            for b, c in zip(b_spherical_slices, spherical_coords):
                 mask =  (c[..., 1] > slice_lat[0]) &\
                         (c[..., 1] < slice_lat[1]) &\
                         (c[..., 2] > slice_lon[0]) &\
@@ -390,13 +402,10 @@ class SphericalDataModule(LightningDataModule):
         # flatten data
         coords = np.concatenate([c.reshape((-1, 3)) for c in coords]).astype(np.float32)
         transform = np.concatenate([t.reshape((-1, 3, 3)) for t in transform]).astype(np.float32)
-        transform[..., :, :] = 0
-        transform[..., 0, 0] = 1
-        transform[..., 1, 1] = 1
-        transform[..., 2, 2] = 1
-        values = np.concatenate([b.reshape((-1, 3)) for b in b_slices]).astype(np.float32)
+        values = np.concatenate([b.reshape((-1, 3)) for b in b_spherical_slices]).astype(np.float32)
+        errors = np.concatenate([e.reshape((-1, 3)) for e in error_slices]).astype(np.float32)
         # ranges = ranges.reshape((-1, 2)).astype(np.float32)
-        # errors = error_slices.reshape((-1, 3)).astype(np.float32) if error_slices is not None else np.zeros_like(values)
+
 
         # filter nan entries
         nan_mask = np.all(np.isnan(values), -1) | np.any(np.isnan(coords), -1)
@@ -405,37 +414,18 @@ class SphericalDataModule(LightningDataModule):
             coords = coords[~nan_mask]
             transform = transform[~nan_mask]
             values = values[~nan_mask]
+            errors = errors[~nan_mask]
             # ranges = ranges[~nan_mask]
             # errors = errors[~nan_mask]
 
-        # if boundary['type'] == 'stress_free':
-        #     boundary_values = np.zeros_like(synchronic_b, dtype=np.float32)
-        #     boundary_coords = np.copy(synchronic_spherical_coords)
-        #     boundary_values[..., 2] = np.nan  # arbitrary z value
-        #     boundary_coords[..., 2] = height  # top boundary
-        #     boundary_transform = cartesian_to_spherical_matrix(boundary_coords)
-        #     boundary_coords = spherical_to_cartesian(boundary_coords)
-        #     # concatenate boundary data points
-        #     strides = boundary['strides'] if 'strides' in boundary else 1
-        #     values = np.concatenate([boundary_values[::strides, ::strides].reshape((-1, 3)), values])
-        #     coords = np.concatenate([boundary_coords[::strides, ::strides].reshape((-1, 3)), coords])
-        #     transform = np.concatenate([boundary_transform[::strides, ::strides].reshape((-1, 3, 3)), transform])
-        # elif boundary['type'] == 'open':
-        #     pass
-        # else:
-        #     raise ValueError('Unknown boundary type')
-
         # normalize data
         values = values / b_norm
-        # errors = errors / b_norm
-        # apply spatial normalization
-        # coords = coords / spatial_norm
-        # ranges = ranges / spatial_norm
+        errors = errors / b_norm
 
         self.cube_shape = {'type': 'spherical', 'height': height}
 
         # check data
-        assert len(coords) == len(transform) == len(values), 'Data length mismatch'
+        assert len(coords) == len(transform) == len(values) == len(errors), 'Data length mismatch'
         # prep dataset
         # shuffle data
         r = np.random.permutation(coords.shape[0])
@@ -443,7 +433,7 @@ class SphericalDataModule(LightningDataModule):
         transform = transform[r]
         values = values[r]
         # ranges = ranges[r]
-        # errors = errors[r]
+
         # store data to disk
         coords_npy_path = os.path.join(work_directory, 'coords.npy')
         np.save(coords_npy_path, coords.astype(np.float32))
@@ -451,10 +441,13 @@ class SphericalDataModule(LightningDataModule):
         np.save(transform_npy_path, transform.astype(np.float32))
         values_npy_path = os.path.join(work_directory, 'values.npy')
         np.save(values_npy_path, values.astype(np.float32))
+        err_npy_path = os.path.join(work_directory, 'errors.npy')
+        np.save(err_npy_path, errors.astype(np.float32))
 
         batches_path = {'coords': coords_npy_path,
                         'values': values_npy_path,
-                        # 'transform': transform_npy_path
+                        'transform': transform_npy_path,
+                        'errors': err_npy_path
                         }
 
         # add height ranges if provided
@@ -463,11 +456,6 @@ class SphericalDataModule(LightningDataModule):
         #     np.save(ranges_npy_path, ranges)
         #     batches_path['height_ranges'] = ranges_npy_path
 
-        # add error ranges if provided
-        # if error_slices is not None:
-        #     err_npy_path = os.path.join(work_directory, 'errors.npy')
-        #     np.save(err_npy_path, errors)
-        #     batches_path['errors'] = err_npy_path
 
         boundary_batch_size = int(batch_size['boundary']) if isinstance(batch_size, dict) else int(batch_size)
         random_batch_size = int(batch_size['random']) if isinstance(batch_size, dict) else int(batch_size)
