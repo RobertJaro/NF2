@@ -74,3 +74,7 @@ trainer = Trainer(max_epochs=len(data_paths),
                   gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=1,
                   check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1,)
 trainer.fit(nf2, data_module)
+
+
+def main(): # workaround for entry_points
+    pass

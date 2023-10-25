@@ -27,3 +27,6 @@ else:
 
 save_vtk(b, vtk_path, 'B', scalar=tau, scalar_name='tau',
          Mm_per_pix=state['Mm_per_pixel'] * strides)
+
+def main(): # workaround for entry_points
+    pass

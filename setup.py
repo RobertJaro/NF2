@@ -16,6 +16,7 @@ setup(
         'console_scripts': [
             'nf2-extrapolate = nf2.extrapolate:main',
             'nf2-extrapolate-series = nf2.extrapolate_series:main',
+            'nf2-noaa-to-sharp = nf2.data.noaa_to_sharp:main',
             'nf2-download = nf2.data.download_range:main',
             'nf2-to-vtk = nf2.evaluation.nf2_to_vtk:main',
             'nf2-to-npy = nf2.evaluation.nf2_to_vtk:main',

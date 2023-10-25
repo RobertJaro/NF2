@@ -84,3 +84,7 @@ trainer.fit(nf2, data_module, ckpt_path='last')
 save(save_path, nf2.model, data_module, config, height_mapping_model=nf2.height_mapping_model)
 # clean up
 data_module.clear()
+
+
+def main(): # workaround for entry_points
+    pass

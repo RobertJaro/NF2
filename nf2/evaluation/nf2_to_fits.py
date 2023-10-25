@@ -22,3 +22,6 @@ b = load_cube(nf2_path, device, progress=True, strides=strides)
 hdu = fits.PrimaryHDU(b)
 hdul = fits.HDUList([hdu])
 hdul.writeto(fits_path)
+
+def main(): # workaround for entry_points
+    pass

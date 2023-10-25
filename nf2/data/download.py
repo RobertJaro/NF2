@@ -26,6 +26,8 @@ def find_HARP(start_time, noaa_nums, client):
                               key=['NOAA_AR', 'HARPNUM'])
     if len(ar_mapping) == 0:
         return None
+    if noaa_nums is None or len(noaa_nums) == 0:
+        return {'HARP': list(ar_mapping['HARPNUM']), 'NOAA': list(ar_mapping['NOAA_AR'])}
     for noaa_num in noaa_nums:
         harpnum = ar_mapping[ar_mapping['NOAA_AR'] == int(noaa_num)]['HARPNUM']
         if len(harpnum) > 0:

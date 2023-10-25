@@ -20,3 +20,7 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 b = load_cube(nf2_path, device, progress=True, strides=strides)
 
 np.save(npy_path, b)
+
+
+def main(): # workaround for entry_points
+    pass
