@@ -148,21 +148,14 @@ class NF2Module(LightningModule):
         radial_regularization = (radial_regularization * radius_weight).mean()
 
         # compute div and ff loss
-        divergence_loss, force_loss  = calculate_loss(b, coords)
+        divergence_loss, force_loss, dE_dr = calculate_loss(b, coords)
         divergence_loss, force_loss = divergence_loss.mean(), force_loss.mean()
 
         # magnetic energy radial decrease
-        E = b[n_boundary_coords:].pow(2).sum(-1)
-        dE_dxyz = torch.autograd.grad(E[:, None], random_coords,
-                                      grad_outputs=torch.ones_like(E[:, None]).to(E),
-                                      retain_graph=True, create_graph=True, allow_unused=True)[0]
-        coords_spherical = cartesian_to_spherical(random_coords, f=torch)
-        t = coords_spherical[:, 1]
-        p = coords_spherical[:, 2]
-        dE_dr = (torch.sin(t) * torch.cos(p)) * dE_dxyz[:, 0] + \
-                (torch.sin(t) * torch.sin(p)) * dE_dxyz[:, 1] + \
-                torch.cos(p) * dE_dxyz[:, 2]
-        energy_gradient_regularization = (torch.relu(dE_dr) * radius_weight).mean()
+        sampled_dE_dr = dE_dr[n_boundary_coords:]
+        energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight
+        energy_gradient_regularization = torch.asinh(energy_gradient_regularization / 0.001) / self.asinh_stretch
+        energy_gradient_regularization = energy_gradient_regularization.mean()
 
         loss = b_diff * self.lambdas['lambda_b'] + \
                divergence_loss * self.lambdas['lambda_div'] + \
@@ -328,7 +321,18 @@ def calculate_loss(b, coords):
     jxb = torch.cross(j, b, -1)
     force_loss = torch.sum(jxb ** 2, dim=-1) / (torch.sum(b ** 2, dim=-1) + 1e-7)
     divergence_loss = (dBx_dx + dBy_dy + dBz_dz) ** 2
-    return divergence_loss, force_loss
+    #
+    dE_dx = 2 * (torch.abs(b[:, 0]) * dBx_dx + torch.abs(b[:, 1]) * dBy_dx + torch.abs(b[:, 2]) * dBz_dx)
+    dE_dy = 2 * (torch.abs(b[:, 0]) * dBx_dy + torch.abs(b[:, 1]) * dBy_dy + torch.abs(b[:, 2]) * dBz_dy)
+    dE_dz = 2 * (torch.abs(b[:, 0]) * dBx_dz + torch.abs(b[:, 1]) * dBy_dz + torch.abs(b[:, 2]) * dBz_dz)
+    coords_spherical = cartesian_to_spherical(coords, f=torch)
+    t = coords_spherical[:, 1]
+    p = coords_spherical[:, 2]
+    dE_dr = (torch.sin(t) * torch.cos(p)) * dE_dx + \
+            (torch.sin(t) * torch.sin(p)) * dE_dy + \
+            torch.cos(p) * dE_dz
+    #
+    return divergence_loss, force_loss, dE_dr
 
 
 def save(save_path, model, data_module, config, height_mapping_model=None):

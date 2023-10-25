@@ -8,8 +8,9 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
+from nf2.train.callback import SlicesCallback
 from nf2.train.module import NF2Module, save
-from nf2.train.data_loader import SHARPSeriesDataModule
+from nf2.train.data_loader import SHARPSeriesDataModule, SphericalSeriesDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -41,7 +42,7 @@ err_t_files = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))  # y
 err_r_files = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))  # z
 
 data_paths = list(zip(hmi_p_files, err_p_files, hmi_t_files, err_t_files, hmi_r_files, err_r_files))
-
+data_paths = [{'Bp': d[0], 'Bp_err': d[1], 'Bt': d[2], 'Bt_err': d[3], 'Br': d[4], 'Br_err': d[5]} for d in data_paths]
 # reload model training
 ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
 meta_path = ckpts[-1] if len(ckpts) > 0 else args.meta_path  # reload last savepoint
@@ -49,28 +50,43 @@ data_paths = data_paths[len(ckpts):]  # select remaining extrapolations
 
 if 'work_directory' not in args.data or args.data['work_directory'] is None:
     args.data['work_directory'] = base_path
-data_module = SHARPSeriesDataModule(data_paths, **args.data)
+if args.data["type"] == 'sharp':
+    data_module = SHARPSeriesDataModule(data_paths, **args.data)
+elif args.data["type"] == 'spherical':
+    data_module = SphericalSeriesDataModule(data_paths, **args.data, plot_settings=args.plot)
+else:
+    raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
+
+plot_slices_callbacks = [SlicesCallback(plot_settings['name'], data_module.slices_datasets[plot_settings['name']].cube_shape)
+                         for plot_settings in args.plot if plot_settings['type'] == 'slices']
+
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': args.data["b_norm"],
-                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"]}
+                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"] if "spatial_norm" in args.data else 1,
+                       'names': [plot_settings['name'] for plot_settings in args.plot],
+                       }
+
 nf2 = NF2Module(validation_settings, meta_path=meta_path, **args.model, **args.training)
+
+
+reload_dataloaders_every_n_epochs = args.training['reload_dataloaders_every_n_epochs'] if 'reload_dataloaders_every_n_epochs' in args.training else 1
 
 # callback
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(on_train_epoch_end=lambda *args: save(
-    os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch][0]).split('.')[-3] + '.nf2'),
+    os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch // reload_dataloaders_every_n_epochs]['Br']).split('.')[-3] + '.nf2'),
     nf2.model, data_module, config, nf2.height_mapping_model))
 
 # general training parameters
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
 
-trainer = Trainer(max_epochs=len(data_paths),
+trainer = Trainer(max_epochs=len(data_paths) * reload_dataloaders_every_n_epochs,
                   logger=wandb_logger,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                  num_sanity_val_steps=0, callbacks=[save_callback],
-                  gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=1,
-                  check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1,)
+                  num_sanity_val_steps=0, callbacks=[save_callback, *plot_slices_callbacks],
+                  gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=reload_dataloaders_every_n_epochs,
+                  check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1, )
 trainer.fit(nf2, data_module)
