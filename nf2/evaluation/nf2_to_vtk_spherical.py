@@ -8,7 +8,6 @@ from torch import nn
 from tqdm import tqdm
 
 from nf2.data.util import vector_cartesian_to_spherical, cartesian_to_spherical, spherical_to_cartesian
-from nf2.evaluation.metric import divergence
 from nf2.evaluation.unpack import load_coords
 from nf2.evaluation.vtk import save_vtk
 
@@ -21,16 +20,15 @@ nf2_path = args.nf2_path
 out_path = args.out_path
 
 nf2_path = '/Users/robert/PycharmProjects/NF2/results/extrapolation_result.nf2'
-out_path = '/Volumes/Extreme SSD/Simulations/global'
+out_path = '/Volumes/Extreme SSD/Simulations/2154_2'
 os.makedirs(os.path.join(out_path, 'cartesian'), exist_ok=True)
 os.makedirs(os.path.join(out_path, 'spherical'), exist_ok=True)
 
-
 # full disk
-radius_range = (0.999, 2.0)
+radius_range = (0.999, 1.3)
 latitude_range = (0 * np.pi, 1 * np.pi)
 longitude_range = (0 * np.pi, 2 * np.pi)
-pixels_per_solRad = 32
+pixels_per_solRad = 64
 
 # 2106
 # radius_range = (0.999, 1.1)
@@ -47,17 +45,15 @@ device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cp
 
 files = glob.glob(os.path.join(nf2_path, '*.nf2')) if os.path.isdir(nf2_path) else [nf2_path]
 
-for f in tqdm(files):
+for i, f in enumerate(files):
+    print('Processing file {} of {}'.format(i + 1, len(files)))
     state = torch.load(f, map_location=device)
     model = nn.DataParallel(state['model'])
-
-
 
     spherical_bounds = np.stack(
         np.meshgrid(np.linspace(radius_range[0], radius_range[1], 50),
                     np.linspace(latitude_range[0], latitude_range[1], 50),
                     np.linspace(longitude_range[0], longitude_range[1], 50), indexing='ij'), -1)
-
 
     cartesian_bounds = spherical_to_cartesian(spherical_bounds)
 
@@ -75,13 +71,14 @@ for f in tqdm(files):
     spherical_coords = cartesian_to_spherical(coords)
     condition = (spherical_coords[..., 0] >= radius_range[0]) & (spherical_coords[..., 0] < radius_range[1]) \
                 & (spherical_coords[..., 1] > latitude_range[0]) & (spherical_coords[..., 1] < latitude_range[1]) \
-                # & (spherical_coords[..., 2] > longitude_range[0]) & (spherical_coords[..., 2] < longitude_range[1])
+        # & (spherical_coords[..., 2] > longitude_range[0]) & (spherical_coords[..., 2] < longitude_range[1])
     sub_coords = coords[condition]
 
     spatial_norm = 1
     cube_shape = coords.shape[:-1]
-    sub_b = load_coords(model, spatial_norm, state['b_norm'], sub_coords, device, progress=False, compute_currents=False)
-    sub_b[..., 2] *= -1 # flip z axis
+    sub_b = load_coords(model, spatial_norm, state['b_norm'], sub_coords, device, progress=True,
+                        compute_currents=False)
+    sub_b[..., 2] *= -1  # flip z axis
     # sub_j[..., 2] *= -1 # flip z axis
 
     b = np.zeros(cube_shape + (3,))

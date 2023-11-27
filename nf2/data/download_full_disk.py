@@ -1,4 +1,5 @@
 import argparse
+import glob
 import os
 
 import drms
@@ -12,6 +13,8 @@ parser.add_argument('--email', type=str, required=True)
 parser.add_argument('--carrington_rotation', type=int, required=True)
 parser.add_argument('--t_start', type=str, required=True)
 parser.add_argument('--t_end', type=str, required=False, default=None)
+parser.add_argument('--convert_ptr', action='store_true')
+parser.add_argument('--download_synoptic', action='store_true')
 args = parser.parse_args()
 
 
@@ -21,15 +24,25 @@ t_end = parse(args.t_end) if args.t_end is not None else None
 os.makedirs(args.download_dir, exist_ok=True)
 client = drms.Client(email=(args.email), verbose=True)
 
-ds = f'hmi.synoptic_mr_polfil_720s[{args.carrington_rotation}]'
-donwload_ds(ds, args.download_dir, client)
+# download synoptic data
+if args.download_synoptic:
+    # ds = f'hmi.synoptic_mr_polfil_720s[{args.carrington_rotation}]'
+    # donwload_ds(ds, args.download_dir, client)
 
-ds = f'hmi.b_synoptic[{args.carrington_rotation}]{{Bt, Bp}}'
-donwload_ds(ds, args.download_dir, client)
+    ds = f'hmi.b_synoptic[{args.carrington_rotation}]{{Br, Bt, Bp}}'
+    donwload_ds(ds, args.download_dir, client)
+
+raise ValueError('stop here')
+# download full disk data
+segments = '' if args.convert_ptr else '{field, inclination, azimuth}'
+process = {'HmiB2ptr': {'l': 1}} if args.convert_ptr else None
 
 if t_end is None:
-    ds = f"hmi.B_720s[{time.isoformat('_', timespec='seconds')}]"
+    ds = f"hmi.B_720s[{time.isoformat('_', timespec='seconds')}]{segments}"
 else:
-    ds = f"hmi.B_720s[{time.isoformat('_', timespec='seconds').replace('-', '.')}-{t_end.isoformat('_', timespec='seconds').replace('-', '.')}]"
+    ds = f"hmi.B_720s[{time.isoformat('_', timespec='seconds').replace('-', '.')}-{t_end.isoformat('_', timespec='seconds').replace('-', '.')}]{segments}"
 full_disk_dir = os.path.join(args.download_dir, 'full_disk')
-donwload_ds(ds, full_disk_dir, client, process={'HmiB2ptr': {'l': 1}})
+donwload_ds(ds, full_disk_dir, client, process=process)
+
+[os.remove(f) for f in glob.glob(os.path.join(full_disk_dir, '*lat.fits'))]
+[os.remove(f) for f in glob.glob(os.path.join(full_disk_dir, '*lon.fits'))]

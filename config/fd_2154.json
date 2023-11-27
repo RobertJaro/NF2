@@ -1,9 +1,9 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2154_vp_v6",
+  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2154_v4",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "global",
-    "wandb_name": "2154_vp",
+    "wandb_name": "2154",
     "wandb_id": null
   },
   "data": {
@@ -30,12 +30,12 @@
       "boundary": 8192,
       "random": 16384
     },
-    "work_directory": "/tmp/nf2/2154_vp_v6",
+    "work_directory": "/tmp/nf2/2154_v4",
     "num_workers": 8
   },
   "model": {
     "dim": 512,
-    "use_vector_potential": true
+    "use_vector_potential": false
   },
   "training": {
     "epochs": 1e4,
@@ -45,8 +45,10 @@
       "iterations": 2e5
     },
     "lambda_force_free": 1e-2,
+    "lambda_divergence": 1e-2,
     "lambda_radial": 0,
-    "lambda_energy_gradient": 1e-3,
+    "lambda_potential": 0,
+    "lambda_energy_gradient": 0,
     "check_val_every_n_epoch": 1
   },
   "plot": [

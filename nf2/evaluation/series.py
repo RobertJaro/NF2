@@ -7,11 +7,13 @@ import imageio
 import numpy as np
 import pandas as pd
 import torch.cuda
+from astropy.io import fits
 from dateutil.parser import parse
 from matplotlib import pyplot as plt, cm
 from matplotlib.colors import Normalize
 from matplotlib.dates import date2num, DateFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from sunpy.map import Map
 from sunpy.net import Fido
 from sunpy.net import attrs as a
 from tqdm import tqdm
@@ -30,7 +32,7 @@ def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
     theta = weighted_theta(b, j)
 
     # check free magnetic energy is positive
-    assert free_me.sum() > 0, f'free magnetic energy is negative: {free_me.sum()}'
+    # assert free_me.sum() > 0, f'free magnetic energy is negative: {free_me.sum()}'
     date_str = nf2_file.split('/')[-2].split('_')
     result = {
         'date': parse(date_str[0] + 'T' + date_str[1]),
@@ -45,11 +47,13 @@ def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
         'theta': theta,
         # heigth distribution
         'height_free_energy': free_me.mean((0, 1)),
+        'height_current_density': vector_norm(j).mean((0, 1)) * cm_per_pixel ** 2,
         # maps
-        'j_map': vector_norm(j).sum(2),
+        'current_density_map': vector_norm(j).sum(2) * cm_per_pixel,
         'energy_map': me.sum(2) * cm_per_pixel,
         'free_energy_map': free_me.sum(2) * cm_per_pixel,
         'jxb_map': vector_norm(jxb).sum(2),
+        'meta': torch.load(nf2_file)['meta_info']
     }
     return result
 
@@ -79,7 +83,8 @@ if __name__ == '__main__':
     batch_size = int(1e5 * torch.cuda.device_count())
 
     # load simulation scaling
-    Mm_per_pix = torch.load(nf2_files[0])['Mm_per_pix'] if 'Mm_per_pix' in torch.load(nf2_files[0]) else 0.36
+    # assume 0.72 if not given (bin2)
+    Mm_per_pix = torch.load(nf2_files[0])['Mm_per_pix'] if 'Mm_per_pix' in torch.load(nf2_files[0]) else 0.72
     z_pixels = int(np.ceil(20 / Mm_per_pix))  # 20 Mm --> pixels
 
     # adjust scale to strides
@@ -169,7 +174,7 @@ if __name__ == '__main__':
 
     # create video of maps
     # j_map
-    j_maps = np.array(series_results['j_map'])
+    j_maps = np.array(series_results['current_density_map'])
     images = [cm.get_cmap('viridis')(Normalize(vmin=0, vmax=j_maps.max())(j_map.T)) for j_map in j_maps]
     images = np.flip(images, axis=1)
     imageio.mimsave(os.path.join(result_path, 'j_maps.mp4'), images)
@@ -234,6 +239,16 @@ if __name__ == '__main__':
 
     images = [plt.imread(image) for image in sorted(glob.glob(os.path.join(video_path, '*.jpg')))]
     imageio.mimsave(os.path.join(result_path, 'free_energy_series.mp4'), images)
+
+    # create FITS files
+    fits_path = os.path.join(result_path, 'fits')
+    os.makedirs(fits_path, exist_ok=True)
+    for date, j_map, free_energy_map, meta in zip(series_results['date'], series_results['current_density_map'], series_results['free_energy_map'], series_results['meta']):
+        ref_map = Map(np.zeros_like(j_map.T), meta)
+        wcs = ref_map.wcs
+        Map(j_map.T, wcs).save(os.path.join(fits_path, f"j_map_{date.isoformat('T', timespec='minutes')}.fits"))
+        Map(free_energy_map.T, wcs).save(os.path.join(fits_path, f"free_energy_map_{date.isoformat('T', timespec='minutes')}.fits"))
+
 
 
 

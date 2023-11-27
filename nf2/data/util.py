@@ -55,14 +55,14 @@ def vector_cartesian_to_spherical(v, c):
     return np.stack([vr, vt, vp], -1)
 
 
-def spherical_to_cartesian(v):
-    sin = np.sin
-    cos = np.cos
+def spherical_to_cartesian(v, f=np):
+    sin = f.sin
+    cos = f.cos
     r, t, p = v[..., 0], v[..., 1], v[..., 2]
     x = r * sin(t) * cos(p)
     y = r * sin(t) * sin(p)
     z = r * cos(t)
-    return np.stack([x, y, z], -1)
+    return f.stack([x, y, z], -1)
 
 
 def cartesian_to_spherical(v, f=np):

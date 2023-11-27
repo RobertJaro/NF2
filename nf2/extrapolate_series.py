@@ -75,7 +75,7 @@ reload_dataloaders_every_n_epochs = args.training['reload_dataloaders_every_n_ep
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(on_train_epoch_end=lambda *args: save(
     os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch // reload_dataloaders_every_n_epochs]['Br']).split('.')[-3] + '.nf2'),
-    nf2.model, data_module, config, nf2.height_mapping_model))
+    nf2.model, data_module, config, nf2.coordinate_transform))
 
 # general training parameters
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs

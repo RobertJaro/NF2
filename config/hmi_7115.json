@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_7115",
+  "base_path": "/Users/robert/PycharmProjects/NF2/test",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "multi-height",
@@ -10,15 +10,14 @@
   "data": {
     "type": "sharp",
     "data_path": [
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Bp.fits",
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Bp_err.fits",
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Bt.fits",
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Bt_err.fits",
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Br.fits",
-    "/gpfs/gpfs0/robert.jarolim/data/nf2/7115/hmi.sharp_cea_720s.7115.20170906_000000_TAI.Br_err.fits"
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Bp.fits",
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Bp_err.fits",
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Bt.fits",
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Bt_err.fits",
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Br.fits",
+    "/Users/robert/PycharmProjects/NF2/test/hmi.sharp_cea_720s.7115.20170902_000000_TAI.Br_err.fits"
     ],
     "bin": 2,
-    "height_mapping": {"z":  [0.000]},
     "Mm_per_pixel": 0.72,
     "boundary": {"type":  "potential", "strides":  4},
     "height": 160,
@@ -31,8 +30,7 @@
   },
 
   "model": {
-    "dim": 256,
-    "use_height_mapping": false
+    "dim": 256
   },
 
   "training": {

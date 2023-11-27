@@ -11,7 +11,7 @@ from pytorch_lightning.loggers import WandbLogger
 from nf2.train.callback import SlicesCallback
 from nf2.train.module import NF2Module, save
 from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule, \
-    SphericalDataModule
+    SphericalDataModule, AzimuthDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -57,6 +57,8 @@ elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
 elif args.data["type"] == 'spherical':
     data_module = SphericalDataModule(**args.data, plot_settings=args.plot)
+elif args.data["type"] == 'azimuth':
+    data_module = AzimuthDataModule(**args.data, plot_settings=args.plot)
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
@@ -73,7 +75,7 @@ nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
-    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config, nf2.height_mapping_model))
+    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config, nf2.coordinate_transform))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path,
                                       every_n_train_steps=args.training["validation_interval"] if "validation_interval" in args.training else None,
                                       every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
@@ -90,9 +92,9 @@ trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.tr
                   val_check_interval=int(args.training['validation_interval']) if 'validation_interval' in args.training else None,
                   check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                   gradient_clip_val=0.1,
-                  callbacks=[checkpoint_callback, save_callback, *plot_slices_callbacks], )
+                  callbacks=[checkpoint_callback, save_callback, *plot_slices_callbacks])
 
 trainer.fit(nf2, data_module, ckpt_path='last')
-save(save_path, nf2.model, data_module, config, height_mapping_model=nf2.height_mapping_model)
+save(save_path, nf2.model, data_module, config, coordinate_transform_module=nf2.coordinate_transform)
 # clean up
 data_module.clear()
