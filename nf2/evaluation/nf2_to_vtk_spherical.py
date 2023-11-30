@@ -20,7 +20,7 @@ nf2_path = args.nf2_path
 out_path = args.out_path
 
 nf2_path = '/Users/robert/PycharmProjects/NF2/results/extrapolation_result.nf2'
-out_path = '/Volumes/Extreme SSD/Simulations/2154_2'
+out_path = '/Volumes/Extreme SSD/Simulations/2154_vp_1_5'
 os.makedirs(os.path.join(out_path, 'cartesian'), exist_ok=True)
 os.makedirs(os.path.join(out_path, 'spherical'), exist_ok=True)
 

@@ -24,7 +24,7 @@ class ForceFreeLoss(nn.Module):
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         jxb = torch.cross(j, b, -1)
-        normalization = (torch.sum(b ** 2, dim=-1).detach() + 1e-7)
+        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
         force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
         #
         return force_free_loss.mean()
@@ -43,7 +43,7 @@ class DivergenceLoss(nn.Module):
 
 class RadialLoss(nn.Module):
 
-    def __init__(self, base_radius=1.5):
+    def __init__(self, base_radius=1.3):
         super().__init__()
         self.base_radius = base_radius
 
@@ -90,7 +90,7 @@ class PotentialLoss(nn.Module):
 
 class EnergyGradientLoss(nn.Module):
 
-    def __init__(self, base_radius=1.5):
+    def __init__(self, base_radius=1.3):
         super().__init__()
         self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3)))
         self.base_radius = base_radius
