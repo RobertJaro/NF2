@@ -11,8 +11,8 @@ from torch import nn
 from nf2.data.util import spherical_to_cartesian
 from nf2.evaluation.unpack import load_coords
 
-files = '/gpfs/gpfs0/robert.jarolim/full_disk/2154_vp_series_v1'
-results_path = '/gpfs/gpfs0/robert.jarolim/full_disk/2154_vp_series_v1/results'
+files = '/glade/work/rjarolim/global/2154_vp_v4'
+results_path = '/glade/work/rjarolim/global/2154_vp_v4/results'
 os.makedirs(results_path, exist_ok=True)
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

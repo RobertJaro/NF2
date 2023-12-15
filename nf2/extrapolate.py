@@ -8,10 +8,10 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.train.callback import SlicesCallback
+from nf2.train.callback import SlicesCallback, BoundaryCallback
 from nf2.train.module import NF2Module, save
 from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule, \
-    SphericalDataModule, AzimuthDataModule
+    SphericalDataModule, SynopticDataModule, PotentialTestDataModule, AzimuthDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -43,6 +43,8 @@ if wandb_id is not None:
     shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
     args.data['plot_overview'] = False  # skip overview plot for restored model
 
+callbacks = []
+
 if 'work_directory' not in args.data or args.data['work_directory'] is None:
     args.data['work_directory'] = base_path
 if args.data["type"] == 'numpy':
@@ -59,11 +61,18 @@ elif args.data["type"] == 'spherical':
     data_module = SphericalDataModule(**args.data, plot_settings=args.plot)
 elif args.data["type"] == 'azimuth':
     data_module = AzimuthDataModule(**args.data, plot_settings=args.plot)
+    boundary_callback = BoundaryCallback(data_module.cube_shape)
+    callbacks += [boundary_callback]
+elif args.data["type"] == 'synoptic':
+    data_module = SynopticDataModule(**args.data, plot_settings=args.plot)
+elif args.data["type"] == 'potential_test':
+    data_module = PotentialTestDataModule(**args.data, plot_settings=args.plot)
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
 plot_slices_callbacks = [SlicesCallback(plot_settings['name'], data_module.slices_datasets[plot_settings['name']].cube_shape)
                          for plot_settings in args.plot if plot_settings['type'] == 'slices']
+# boundary_callback = BoundaryCallback(data_module.cube_shape)
 
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': args.data["b_norm"],
@@ -75,7 +84,7 @@ nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
-    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config, nf2.coordinate_transform))
+    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path,
                                       every_n_train_steps=args.training["validation_interval"] if "validation_interval" in args.training else None,
                                       every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
@@ -83,6 +92,7 @@ checkpoint_callback = ModelCheckpoint(dirpath=base_path,
 
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
+callbacks += [checkpoint_callback, save_callback, *plot_slices_callbacks]
 trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.training else 1,
                   logger=wandb_logger,
                   devices=n_gpus if n_gpus > 0 else None,
@@ -92,9 +102,9 @@ trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.tr
                   val_check_interval=int(args.training['validation_interval']) if 'validation_interval' in args.training else None,
                   check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                   gradient_clip_val=0.1,
-                  callbacks=[checkpoint_callback, save_callback, *plot_slices_callbacks])
+                  callbacks=callbacks)
 
 trainer.fit(nf2, data_module, ckpt_path='last')
-save(save_path, nf2.model, data_module, config, coordinate_transform_module=nf2.coordinate_transform)
+save(save_path, nf2.model, data_module, config)
 # clean up
 data_module.clear()

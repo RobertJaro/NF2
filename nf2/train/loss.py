@@ -43,7 +43,7 @@ class DivergenceLoss(nn.Module):
 
 class RadialLoss(nn.Module):
 
-    def __init__(self, base_radius=1.3):
+    def __init__(self, base_radius=1.0):
         super().__init__()
         self.base_radius = base_radius
 
@@ -84,15 +84,14 @@ class PotentialLoss(nn.Module):
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         potential_loss = torch.sum(j ** 2, dim=-1)
 
-        radial_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7) if self.radial_weight else 1
+        radial_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7) - 1 if self.radial_weight else 1
 
         return (potential_loss * radial_weight).mean()
 
 class EnergyGradientLoss(nn.Module):
 
-    def __init__(self, base_radius=1.3):
+    def __init__(self, base_radius=1.0):
         super().__init__()
-        self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3)))
         self.base_radius = base_radius
 
     def forward(self, b, jac_matrix, coords, n_boundary_coords=None, *args, **kwargs):
@@ -125,6 +124,7 @@ class EnergyGradientLoss(nn.Module):
 
         sampled_dE_dr = dE_dr[n_boundary_coords:]
         energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight
+        energy_gradient_regularization = torch.asinh(energy_gradient_regularization * 1e3) / self.asinh_stretch
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
@@ -140,23 +140,36 @@ class NaNLoss(nn.Module):
 
 class AzimuthBoundaryLoss(nn.Module):
 
+    def __init__(self, disambiguate=True):
+        super().__init__()
+        self.disambiguate = disambiguate
+
     def forward(self, boundary_b, b_true, transform=None, *args, **kwargs):
         # apply transforms
-        transformed_b = torch.einsum('ijk,ik->ij', transform, boundary_b) if transform is not None else boundary_b
-        transformed_b = img_to_los_trv_azi(transformed_b)
+        b_pred = torch.einsum('ijk,ik->ij', transform, boundary_b) if transform is not None else boundary_b
+        b_pred = img_to_los_trv_azi(b_pred)
 
         bz_true = b_true[:, 0]
-        bx_true = b_true[:, 1] * torch.abs(torch.sin(b_true[:, 2]))
-        by_true = b_true[:, 1] * torch.abs(torch.cos(b_true[:, 2]))
+
+        if self.disambiguate:
+            bx_true = b_true[:, 1] * torch.abs(torch.sin(b_true[:, 2]))
+            by_true = b_true[:, 1] * torch.abs(torch.cos(b_true[:, 2]))
+        else:
+            bx_true = b_true[:, 1] * torch.sin(b_true[:, 2])
+            by_true = b_true[:, 1] * torch.cos(b_true[:, 2])
         b_true = torch.stack([bx_true, by_true, bz_true], -1)
 
-        bz = transformed_b[:, 0]
-        bx = transformed_b[:, 1] * torch.abs(torch.sin(transformed_b[:, 2]))
-        by = transformed_b[:, 1] * torch.abs(torch.cos(transformed_b[:, 2]))
-        transformed_b = torch.stack([bx, by, bz], -1)
+        bz = b_pred[:, 0]
+        if self.disambiguate:
+            bx = b_pred[:, 1] * torch.abs(torch.sin(b_pred[:, 2]))
+            by = b_pred[:, 1] * torch.abs(torch.cos(b_pred[:, 2]))
+        else:
+            bx = b_pred[:, 1] * torch.sin(b_pred[:, 2])
+            by = b_pred[:, 1] * torch.cos(b_pred[:, 2])
+        b_pred = torch.stack([bx, by, bz], -1)
 
         # compute diff
-        b_diff = torch.abs(transformed_b - b_true)
+        b_diff = torch.abs(b_pred - b_true)
         b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         return b_diff
@@ -167,7 +180,7 @@ def img_to_los_trv_azi(transformed_b):
     cos_inc = transformed_b[..., 2] / (fld + eps)
     azi = torch.arctan2(transformed_b[..., 0], -transformed_b[..., 1] + eps)
     B_los = fld * cos_inc
-    B_trv = torch.abs(fld * (1 - cos_inc ** 2) ** 0.5)
+    B_trv = fld * (1 - cos_inc ** 2) ** 0.5
     transformed_b = torch.stack([B_los, B_trv, azi], -1)
     return transformed_b
 
@@ -193,42 +206,27 @@ class HeightLoss(nn.Module):
 
         return height_regularization
 
-class BDiffMetric(nn.Module):
+class SphericalTransform(nn.Module):
 
-    def forward(self, b, b_true, b_err=0, transform=None):
+    def forward(self, b, b_true, transform=None):
         b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
-
-        # compute boundary loss
-        b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
-        b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
-
-        b_diff = torch.abs(b - b_true)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
-
-        return b_diff, b_diff_error
+        return b, b_true
 
 
-class AziDiffMetric(nn.Module):
+class AzimuthTransform(nn.Module):
 
-    def forward(self, b, b_true, b_err=0, transform=None):
+    def forward(self, b, b_true, transform=None):
         b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         b = img_to_los_trv_azi(b)
 
-        bz_true = b_true[:, 0]
-        bx_true = b_true[:, 1] * torch.sin(b_true[:, 2])
-        by_true = b_true[:, 1] * torch.cos(b_true[:, 2])
-        b_true = torch.stack([bx_true, by_true, bz_true], -1)
+        # bz_true = b_true[:, 0]
+        # bx_true = b_true[:, 1] * torch.sin(b_true[:, 2])
+        # by_true = b_true[:, 1] * torch.cos(b_true[:, 2])
+        # b_true = torch.stack([bx_true, by_true, bz_true], -1)
+        #
+        # bz = b[:, 0]
+        # bx = b[:, 1] * torch.sin(b[:, 2])
+        # by = b[:, 1] * torch.cos(b[:, 2])
+        # b = torch.stack([bx, by, bz], -1)
 
-        bz = b[:, 0]
-        bx = b[:, 1] * torch.sin(b[:, 2])
-        by = b[:, 1] * torch.cos(b[:, 2])
-        transformed_b = torch.stack([bx, by, bz], -1)
-
-        # compute diff
-        b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
-        b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
-
-        b_diff = torch.abs(b - b_true)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
-
-        return b_diff, b_diff_error
+        return b, b_true

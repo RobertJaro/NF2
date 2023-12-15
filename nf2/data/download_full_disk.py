@@ -26,15 +26,15 @@ client = drms.Client(email=(args.email), verbose=True)
 
 # download synoptic data
 if args.download_synoptic:
-    # ds = f'hmi.synoptic_mr_polfil_720s[{args.carrington_rotation}]'
-    # donwload_ds(ds, args.download_dir, client)
+    # download corrected synoptic data
+    ds = f'hmi.synoptic_mr_polfil_720s[{args.carrington_rotation}]'
+    donwload_ds(ds, args.download_dir, client)
 
     ds = f'hmi.b_synoptic[{args.carrington_rotation}]{{Br, Bt, Bp}}'
     donwload_ds(ds, args.download_dir, client)
 
-raise ValueError('stop here')
 # download full disk data
-segments = '' if args.convert_ptr else '{field, inclination, azimuth}'
+segments = '' if args.convert_ptr else '{field, inclination, azimuth, disambig}'
 process = {'HmiB2ptr': {'l': 1}} if args.convert_ptr else None
 
 if t_end is None:

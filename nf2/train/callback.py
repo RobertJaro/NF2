@@ -1,5 +1,6 @@
 import numpy as np
 import wandb
+from astropy.nddata import block_reduce
 from pytorch_lightning import Callback
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
@@ -112,7 +113,6 @@ class BoundaryCallback(Callback):
     def plot_b(self, b, b_true, coords):
         fig, axs = plt.subplots(3, 2, figsize=(8, 12))
 
-        b_norm = 0.2
         extent = [coords[:, 2].min(), coords[:, 2].max(), coords[:, 1].min(), coords[:, 1].max()]
         extent = np.rad2deg(extent)
 
@@ -120,46 +120,53 @@ class BoundaryCallback(Callback):
         x = coords[:, 2]
         y = coords[:, 1]
 
-        x = ((x - x.min()) / (x.max() - x.min()) * (boundary_shape[1] - 1)).astype(int)
-        y = ((y - y.min()) / (y.max() - y.min()) * (boundary_shape[0] - 1)).astype(int)
+        x = np.round((x - x.min()) / (x.max() - x.min()) * (boundary_shape[1] - 1)).astype(int)
+        y = np.round((y - y.min()) / (y.max() - y.min()) * (boundary_shape[0] - 1)).astype(int)
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b[:, 0]
-        im = axs[0, 0].imshow(img, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        img = block_reduce(img, (8, 8), np.nanmean)
+        b_norm = np.max(np.abs(img))
+        im = axs[0, 0].imshow(img, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent, interpolation='nearest')
         divider = make_axes_locatable(axs[0, 0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='B_LOS [G]')
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b_true[:, 0]
+        img = block_reduce(img, (8, 8), np.nanmean)
         im = axs[0, 1].imshow(img, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
         divider = make_axes_locatable(axs[0, 1])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='B_LOS [G]')
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b[:, 1]
+        img = block_reduce(img, (8, 8), np.nanmean)
         im = axs[1, 0].imshow(img, vmin=0, vmax=b_norm, cmap='gray', origin='lower', extent=extent)
         divider = make_axes_locatable(axs[1, 0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='B_TRV [G]')
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b_true[:, 1]
+        img = block_reduce(img, (8, 8), np.nanmean)
         im = axs[1, 1].imshow(img, vmin=0, vmax=b_norm, cmap='gray', origin='lower', extent=extent)
         divider = make_axes_locatable(axs[1, 1])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='B_TRV [G]')
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b[:, 2]
+        img = block_reduce(img, (8, 8), np.nanmean)
         im = axs[2, 0].imshow(img, vmin=-np.pi, vmax=np.pi, cmap='gray', origin='lower', extent=extent)
         divider = make_axes_locatable(axs[2, 0])
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Azimuth [rad]')
 
-        img = np.zeros(boundary_shape)
+        img = np.zeros(boundary_shape) * np.nan
         img[y, x] = b_true[:, 2]
+        img = block_reduce(img, (8, 8), np.nanmean)
         im = axs[2, 1].imshow(img, vmin=-np.pi, vmax=np.pi, cmap='gray', origin='lower', extent=extent)
         divider = make_axes_locatable(axs[2, 1])
         cax = divider.append_axes("right", size="5%", pad=0.05)

@@ -4,6 +4,7 @@ import json
 import os
 
 import torch
+from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
@@ -45,7 +46,7 @@ data_paths = list(zip(hmi_p_files, err_p_files, hmi_t_files, err_t_files, hmi_r_
 data_paths = [{'Bp': d[0], 'Bp_err': d[1], 'Bt': d[2], 'Bt_err': d[3], 'Br': d[4], 'Br_err': d[5]} for d in data_paths]
 # reload model training
 ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
-meta_path = ckpts[-1] if len(ckpts) > 0 else args.meta_path  # reload last savepoint
+ckpt_path = 'last' if len(ckpts) > 0 else args.meta_path  # reload last savepoint
 data_paths = data_paths[len(ckpts):]  # select remaining extrapolations
 
 if 'work_directory' not in args.data or args.data['work_directory'] is None:
@@ -66,7 +67,7 @@ validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'names': [plot_settings['name'] for plot_settings in args.plot],
                        }
 
-nf2 = NF2Module(validation_settings, meta_path=meta_path, **args.model, **args.training)
+nf2 = NF2Module(validation_settings, **args.model, **args.training)
 
 
 reload_dataloaders_every_n_epochs = args.training['reload_dataloaders_every_n_epochs'] if 'reload_dataloaders_every_n_epochs' in args.training else 1
@@ -74,19 +75,23 @@ reload_dataloaders_every_n_epochs = args.training['reload_dataloaders_every_n_ep
 # callback
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(on_train_epoch_end=lambda *args: save(
-    os.path.join(base_path, os.path.basename(data_paths[nf2.current_epoch // reload_dataloaders_every_n_epochs]['Br']).split('.')[-3] + '.nf2'),
-    nf2.model, data_module, config, nf2.coordinate_transform))
+    os.path.join(base_path, os.path.basename(data_module.current_files['Br']).split('.')[-3] + '.nf2'),
+    nf2.model, data_module, config))
+
+checkpoint_callback = ModelCheckpoint(dirpath=base_path,
+                                      every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1,
+                                      save_last=True)
 
 # general training parameters
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
 
-trainer = Trainer(max_epochs=len(data_paths) * reload_dataloaders_every_n_epochs,
+trainer = Trainer(max_epochs=-1,
                   logger=wandb_logger,
                   devices=n_gpus,
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                  num_sanity_val_steps=0, callbacks=[save_callback, *plot_slices_callbacks],
+                  num_sanity_val_steps=0, callbacks=[save_callback, checkpoint_callback, *plot_slices_callbacks],
                   gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=reload_dataloaders_every_n_epochs,
                   check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1, )
-trainer.fit(nf2, data_module)
+trainer.fit(nf2, data_module, ckpt_path=ckpt_path)

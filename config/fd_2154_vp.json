@@ -1,37 +1,36 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2154_vp_v7",
+  "base_path": "/glade/work/rjarolim/global/2154_vp_v4",
   "logging": {
     "wandb_entity": "robert_jarolim",
-    "wandb_project": "global",
+    "wandb_project": "global_HAO",
     "wandb_name": "2154_vp",
     "wandb_id": null
   },
   "data": {
     "type": "spherical",
     "synoptic_files": {
-      "Bp": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_synoptic.2154.Bp.fits",
-      "Br": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.synoptic_mr_polfil_720s.2154.Mr_polfil.fits",
-      "Bt": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_synoptic.2154.Bt.fits"
+      "Bp": "/glade/work/rjarolim/data/global/fd_2154/hmi.b_synoptic.2154.Bp.fits",
+      "Br": "/glade/work/rjarolim/data/global/fd_2154/hmi.b_synoptic.2154.Br.fits",
+      "Bt": "/glade/work/rjarolim/data/global/fd_2154/hmi.b_synoptic.2154.Bt.fits"
     },
     "full_disk_files": {
-      "Bp": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Bp.fits",
-      "Br": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Br.fits",
-      "Bt": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Bt.fits",
-      "Bp_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Bp_err.fits",
-      "Br_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Br_err.fits",
-      "Bt_err": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.b_720s.20140902_060000_TAI.Bt_err.fits"
+      "Bp": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bp.fits",
+      "Br": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Br.fits",
+      "Bt": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bt.fits",
+      "Bp_err": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bp_err.fits",
+      "Br_err": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Br_err.fits",
+      "Bt_err": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bt_err.fits"
     },
     "boundary": {
-      "type": "potential",
-      "Br": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/hmi.synoptic_mr_polfil_720s.2154.Mr_polfil.fits"
+      "type": "open"
     },
-    "height": 1.5,
+    "height": 1.3,
     "b_norm": 2000,
     "batch_size": {
-      "boundary": 8192,
-      "random": 16384
+      "boundary": 32768,
+      "random": 65536
     },
-    "work_directory": "/tmp/nf2/2154_vp_v7",
+    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2154_vp_v4",
     "num_workers": 8
   },
   "model": {
@@ -47,14 +46,14 @@
     },
     "lambda_force_free": 1e-2,
     "lambda_radial": 0,
-    "lambda_energy_gradient": 0,
-    "check_val_every_n_epoch": 1
+    "lambda_energy_gradient": 1e-4,
+    "check_val_every_n_epoch": 5
   },
   "plot": [
     {
       "type": "slices",
       "name": "full-disk",
-      "radius_range": [1.0, 1.5],
+      "radius_range": [1.0, 1.3],
       "n_slices": 5,
       "plot_currents": true
     }

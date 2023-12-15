@@ -15,8 +15,7 @@ class NF2Module(LightningModule):
                  lambda_energy_gradient=None, lambda_potential=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  meta_path=None,
-                 use_positional_encoding=False, use_vector_potential=False,
-                 coordinate_transform=None, **kwargs):
+                 use_positional_encoding=False, use_vector_potential=False, **kwargs):
         """
         The main module for training the neural field model.
 
@@ -41,14 +40,6 @@ class NF2Module(LightningModule):
             model = VectorPotentialModel(3, dim, pos_encoding=use_positional_encoding)
         else:
             model = BModel(3, 3, dim, pos_encoding=use_positional_encoding)
-        # init coordinate transform modules
-        if coordinate_transform is None:
-            self.coordinate_transform = None
-        elif coordinate_transform == 'z_height':
-            self.coordinate_transform = HeightMappingModel(3, dim)
-        else:
-            raise ValueError(f"Invalid coordinate transform: {coordinate_transform}, must be in [None, 'z_height']")
-
         # load meta state
         if meta_path:
             state_dict = torch.load(meta_path)['model'].state_dict() \
@@ -59,10 +50,10 @@ class NF2Module(LightningModule):
         # init boundary loss module
         if boundary_loss == "azimuth":
             boundary_loss_module = AzimuthBoundaryLoss
-            self.validation_b_diff_metric = AziDiffMetric()
+            self.b_transform = AzimuthTransform()
         elif boundary_loss == "ptr":
             boundary_loss_module = BoundaryLoss
-            self.validation_b_diff_metric = BDiffMetric()
+            self.b_transform = SphericalTransform()
         else:
             raise ValueError(f"Invalid boundary loss: {boundary_loss}, must be in ['azimuth', 'rtp']")
         # mapping
@@ -99,13 +90,10 @@ class NF2Module(LightningModule):
         #
         self.use_vector_potential = use_vector_potential
         self.validation_outputs = {}
-        self.vector_weight = nn.Parameter(torch.tensor([1, 1, 1], dtype=torch.float32).reshape((1, 3)))
         self.loss_modules = nn.ModuleDict(loss_modules)
 
     def configure_optimizers(self):
         parameters = list(self.model.parameters())
-        if self.coordinate_transform is not None:
-            parameters += list(self.coordinate_transform.parameters())
         if isinstance(self.lr_params, dict):
             lr_start = self.lr_params['start']
             lr_end = self.lr_params['end']
@@ -128,9 +116,6 @@ class NF2Module(LightningModule):
         b_err = boundary_batch['errors'] if 'errors' in boundary_batch else 0
 
         boundary_coords.requires_grad = True
-        original_coords = boundary_coords
-        if self.coordinate_transform is not None:
-            boundary_coords = self.coordinate_transform(boundary_coords, boundary_batch['height_ranges'])
 
         random_coords = batch['random']
         random_coords.requires_grad = True
@@ -150,7 +135,7 @@ class NF2Module(LightningModule):
             "n_boundary_coords": n_boundary_coords,
             "boundary_coords": coords[:n_boundary_coords], "random_coords": coords[n_boundary_coords:],
             "boundary_b": b[:n_boundary_coords],  "random_b": b[n_boundary_coords:],
-            "jac_matrix": jac_matrix, "original_coords": original_coords,
+            "jac_matrix": jac_matrix,
         }
         loss_dict = {k: module(**state_dict) for k, module in self.loss_modules.items()}
         total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
@@ -185,10 +170,17 @@ class NF2Module(LightningModule):
             b_err = batch['errors'] if 'errors' in batch else 0
             boundary_coords.requires_grad = True
             transform = batch['transform'] if 'transform' in batch else None
-            if self.coordinate_transform:
-                boundary_coords = self.coordinate_transform(boundary_coords, batch['height_ranges'])
+
             b = self.model(boundary_coords)
-            b_diff, b_diff_error = self.validation_b_diff_metric(b, b_true, b_err=b_err, transform=transform)
+            b, b_true = self.b_transform(b, b_true, transform=transform)
+
+            # compute diff
+            b_diff_error = torch.clip(torch.abs(b - b_true) - b_err, 0)
+            b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
+
+            b_diff = torch.abs(b - b_true)
+            b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
+
             return {'b_diff_error': b_diff_error.detach(), 'b_diff': b_diff.detach(),
                     'b': b.detach(), 'b_true': b_true.detach(), 'coords': boundary_coords.detach()}
         else:
@@ -279,14 +271,13 @@ class NF2Module(LightningModule):
 
         self.load_state_dict(state_dict, strict=False)
 
-def save(save_path, model, data_module, config, coordinate_transform_module=None):
+def save(save_path, model, data_module, config):
     save_state = {'model': model,
                   'cube_shape': data_module.cube_shape,
                   'b_norm': data_module.b_norm,
                   'spatial_norm': data_module.spatial_norm,
                   'meta_data': data_module.meta_data,
                   'config': config,
-                  'height_mapping_model': coordinate_transform_module,
                   'height_mapping': data_module.height_mapping if hasattr(data_module, 'height_mapping') else None,
                   'Mm_per_pixel': data_module.Mm_per_pixel if hasattr(data_module, 'Mm_per_pixel') else None,
                   }

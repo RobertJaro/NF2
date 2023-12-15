@@ -1,22 +1,23 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/full_disk/2154_az_v1",
+  "base_path": "/glade/work/rjarolim/global/2154_az_v1",
   "logging": {
     "wandb_entity": "robert_jarolim",
-    "wandb_project": "global",
+    "wandb_project": "global_HAO",
     "wandb_name": "2154_az",
     "wandb_id": null
   },
   "data": {
     "type": "azimuth",
     "files": {
-      "B_field": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.field.fits",
-      "B_inclination": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.inclination.fits",
-      "B_azimuth": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.azimuth.fits",
-      "B_disambig": "/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/hmi.B_720s.20140902_060000_TAI.disambig.fits"
+      "B_field": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.field.fits",
+      "B_inclination": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.inclination.fits",
+      "B_azimuth": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_060000_TAI.azimuth.fits",
+      "B_disambig": "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.B_720s.20140902_060000_TAI.disambig.fits"
     },
     "auto_disambig": true,
     "boundary": {
-      "type": "open"
+      "type": "potential",
+      "Br": "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits"
     },
     "height": 1.5,
     "b_norm": 2000,
@@ -41,12 +42,8 @@
       "end": 10,
       "iterations": 2e5
     },
-    "lambda_div": 1e-2,
     "lambda_ff": 1e-2,
-    "lambda_min_energy": 0,
-    "lambda_radial_reg": 0,
-    "lambda_energy_gradient_reg": 1e-2,
-    "check_val_every_n_epoch": 5,
+    "check_val_every_n_epoch": 100,
     "lr_params": {
       "start": 5e-4,
       "end": 5e-5,
