@@ -5,27 +5,23 @@ import os
 import numpy as np
 import torch
 from torch import nn
-from tqdm import tqdm
 
 from nf2.data.util import vector_cartesian_to_spherical, cartesian_to_spherical, spherical_to_cartesian
 from nf2.evaluation.unpack import load_coords
 from nf2.evaluation.vtk import save_vtk
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-parser.add_argument('nf2_path', type=str, help='path to the source NF2 file')
-parser.add_argument('out_path', type=str, help='path to the target VTK files')
+parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
+parser.add_argument('--out_path', type=str, help='path to the target VTK files')
 
 args = parser.parse_args()
 nf2_path = args.nf2_path
 out_path = args.out_path
 
-nf2_path = '/Users/robert/PycharmProjects/NF2/results/extrapolation_result.nf2'
-out_path = '/Volumes/Extreme SSD/Simulations/2154_vp_1_5'
-os.makedirs(os.path.join(out_path, 'cartesian'), exist_ok=True)
-os.makedirs(os.path.join(out_path, 'spherical'), exist_ok=True)
+os.makedirs(out_path, exist_ok=True)
 
 # full disk
-radius_range = (0.999, 1.3)
+radius_range = (0.999, 1.2)
 latitude_range = (0 * np.pi, 1 * np.pi)
 longitude_range = (0 * np.pi, 2 * np.pi)
 pixels_per_solRad = 64
@@ -43,7 +39,7 @@ pixels_per_solRad = 64
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-files = glob.glob(os.path.join(nf2_path, '*.nf2')) if os.path.isdir(nf2_path) else [nf2_path]
+files = sorted(glob.glob(nf2_path)) #if os.path.isdir(nf2_path) else [nf2_path]
 
 for i, f in enumerate(files):
     print('Processing file {} of {}'.format(i + 1, len(files)))
@@ -76,23 +72,22 @@ for i, f in enumerate(files):
 
     spatial_norm = 1
     cube_shape = coords.shape[:-1]
-    sub_b = load_coords(model, spatial_norm, state['b_norm'], sub_coords, device, progress=True,
-                        compute_currents=False)
+    sub_b, sub_j = load_coords(model, spatial_norm, state['b_norm'], sub_coords, device, progress=True,
+                        compute_currents=True)
     sub_b[..., 2] *= -1  # flip z axis
-    # sub_j[..., 2] *= -1 # flip z axis
+    sub_j[..., 2] *= -1 # flip z axis
 
     b = np.zeros(cube_shape + (3,))
     b[condition] = sub_b
 
-    # j = np.zeros(cube_shape + (3,))
-    # j[(radius > 1) & (radius <= height)] = sub_j
+    j = np.zeros(cube_shape + (3,))
+    j[condition] = sub_j
 
     spherical_coords = cartesian_to_spherical(coords)
     b_spherical = vector_cartesian_to_spherical(b, spherical_coords)
 
-    vtk_path = os.path.join(out_path, 'cartesian', os.path.basename(f).replace('.nf2', '.vtk'))
-    save_vtk(b, vtk_path, 'B', scalar=radius, scalar_name='radius')
-    # save_vtk(j, vtk_j_path, 'J', scalar=radius, scalar_name='radius')
-    vtk_spherical_path = os.path.join(out_path, 'spherical', os.path.basename(f).replace('.nf2', '.vtk'))
-    save_vtk(b_spherical, vtk_spherical_path, 'B_spherical', scalar=radius, scalar_name='radius')
+    vtk_path = os.path.join(out_path, 'cartesian_' + os.path.basename(f).replace('.nf2', '.vtk'))
+    save_vtk(b, vtk_path, 'B', scalar={'radius': radius, 'current_density': np.sum(j ** 2, -1) ** 0.5})
+    vtk_spherical_path = os.path.join(out_path, 'spherical_' + os.path.basename(f).replace('.nf2', '.vtk'))
+    save_vtk(b_spherical, vtk_spherical_path, 'B_spherical', scalar={'radius': radius})
     # Mm_per_pix=state['Mm_per_pixel'] * strides)
