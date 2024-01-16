@@ -8,7 +8,7 @@ from pytorch_lightning.callbacks import LambdaCallback, ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.module import NF2Module, save
-from nf2.train.data_loader import AnalyticDataModule
+from nf2.loader.analytical import AnalyticDataModule
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,

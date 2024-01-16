@@ -10,7 +10,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.train.callback import SlicesCallback
-from nf2.train.data_loader import SHARPSeriesDataModule, SphericalSeriesDataModule, SynopticSeriesDataModule
+from nf2.loader.synoptic import SynopticSeriesDataModule
+from nf2.loader.spherical import SphericalSeriesDataModule
+from nf2.loader.sharp import SHARPSeriesDataModule
 from nf2.train.module import NF2Module, save
 
 parser = argparse.ArgumentParser()

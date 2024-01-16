@@ -9,8 +9,14 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.train.callback import SlicesCallback, BoundaryCallback
-from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule, \
-    SphericalDataModule, SynopticDataModule, PotentialTestDataModule, AzimuthDataModule
+from nf2.loader.base import NumpyDataModule, FITSDataModule
+from nf2.loader.analytical import AnalyticDataModule
+from nf2.loader.vsm import VSMDataModule
+from nf2.loader.sharp import SHARPDataModule
+from nf2.loader.disambiguation import AzimuthDataModule
+from nf2.loader.spherical import SphericalDataModule
+from nf2.loader.potential import PotentialTestDataModule
+from nf2.loader.synoptic import SynopticDataModule
 from nf2.train.module import NF2Module, save
 
 parser = argparse.ArgumentParser()
@@ -56,7 +62,7 @@ elif args.data["type"] == 'sharp':
 elif args.data["type"] == 'fits':
     data_module = FITSDataModule(**args.data)
 elif args.data["type"] == 'solis':
-    data_module = SOLISDataModule(**args.data)
+    data_module = VSMDataModule(**args.data)
 elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
 elif args.data["type"] == 'spherical':

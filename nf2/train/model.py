@@ -157,24 +157,26 @@ class FluxModel(nn.Module):
         dflux_dz_dy = jac_matrix[:, 2, 1]
         dflux_dz_dz = jac_matrix[:, 2, 2]
         #
-        dx_dtheta = r * torch.cos(theta) * torch.cos(phi)
-        dy_dtheta = r * torch.cos(theta) * torch.sin(phi)
-        dz_dtheta = -r * torch.sin(theta)
-        dx_dphi = -r * torch.sin(theta) * torch.sin(phi)
-        dy_dphi = r * torch.sin(theta) * torch.cos(phi)
-        dz_dphi = 0
+        # ============== full version ==============
+        # dx_dtheta = r * torch.cos(theta) * torch.cos(phi)
+        # dy_dtheta = r * torch.cos(theta) * torch.sin(phi)
+        # dz_dtheta = -r * torch.sin(theta)
+        # dx_dphi = -r * torch.sin(theta) * torch.sin(phi)
+        # dy_dphi = r * torch.sin(theta) * torch.cos(phi)
+        # dz_dphi = 0
         #
-        dflux_dtheta_dphi = dflux_dx_dx * dx_dtheta * dx_dphi + dflux_dx_dy * dx_dtheta * dy_dphi + dflux_dx_dz * dx_dtheta * dz_dphi + \
-                            dflux_dy_dx * dy_dtheta * dx_dphi + dflux_dy_dy * dy_dtheta * dy_dphi + dflux_dy_dz * dy_dtheta * dz_dphi + \
-                            dflux_dz_dx * dz_dtheta * dx_dphi + dflux_dz_dy * dz_dtheta * dy_dphi + dflux_dz_dz * dz_dtheta * dz_dphi
-        # alternative with canceled terms
+        # dflux_dtheta_dphi = dflux_dx_dx * dx_dtheta * dx_dphi + dflux_dx_dy * dx_dtheta * dy_dphi + dflux_dx_dz * dx_dtheta * dz_dphi + \
+        #                     dflux_dy_dx * dy_dtheta * dx_dphi + dflux_dy_dy * dy_dtheta * dy_dphi + dflux_dy_dz * dy_dtheta * dz_dphi + \
+        #                     dflux_dz_dx * dz_dtheta * dx_dphi + dflux_dz_dy * dz_dtheta * dy_dphi + dflux_dz_dz * dz_dtheta * dz_dphi
+        #
+        # ==============  alternative with canceled terms ==============
         # cancels -->  area = r ** 2 * torch.sin(theta)
-        # dflux_dtheta_dphi = - dflux_dx_dx * torch.cos(theta) * torch.cos(phi) * torch.sin(phi) + dflux_dx_dy * torch.cos(theta) * torch.cos(phi) * torch.cos(phi) + \
-        #                     - dflux_dy_dx * torch.cos(theta) * torch.sin(phi) * torch.sin(phi) + dflux_dy_dy * torch.cos(theta) * torch.sin(phi) * torch.cos(phi) + \
-        #                     dflux_dz_dx * torch.sin(theta) * torch.sin(phi) - dflux_dz_dy * torch.sin(theta) * torch.cos(phi)
+        dflux_dtheta_dphi = - dflux_dx_dx * torch.cos(theta) * torch.cos(phi) * torch.sin(phi) + dflux_dx_dy * torch.cos(theta) * torch.cos(phi) * torch.cos(phi) + \
+                            - dflux_dy_dx * torch.cos(theta) * torch.sin(phi) * torch.sin(phi) + dflux_dy_dy * torch.cos(theta) * torch.sin(phi) * torch.cos(phi) + \
+                            dflux_dz_dx * torch.sin(theta) * torch.sin(phi) - dflux_dz_dy * torch.sin(theta) * torch.cos(phi)
         #
-        area = r ** 2 * torch.sin(theta) + 1e-7  # area element
-        b_r = area ** -1 * dflux_dtheta_dphi
+        # area = r ** 2 * torch.sin(theta) + 1e-7  # area element
+        b_r = dflux_dtheta_dphi
         b_r = b_r[:, None]
         b_spherical = torch.cat([b_r, b_h], -1)
         #
