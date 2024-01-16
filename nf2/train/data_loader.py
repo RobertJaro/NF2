@@ -4,6 +4,7 @@ from copy import copy
 
 import numpy as np
 import pfsspy
+import torch
 import wandb
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -198,8 +199,7 @@ class SynopticDataModule(LightningDataModule):
 
     def __init__(self, synoptic_files, height, b_norm, work_directory,
                  batch_size={"boundary": 1e4, "random": 2e4},
-                 iterations=1e5, num_workers=None,
-                 height_mapping={'z': [0]}, boundary={"type": "open"},
+                 iterations=1e5, num_workers=None, boundary={"type": "open"},
                  validation_resolution=256,
                  meta_data=None, plot_overview=True, slice=None,
                  plot_settings=[],
@@ -210,7 +210,6 @@ class SynopticDataModule(LightningDataModule):
         self.spatial_norm = None
         self.height = height
         self.b_norm = b_norm
-        self.height_mapping = height_mapping
         self.meta_data = meta_data
         assert boundary['type'] in ['open', 'potential'], 'Unknown boundary type. Implemented types are: open, potential'
 
@@ -279,6 +278,24 @@ class SynopticDataModule(LightningDataModule):
             boundary_coords = spherical_to_cartesian(spherical_boundary_coords)
             boundary_transform = cartesian_to_spherical_matrix(spherical_boundary_coords)
 
+            # log boundary map
+            fig, axs = plt.subplots(1, 3, figsize=(12, 4))
+            boundary_b_norm = np.max(np.abs(spherical_boundary_values))
+            im = axs[0].imshow(spherical_boundary_values[..., 0].transpose(), vmin=-boundary_b_norm, vmax=boundary_b_norm, cmap='gray', origin='lower')
+            divider = make_axes_locatable(axs[0])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(im, cax=cax)
+            im = axs[1].imshow(spherical_boundary_values[..., 1].transpose(), vmin=-boundary_b_norm, vmax=boundary_b_norm, cmap='gray', origin='lower')
+            divider = make_axes_locatable(axs[1])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(im, cax=cax)
+            im = axs[2].imshow(spherical_boundary_values[..., 2].transpose(), vmin=-boundary_b_norm, vmax=boundary_b_norm, cmap='gray', origin='lower')
+            divider = make_axes_locatable(axs[2])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            fig.colorbar(im, cax=cax)
+            wandb.log({"Potential boundary": fig})
+            plt.close('all')
+
             b_spherical_slices += [spherical_boundary_values]
             b_slices += [boundary_values]
             error_slices += [np.zeros_like(boundary_values)]
@@ -290,17 +307,35 @@ class SynopticDataModule(LightningDataModule):
 
         if plot_overview:
             for b in b_slices:
-                fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-                axs[0].imshow(b[..., 0].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
-                axs[1].imshow(b[..., 1].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
-                axs[2].imshow(b[..., 2].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
+                fig, axs = plt.subplots(3, 1, figsize=(8, 8))
+                im = axs[0].imshow(b[..., 0].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[0])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
+                im = axs[1].imshow(b[..., 1].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[1])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
+                im = axs[2].imshow(b[..., 2].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[2])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
                 wandb.log({"Overview": fig})
                 plt.close('all')
             for b in b_spherical_slices:
-                fig, axs = plt.subplots(1, 3, figsize=(12, 4))
-                axs[0].imshow(b[..., 0].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
-                axs[1].imshow(b[..., 1].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
-                axs[2].imshow(b[..., 2].transpose(), vmin=-b_norm, vmax=b_norm, cmap='gray', origin='lower')
+                fig, axs = plt.subplots(3, 1, figsize=(8, 8))
+                im = axs[0].imshow(b[..., 0].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[0])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
+                im = axs[1].imshow(b[..., 1].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[1])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
+                im = axs[2].imshow(b[..., 2].transpose(), vmin=-500, vmax=500, cmap='gray', origin='lower')
+                divider = make_axes_locatable(axs[2])
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                fig.colorbar(im, cax=cax)
                 wandb.log({"Overview Spherical": fig})
                 plt.close('all')
             for c in coords:
@@ -369,11 +404,17 @@ class SynopticDataModule(LightningDataModule):
         batches_path = {'coords': coords_npy_path,
                         'values': values_npy_path,
                         'transform': transform_npy_path,
-                        'errors': err_npy_path
-                        }
+                        'errors': err_npy_path}
+
 
         boundary_batch_size = int(batch_size['boundary']) if isinstance(batch_size, dict) else int(batch_size)
         random_batch_size = int(batch_size['random']) if isinstance(batch_size, dict) else int(batch_size)
+
+        if isinstance(batch_size, dict) and 'scale_gpus' in batch_size and batch_size['scale_gpus']:
+            n_gpus = torch.cuda.device_count()
+            boundary_batch_size = boundary_batch_size * n_gpus
+            random_batch_size = random_batch_size * n_gpus
+
 
         # create data loaders
         self.dataset = BatchesDataset(batches_path, boundary_batch_size)
@@ -1311,6 +1352,25 @@ class SphericalSeriesDataModule(SphericalDataModule):
         self.current_files = self.full_disk_files[0]
         super().__init__(full_disk_files=self.full_disk_files[0], *self.args, **self.kwargs)
         del self.full_disk_files[0]
+        return super().train_dataloader()
+
+class SynopticSeriesDataModule(SynopticDataModule):
+    def __init__(self, files, *args, **kwargs):
+        self.args = args
+        self.kwargs = kwargs
+        self.files = copy(files)
+        self.current_files = self.files[0]
+
+        super().__init__(self.files[0], *self.args, **self.kwargs)
+
+    def train_dataloader(self):
+        if len(self.files) == 0:
+            return None
+        # re-initialize
+        print(f"Load next file: {os.path.basename(self.files[0]['Br'])}")
+        self.current_files = self.files[0]
+        super().__init__(self.files[0], *self.args, **self.kwargs)
+        del self.files[0]
         return super().train_dataloader()
 
 

@@ -11,11 +11,11 @@ from torch import nn
 from nf2.data.util import spherical_to_cartesian, vector_cartesian_to_spherical
 from nf2.evaluation.unpack import load_coords
 
-nf2_file = '/glade/work/rjarolim/global/2173_vp_v2/extrapolation_result.nf2'
-results_path = '/glade/work/rjarolim/global/2173_vp_v2/results'
-ref_r_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br.fits'
-ref_t_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits'
-ref_p_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp.fits'
+nf2_file = '/glade/work/rjarolim/nf2/global/2154_vp_v11/extrapolation_result.nf2'
+results_path = '/glade/work/rjarolim/nf2/global/2154_vp_v11/results'
+ref_r_file = '/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Br.fits'
+ref_t_file = '/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bt.fits'
+ref_p_file = '/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_000000_TAI.Bp.fits'
 os.makedirs(results_path, exist_ok=True)
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

@@ -69,13 +69,14 @@ class RandomSphericalCoordinateDataset(Dataset):
 
     def __init__(self, height_range, batch_size,
                  latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi),
-                 radial_weighted_sampling=False):
+                 radial_weighted_sampling=True, latitude_weighted_sampling=True):
         self.height_range = height_range
         self.latitude_range = latitude_range
         self.longitude_range = longitude_range
         self.batch_size = batch_size
         self.float_tensor = torch.FloatTensor
         self.radial_weighted_sampling = radial_weighted_sampling
+        self.latitude_weighted_sampling = latitude_weighted_sampling
 
     def __len__(self):
         return 1
@@ -85,27 +86,26 @@ class RandomSphericalCoordinateDataset(Dataset):
         # r [1, height]
         h_r = self.height_range
         if self.radial_weighted_sampling:
-            random_coords[:, 0] = h_r[0] + random_coords[:, 0] ** 2 * (h_r[1] - h_r[0])
+            v_min, v_max = np.min(np.log(h_r)), np.max(np.log(h_r))
+            random_coords[:, 0] = v_min + random_coords[:, 0] * (v_max - v_min)
+            random_coords[:, 0] = torch.exp(random_coords[:, 0])
         else:
             random_coords[:, 0] = h_r[0] + random_coords[:, 0] * (h_r[1] - h_r[0])
         # theta [0, pi]
-        lat_r = self.latitude_range
-        random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
+        if self.latitude_weighted_sampling:
+            lat_r = self.latitude_range
+            v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
+            random_coords[:, 1] = v_min + random_coords[:, 1] * (v_max - v_min)
+            random_coords[:, 1] = torch.arccos(random_coords[:, 1])
+        else:
+            lat_r = self.latitude_range
+            random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
         # phi [0, 2pi]
         lon_r = self.longitude_range
         random_coords[:, 2] = lon_r[0] + random_coords[:, 2] * (lon_r[1] - lon_r[0])
         # convert to cartesian
-        random_coords = self.to_cartesian(random_coords)
+        random_coords = spherical_to_cartesian(random_coords, f=torch)
         return random_coords
-
-    def to_cartesian(self, c):
-        sin = torch.sin
-        cos = torch.cos
-        r, t, p = c[..., 0], c[..., 1], c[..., 2]
-        x = r * sin(t) * cos(p)
-        y = r * sin(t) * sin(p)
-        z = r * cos(t)
-        return torch.stack([x, y, z], -1)
 
 
 class SphereDataset(Dataset):

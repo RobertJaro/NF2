@@ -9,9 +9,9 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.train.callback import SlicesCallback, BoundaryCallback
-from nf2.train.module import NF2Module, save
 from nf2.train.data_loader import NumpyDataModule, SOLISDataModule, FITSDataModule, AnalyticDataModule, SHARPDataModule, \
     SphericalDataModule, SynopticDataModule, PotentialTestDataModule, AzimuthDataModule
+from nf2.train.module import NF2Module, save
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config', type=str, required=True,
@@ -26,13 +26,18 @@ with open(args.config) as config:
 base_path = args.base_path
 os.makedirs(base_path, exist_ok=True)
 
+if 'work_directory' not in args.data or args.data['work_directory'] is None:
+    args.data['work_directory'] = base_path
+os.makedirs(args.data['work_directory'], exist_ok=True)
+
 save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
 # init logging
 wandb_id = args.logging['wandb_id'] if 'wandb_id' in args.logging else None
 log_model = args.logging['wandb_log_model'] if 'wandb_log_model' in args.logging else False
 wandb_logger = WandbLogger(project=args.logging['wandb_project'], name=args.logging['wandb_name'], offline=False,
-                           entity=args.logging['wandb_entity'], id=wandb_id, dir=base_path, log_model=log_model)
+                           entity=args.logging['wandb_entity'], id=wandb_id, dir=base_path, log_model=log_model,
+                           save_dir=args.data['work_directory'])
 wandb_logger.experiment.config.update(vars(args), allow_val_change=True)
 
 # restore model checkpoint from wandb
@@ -44,9 +49,6 @@ if wandb_id is not None:
     args.data['plot_overview'] = False  # skip overview plot for restored model
 
 callbacks = []
-
-if 'work_directory' not in args.data or args.data['work_directory'] is None:
-    args.data['work_directory'] = base_path
 if args.data["type"] == 'numpy':
     data_module = NumpyDataModule(**args.data)
 elif args.data["type"] == 'sharp':
@@ -70,13 +72,15 @@ elif args.data["type"] == 'potential_test':
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
-plot_slices_callbacks = [SlicesCallback(plot_settings['name'], data_module.slices_datasets[plot_settings['name']].cube_shape)
-                         for plot_settings in args.plot if plot_settings['type'] == 'slices']
+plot_slices_callbacks = [
+    SlicesCallback(plot_settings['name'], data_module.slices_datasets[plot_settings['name']].cube_shape)
+    for plot_settings in args.plot if plot_settings['type'] == 'slices']
 # boundary_callback = BoundaryCallback(data_module.cube_shape)
 
 validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
                        'gauss_per_dB': args.data["b_norm"],
-                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data["spatial_norm"] if "spatial_norm" in args.data else 1,
+                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data[
+                           "spatial_norm"] if "spatial_norm" in args.data else 1,
                        'names': [plot_settings['name'] for plot_settings in args.plot],
                        }
 
@@ -86,8 +90,10 @@ config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
     on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path,
-                                      every_n_train_steps=args.training["validation_interval"] if "validation_interval" in args.training else None,
-                                      every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
+                                      every_n_train_steps=args.training[
+                                          "validation_interval"] if "validation_interval" in args.training else None,
+                                      every_n_epochs=args.training[
+                                          'check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                                       save_last=True)
 
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
@@ -99,8 +105,10 @@ trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.tr
                   accelerator='gpu' if n_gpus >= 1 else None,
                   strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
                   num_sanity_val_steps=0,
-                  val_check_interval=int(args.training['validation_interval']) if 'validation_interval' in args.training else None,
-                  check_val_every_n_epoch=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
+                  val_check_interval=int(
+                      args.training['validation_interval']) if 'validation_interval' in args.training else None,
+                  check_val_every_n_epoch=args.training[
+                      'check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else None,
                   gradient_clip_val=0.1,
                   callbacks=callbacks)
 

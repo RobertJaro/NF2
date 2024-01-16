@@ -1,5 +1,5 @@
 {
-  "base_path": "/glade/work/rjarolim/nf2/global/2173_vp_v1",
+  "base_path": "/glade/work/rjarolim/nf2/global/2173_vp_v3",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "global_HAO",
@@ -27,7 +27,7 @@
     "height": 1.3,
     "b_norm": 2000,
     "batch_size": {"boundary":  8192, "random":  16384},
-    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2173_vp_v1",
+    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2173_vp_v3",
     "num_workers": 8
   },
   "model": {
@@ -44,7 +44,7 @@
     "lambda_force_free": 1e-1,
     "lambda_energy_gradient": 1e-2,
     "check_val_every_n_epoch": 5,
-    "lr_params": {"start": 5e-4, "end": 5e-5, "iterations": 1e5}
+    "lr_params": 5e-4
   },
   "plot": [
     {

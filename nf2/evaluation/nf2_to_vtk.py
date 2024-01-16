@@ -25,4 +25,4 @@ if state['height_mapping_model'] is not None:
 else:
     tau = None
 
-save_vtk(b, vtk_path, 'B', scalar={'tau': tau}, Mm_per_pix=state['Mm_per_pixel'] * strides)
+save_vtk(vtk_path, vectors={'B': b}, scalars={'tau': tau}, Mm_per_pix=state['Mm_per_pixel'] * strides)

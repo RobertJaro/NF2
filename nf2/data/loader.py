@@ -7,6 +7,7 @@ from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from sunpy.map import Map, all_coordinates_from_map
 
+from nf2.data.util import spherical_to_cartesian
 from nf2.potential.potential_field import get_potential_boundary, get_potential_top
 
 
@@ -62,28 +63,3 @@ def _plot_data(error_cube, n_hmi_cube, plot_path, b_norm):
     axs[2].imshow(error_cube[..., 2].transpose(), vmin=0, cmap='gray', origin='lower')
     plt.savefig(os.path.join(plot_path, 'b_err.jpg'))
     plt.close()
-
-
-class RandomSphericalCoordinateSampler():
-
-    def __init__(self, height, batch_size, cuda=True):
-        self.height = height
-        self.batch_size = batch_size
-        self.float_tensor = torch.cuda.FloatTensor if cuda else torch.FloatTensor
-
-    def load_sample(self):
-        random_coords = self.float_tensor(self.batch_size, 3).uniform_()
-        random_coords[:, 0] = 1 + random_coords[:, 0] * (self.height - 1)  # r [1, height]
-        random_coords[:, 1] = random_coords[:, 1] * np.pi  # theta [0, pi]
-        random_coords[:, 2] = random_coords[:, 1] * 2 * np.pi  # phi [0, 2pi]
-        random_coords = self.to_cartesian(random_coords)
-        return random_coords
-
-    def to_cartesian(self, v):
-        sin = torch.sin
-        cos = torch.cos
-        r, t, p = v[..., 0], v[..., 1], v[..., 2]
-        x = r * sin(t) * cos(p)
-        y = r * sin(t) * sin(p)
-        z = r * cos(t)
-        return torch.stack([x, y, z], -1)

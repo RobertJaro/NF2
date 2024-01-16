@@ -29,30 +29,30 @@ def cartesian_to_spherical_matrix(c):
     return matrix
 
 
-def vector_spherical_to_cartesian(v, c):
+def vector_spherical_to_cartesian(v, c, f=np):
     vr, vt, vp = v[..., 0], v[..., 1], v[..., 2]
     r, t, p = c[..., 0], c[..., 1], c[..., 2]
-    sin = np.sin
-    cos = np.cos
+    sin = f.sin
+    cos = f.cos
     #
     vx = vr * sin(t) * cos(p) + vt * cos(t) * cos(p) - vp * sin(p)
     vy = vr * sin(t) * sin(p) + vt * cos(t) * sin(p) + vp * cos(p)
     vz = vr * cos(t) - vt * sin(t)
     #
-    return np.stack([vx, vy, vz], -1)
+    return f.stack([vx, vy, vz], -1)
 
 
-def vector_cartesian_to_spherical(v, c):
+def vector_cartesian_to_spherical(v, c, f=np):
     vx, vy, vz = v[..., 0], v[..., 1], v[..., 2]
     r, t, p = c[..., 0], c[..., 1], c[..., 2]
-    sin = np.sin
-    cos = np.cos
+    sin = f.sin
+    cos = f.cos
     #
     vr = vx * sin(t) * cos(p) + vy * sin(t) * sin(p) + vz * cos(t)
     vt = vx * cos(t) * cos(p) + vy * cos(t) * sin(p) - vz * sin(t)
     vp = - vx * sin(p) + vy * cos(p)
     #
-    return np.stack([vr, vt, vp], -1)
+    return f.stack([vr, vt, vp], -1)
 
 
 def spherical_to_cartesian(v, f=np):

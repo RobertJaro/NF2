@@ -4,18 +4,15 @@ from pytorch_lightning import LightningModule
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import *
-from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappingModel
+from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappingModel, FluxModel
 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_settings, dim=256, boundary_loss="ptr",
-                 lambda_b={'start': 1e3, 'end': 1, 'iterations': 1e5}, lambda_divergence=None, lambda_force_free=None,
-                 lambda_height=None, lambda_nans=None, lambda_radial=None,
-                 lambda_energy_gradient=None, lambda_potential=None,
+    def __init__(self, validation_settings, dim=256, loss_config = None, boundary_loss="ptr",
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  meta_path=None,
-                 use_positional_encoding=False, use_vector_potential=False, **kwargs):
+                 use_positional_encoding=False, model='b', **kwargs):
         """
         The main module for training the neural field model.
 
@@ -36,10 +33,15 @@ class NF2Module(LightningModule):
         """
         super().__init__()
         # init model
-        if use_vector_potential:
-            model = VectorPotentialModel(3, dim, pos_encoding=use_positional_encoding)
-        else:
+        if model == 'b':
             model = BModel(3, 3, dim, pos_encoding=use_positional_encoding)
+        elif model == 'vector_potential':
+            model = VectorPotentialModel(3, dim, pos_encoding=use_positional_encoding)
+        elif model == 'flux':
+            model = FluxModel(3, dim, pos_encoding=use_positional_encoding)
+        else:
+            raise ValueError(f"Invalid model: {model}, must be in ['b', 'vector_potential', 'flux']")
+
         # load meta state
         if meta_path:
             state_dict = torch.load(meta_path)['model'].state_dict() \
@@ -47,30 +49,32 @@ class NF2Module(LightningModule):
             model.load_state_dict(state_dict)
             logging.info('Loaded meta state: %s' % meta_path)
 
+        # init loss modules
+        if loss_config is None:
+            logging.info('Using default loss configuration')
+            loss_config = [
+                {"type": "boundary", "lambda":  {"start": 1e3, "end": 1, "iterations": 1e5 } },
+                {"type": "force_free", "lambda": 1e-1},]
+
         # init boundary loss module
         if boundary_loss == "azimuth":
-            boundary_loss_module = AzimuthBoundaryLoss
             self.b_transform = AzimuthTransform()
         elif boundary_loss == "ptr":
-            boundary_loss_module = BoundaryLoss
             self.b_transform = SphericalTransform()
         else:
             raise ValueError(f"Invalid boundary loss: {boundary_loss}, must be in ['azimuth', 'rtp']")
         # mapping
-        lambda_mapping = {'b': lambda_b, 'divergence': lambda_divergence, 'force-free': lambda_force_free,
-                          'potential': lambda_potential, 'height': lambda_height, 'NaNs': lambda_nans,
-                          'radial': lambda_radial, 'energy_gradient': lambda_energy_gradient, }
-        loss_module_mapping = {'b': boundary_loss_module,
-                               'divergence': DivergenceLoss, 'force-free': ForceFreeLoss, 'potential': PotentialLoss,
+        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_azimuth': AzimuthBoundaryLoss,
+                               'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                                'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
-                               'energy_gradient': EnergyGradientLoss}
+                               'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}
         loss_modules = {}
-        for k, v in lambda_mapping.items():
-            if v is None:
-                continue
+        for config in loss_config:
+            k = config['type']
+            v = config['lambda']
             if isinstance(v, dict):
                 value = torch.tensor(v['start'], dtype=torch.float32)
                 gamma = torch.tensor((v['end'] / v['start']) ** (1 / v['iterations']), dtype=torch.float32)
@@ -79,7 +83,9 @@ class NF2Module(LightningModule):
             else:
                 value = torch.tensor(v, dtype=torch.float32)
             lambdas[k] = value
-            loss_modules[k] = loss_module_mapping[k]()
+            # additional kwargs
+            kwargs = {k: v for k, v in config.items() if k not in ['type', 'lambda']}
+            loss_modules[k] = loss_module_mapping[k](**kwargs)
 
         self.model = model
         self.validation_settings = validation_settings
@@ -88,7 +94,6 @@ class NF2Module(LightningModule):
         self.scheduled_lambdas = nn.ParameterDict(scheduled_lambdas)
         self.lambdas = nn.ParameterDict(lambdas)
         #
-        self.use_vector_potential = use_vector_potential
         self.validation_outputs = {}
         self.loss_modules = nn.ModuleDict(loss_modules)
 
@@ -98,15 +103,17 @@ class NF2Module(LightningModule):
             lr_start = self.lr_params['start']
             lr_end = self.lr_params['end']
             iterations = self.lr_params['iterations']
-        else:
+        elif isinstance(self.lr_params, (float, int)):
             lr_start = self.lr_params
             lr_end = self.lr_params
             iterations = 1
             self.lr_params = {'start': lr_start, 'end': lr_end, 'iterations': iterations}
-        self.optimizer = torch.optim.Adam(parameters, lr=lr_start)
-        self.scheduler = ExponentialLR(self.optimizer, gamma=(lr_end / lr_start) ** (1 / iterations))
+        else:
+            raise ValueError(f"Invalid lr_params: {self.lr_params}, must be dict or float/int")
+        optimizer = torch.optim.Adam(parameters, lr=lr_start)
+        scheduler = ExponentialLR(optimizer, gamma=(lr_end / lr_start) ** (1 / iterations))
 
-        return [self.optimizer], [self.scheduler]
+        return [optimizer], [scheduler]
 
     def training_step(self, batch, batch_nb):
         boundary_batch = batch['boundary']
@@ -125,7 +132,8 @@ class NF2Module(LightningModule):
         coords = torch.cat([boundary_coords, random_coords], 0)
 
         # forward step
-        b = self.model(coords)
+        result = self.model(coords)
+        b = result['b']
 
         # compute derivatives
         jac_matrix = jacobian(b, coords)
@@ -135,7 +143,7 @@ class NF2Module(LightningModule):
             "n_boundary_coords": n_boundary_coords,
             "boundary_coords": coords[:n_boundary_coords], "random_coords": coords[n_boundary_coords:],
             "boundary_b": b[:n_boundary_coords],  "random_b": b[n_boundary_coords:],
-            "jac_matrix": jac_matrix,
+            "jac_matrix": jac_matrix, 'dflux_dr': result['dflux_dr'] if 'dflux_dr' in result else None,
         }
         loss_dict = {k: module(**state_dict) for k, module in self.loss_modules.items()}
         total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
@@ -155,9 +163,10 @@ class NF2Module(LightningModule):
                 param.copy_(new_lambda)
             self.log('lambda_' + k, self.lambdas[k])
         # update learning rate
-        if self.scheduler.get_last_lr()[0] > self.lr_params['end']:
-            self.scheduler.step()
-        self.log('Learning Rate', self.scheduler.get_last_lr()[0])
+        scheduler = self.lr_schedulers()
+        if scheduler.get_last_lr()[0] > self.lr_params['end']:
+            scheduler.step()
+        self.log('Learning Rate', scheduler.get_last_lr()[0])
 
         # log results to WANDB
         self.log("train", {k: v.mean() for k, v in outputs.items()})
@@ -171,7 +180,8 @@ class NF2Module(LightningModule):
             boundary_coords.requires_grad = True
             transform = batch['transform'] if 'transform' in batch else None
 
-            b = self.model(boundary_coords)
+            result = self.model(boundary_coords)
+            b = result['b']
             b, b_true = self.b_transform(b, b_true, transform=transform)
 
             # compute diff
@@ -188,7 +198,8 @@ class NF2Module(LightningModule):
             coords.requires_grad = True
 
             # forward step
-            b = self.model(coords)
+            result = self.model(coords)
+            b = result['b']
 
             jac_matrix = jacobian(b, coords)
             dBx_dx = jac_matrix[:, 0, 0]

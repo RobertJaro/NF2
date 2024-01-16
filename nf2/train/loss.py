@@ -2,10 +2,14 @@ import numpy as np
 import torch
 from torch import nn
 
-from nf2.data.util import cartesian_to_spherical
+from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical
 
 
 class ForceFreeLoss(nn.Module):
+
+    def __init__(self, stretch=False):
+        super().__init__()
+        self.stretch = stretch
 
     def forward(self, b, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -27,6 +31,9 @@ class ForceFreeLoss(nn.Module):
         normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
         force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
         #
+        if self.stretch:
+            force_free_loss = torch.asinh(force_free_loss)
+        #
         return force_free_loss.mean()
 
 
@@ -43,18 +50,19 @@ class DivergenceLoss(nn.Module):
 
 class RadialLoss(nn.Module):
 
-    def __init__(self, base_radius=1.0):
+    def __init__(self, base_radius=2.0):
         super().__init__()
         self.base_radius = base_radius
 
     def forward(self, random_b, random_coords,  *args, **kwargs):
-        # radial regularization
-        normalization = torch.norm(random_b, dim=-1) * torch.norm(random_coords, dim=-1) + 1e-8
-        dot_product = (random_b * random_coords).sum(-1)
-        radial_regularization = 1 - (dot_product / normalization).abs()
+        # radial regularization --> vanishing phi and theta components
+        radial_regularization = torch.norm(torch.cross(random_b, random_coords, dim=-1), dim=-1)
 
         radius_weight = torch.sqrt(torch.sum(random_coords ** 2, dim=-1) + 1e-7)
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+
+        normalization = torch.norm(random_b, dim=-1) * torch.norm(random_coords, dim=-1) + 1e-7
+        radial_regularization = radial_regularization / normalization
 
         radial_regularization = (radial_regularization * radius_weight).mean()
 
@@ -62,9 +70,9 @@ class RadialLoss(nn.Module):
 
 class PotentialLoss(nn.Module):
 
-    def __init__(self, radial_weight=True):
+    def __init__(self, base_radius=1.3):
         super().__init__()
-        self.radial_weight = radial_weight
+        self.base_radius = base_radius
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -84,15 +92,19 @@ class PotentialLoss(nn.Module):
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         potential_loss = torch.sum(j ** 2, dim=-1)
 
-        radial_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7) - 1 if self.radial_weight else 1
+        if self.base_radius:
+            radius_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7)
+            radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+            potential_loss *= radius_weight
 
-        return (potential_loss * radial_weight).mean()
+        return potential_loss.mean()
 
 class EnergyGradientLoss(nn.Module):
 
-    def __init__(self, base_radius=1.0):
+    def __init__(self, base_radius=1.3):
         super().__init__()
         self.base_radius = base_radius
+        # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
     def forward(self, b, jac_matrix, coords, n_boundary_coords=None, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -123,8 +135,8 @@ class EnergyGradientLoss(nn.Module):
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
 
         sampled_dE_dr = dE_dr[n_boundary_coords:]
-        energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight
-        energy_gradient_regularization = torch.asinh(energy_gradient_regularization * 1e3) / self.asinh_stretch
+        energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight ** 2
+        # energy_gradient_regularization = torch.asinh(energy_gradient_regularization * 1e3) / self.asinh_stretch
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
@@ -230,3 +242,9 @@ class AzimuthTransform(nn.Module):
         # b = torch.stack([bx, by, bz], -1)
 
         return b, b_true
+
+class FluxPreservationLoss(nn.Module):
+
+    def forward(self, dflux_dr, *args, **kwargs):
+        flux_preservation_loss = dflux_dr.pow(2).mean()
+        return flux_preservation_loss
