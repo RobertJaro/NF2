@@ -4,17 +4,15 @@ import torch
 from torch import nn
 
 from nf2.data.util import vector_cartesian_to_spherical, spherical_to_cartesian
-from nf2.evaluation.unpack import load_coords
+from nf2.evaluation.unpack import load_coords, SphericalOutput
 
 
 # transform NF2 solution to PFSS output
 class NF2Output(pfsspy.Output):
 
     def __init__(self, nf2_path, input: pfsspy.Input):
-        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-        state = torch.load(nf2_path, map_location=device)
-        model = nn.DataParallel(state['model'])
+        output = SphericalOutput(nf2_path)
 
         coords = np.stack(np.meshgrid(
             input.grid.pg,
@@ -26,8 +24,8 @@ class NF2Output(pfsspy.Output):
         input_coords = np.stack([input_coords[:, 2], input_coords[:, 1], input_coords[:, 0]], -1)
         input_cartesian_coords = spherical_to_cartesian(input_coords)
 
-        b = load_coords(model, 1, state['b_norm'], input_cartesian_coords, device, progress=True,
-                        compute_currents=False)
+        model_output = output.load_coords(input_cartesian_coords)
+        b = model_output['B']
         # input_coords[:, 1] -= np.pi / 2
         b = vector_cartesian_to_spherical(b, input_coords)
         b[..., 1] *= -1

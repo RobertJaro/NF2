@@ -70,7 +70,9 @@ def cartesian_to_spherical(v, f=np):
     xy = x ** 2 + y ** 2
 
     r = f.sqrt(xy + z ** 2)
-    t = f.arctan2(f.sqrt(xy), z)
-    p = f.arctan2(y, x)
+    nudge = (f.abs(z) < 1e-6) * 1e-6 # assure numerical stability
+    t = f.arctan2(f.sqrt(xy), z + nudge)
+    nudge = (f.abs(x) < 1e-6) * 1e-6 # assure numerical stability
+    p = f.arctan2(y, x + nudge)
 
     return f.stack([r, t, p], -1)

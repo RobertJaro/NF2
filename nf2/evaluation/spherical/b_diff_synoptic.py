@@ -35,7 +35,7 @@ ref_r_map = Map(ref_r_file)
 ref_t_map = Map(ref_t_file)
 ref_p_map = Map(ref_p_file)
 coords = all_coordinates_from_map(ref_r_map).transform_to(frames.HeliographicCarrington)
-ref_b = np.stack([ref_r_map.data, -ref_t_map.data, ref_p_map.data]).T
+ref_b = np.stack([ref_r_map.data, -ref_t_map.data, ref_p_map.data]).T * u.G
 
 spherical_coords = np.stack([
     coords.radius.value,
@@ -48,7 +48,7 @@ cartesian_coords = spherical_to_cartesian(spherical_coords)
 state = torch.load(nf2_file, map_location=device)
 model = nn.DataParallel(state['model'])
 
-b = load_coords(model, 1, state['b_norm'], cartesian_coords, device, progress=True, compute_currents=False)
+b = load_coords(model, 1, state['data']['G_per_dB'], cartesian_coords, device, progress=True, compute_currents=False)
 
 b = vector_cartesian_to_spherical(b, spherical_coords)
 
@@ -56,17 +56,17 @@ extent = [coords.lon.min().value, coords.lon.max().value, coords.lat.min().value
 # create difference plot
 fig, axs = plt.subplots(3, 3, figsize=(25, 15))
 for i in range(3):
-    im = axs[i, 0].imshow(ref_b[..., i].T, cmap='grey', vmin=-500, vmax=500, origin='lower', extent=extent)
+    im = axs[i, 0].imshow(ref_b[..., i].value.T, cmap='grey', vmin=-500, vmax=500, origin='lower', extent=extent)
     divider = make_axes_locatable(axs[i, 0])
     cax = divider.append_axes("right", size="2%", pad=0.05)
     plt.colorbar(im, cax=cax, label='B$_r$ [G]')
 
-    im = axs[i, 1].imshow(b[..., i].T, cmap='grey', vmin=-500, vmax=500, origin='lower', extent=extent)
+    im = axs[i, 1].imshow(b[..., i].value.T, cmap='grey', vmin=-500, vmax=500, origin='lower', extent=extent)
     divider = make_axes_locatable(axs[i, 1])
     cax = divider.append_axes("right", size="2%", pad=0.05)
     plt.colorbar(im, cax=cax, label='B$_{\\theta}$ [G]')
 
-    im = axs[i, 2].imshow(np.abs(b[..., i] - ref_b[..., i]).T, cmap='viridis', vmin=0, vmax=100, origin='lower', extent=extent)
+    im = axs[i, 2].imshow(np.abs(b[..., i] - ref_b[..., i]).value.T, cmap='viridis', vmin=0, vmax=100, origin='lower', extent=extent)
     divider = make_axes_locatable(axs[i, 2])
     cax = divider.append_axes("right", size="2%", pad=0.05)
     plt.colorbar(im, cax=cax, label='B$_{\\phi}$ [G]')

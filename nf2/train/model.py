@@ -10,6 +10,15 @@ from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian, \
     vector_spherical_to_cartesian
 
 
+class Swish(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.beta = nn.Parameter(torch.tensor(1., dtype=torch.float32), requires_grad=True)
+
+    def forward(self, x):
+        return x * torch.sigmoid(self.beta * x)
+
 class Sine(nn.Module):
     def __init__(self, w0=1.):
         super().__init__()
@@ -17,7 +26,6 @@ class Sine(nn.Module):
 
     def forward(self, x):
         return torch.sin(self.w0 * x)
-
 
 class HeightMappingModel(nn.Module):
 
@@ -49,9 +57,10 @@ class HeightMappingModel(nn.Module):
 
 class BModel(nn.Module):
 
-    def __init__(self, in_coords, out_values, dim, pos_encoding=False):
+    def __init__(self, in_coords=3, out_values=3, dim=512, positional_encoding=False, activation='swish'):
         super().__init__()
-        if pos_encoding:
+
+        if positional_encoding:
             posenc = PositionalEncoding(8, 20)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
@@ -60,21 +69,25 @@ class BModel(nn.Module):
         lin = [nn.Linear(dim, dim) for _ in range(8)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, out_values)
-        self.activation = Sine()  # torch.tanh
+        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
+        activation_f = activation_mapping[activation]
+        self.in_activation = activation_f()
+        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
 
     def forward(self, x):
-        x = self.activation(self.d_in(x))
-        for l in self.linear_layers:
-            x = self.activation(l(x))
+        radius = torch.norm(x, dim=-1, keepdim=True)
+        x = self.in_activation(self.d_in(x))
+        for l, a in zip(self.linear_layers, self.activations):
+            x = a(l(x))
         b = self.d_out(x)
         return {'b': b}
 
 
 class VectorPotentialModel(nn.Module):
 
-    def __init__(self, in_coords, dim, pos_encoding=False):
+    def __init__(self, in_coords, dim, positional_encoding=False, activation='swish'):
         super().__init__()
-        if pos_encoding:
+        if positional_encoding:
             posenc = PositionalEncoding(8, 20)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
@@ -83,7 +96,10 @@ class VectorPotentialModel(nn.Module):
         lin = [nn.Linear(dim, dim) for _ in range(8)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, 3)
-        self.activation = Sine()  # torch.tanh
+        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
+        activation_f = activation_mapping[activation]
+        self.in_activation = activation_f()
+        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
 
     def forward(self, x):
         a = self.potential(x)
@@ -100,21 +116,21 @@ class VectorPotentialModel(nn.Module):
         rot_z = dAy_dx - dAx_dy
         b = torch.stack([rot_x, rot_y, rot_z], -1)
         #
-        return {'b': b}
+        return {'b': b, 'a': a}
 
     def potential(self, x):
-        x = self.activation(self.d_in(x))
-        for layer in self.linear_layers:
-            x = self.activation(layer(x))
+        x = self.in_activation(self.d_in(x))
+        for l, a in zip(self.linear_layers, self.activations):
+            x = a(l(x))
         a = self.d_out(x)
         return a
 
 
 class FluxModel(nn.Module):
 
-    def __init__(self, in_coords, dim, pos_encoding=False):
+    def __init__(self, in_coords, dim, positional_encoding=False, activation='swish'):
         super().__init__()
-        if pos_encoding:
+        if positional_encoding:
             posenc = PositionalEncoding(8, 20)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
@@ -124,7 +140,10 @@ class FluxModel(nn.Module):
         self.linear_layers = nn.ModuleList(lin)
         self.flux_out = nn.Linear(dim, 1)
         self.b_h_out = nn.Linear(dim, 2)
-        self.activation = Sine()  # torch.tanh
+        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
+        activation_f = activation_mapping[activation]
+        self.in_activation = activation_f()
+        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
 
     def forward(self, x):
         # compute spherical coordinates
@@ -137,7 +156,7 @@ class FluxModel(nn.Module):
         dy_dr = torch.sin(theta) * torch.sin(phi)
         dz_dr = torch.cos(theta)
         #
-        flux, b_h = self.flux(x)
+        flux, b_h = self._model_forward(x)
         #
         jac_matrix = jacobian(flux, x)
         dflux_dx = jac_matrix[:, :, 0]
@@ -183,10 +202,10 @@ class FluxModel(nn.Module):
         b = vector_spherical_to_cartesian(b_spherical, spherical_coords, f=torch)
         return {'b': b, 'dflux_dr': dflux_dr}
 
-    def flux(self, x):
-        x = self.activation(self.d_in(x))
-        for layer in self.linear_layers:
-            x = self.activation(layer(x))
+    def _model_forward(self, x):
+        x = self.in_activation(self.d_in(x))
+        for l, a in zip(self.linear_layers, self.activations):
+            x = a(l(x))
         flux = self.flux_out(x)
         b_h = self.b_h_out(x)
         return flux, b_h

@@ -4,11 +4,17 @@ from torch import nn
 
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical
 
+class BaseLoss(nn.Module):
 
-class ForceFreeLoss(nn.Module):
-
-    def __init__(self, stretch=False):
+    def __init__(self, name, ds_id):
         super().__init__()
+        self.name = name
+        self.ds_id = ds_id
+
+class ForceFreeLoss(BaseLoss):
+
+    def __init__(self, stretch=False, **kwargs):
+        super().__init__(**kwargs)
         self.stretch = stretch
 
     def forward(self, b, jac_matrix, *args, **kwargs):
@@ -37,7 +43,7 @@ class ForceFreeLoss(nn.Module):
         return force_free_loss.mean()
 
 
-class DivergenceLoss(nn.Module):
+class DivergenceLoss(BaseLoss):
 
     def forward(self, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -48,30 +54,30 @@ class DivergenceLoss(nn.Module):
 
         return divergence_loss.mean()
 
-class RadialLoss(nn.Module):
+class RadialLoss(BaseLoss):
 
-    def __init__(self, base_radius=2.0):
-        super().__init__()
+    def __init__(self, base_radius=2.0, **kwargs):
+        super().__init__(**kwargs)
         self.base_radius = base_radius
 
-    def forward(self, random_b, random_coords,  *args, **kwargs):
+    def forward(self, b, coords, *args, **kwargs):
         # radial regularization --> vanishing phi and theta components
-        radial_regularization = torch.norm(torch.cross(random_b, random_coords, dim=-1), dim=-1)
+        radial_regularization = torch.norm(torch.cross(b, coords, dim=-1), dim=-1)
 
-        radius_weight = torch.sqrt(torch.sum(random_coords ** 2, dim=-1) + 1e-7)
+        radius_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7)
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
 
-        normalization = torch.norm(random_b, dim=-1) * torch.norm(random_coords, dim=-1) + 1e-7
+        normalization = torch.norm(b, dim=-1) * torch.norm(coords, dim=-1) + 1e-7
         radial_regularization = radial_regularization / normalization
 
         radial_regularization = (radial_regularization * radius_weight).mean()
 
         return radial_regularization
 
-class PotentialLoss(nn.Module):
+class PotentialLoss(BaseLoss):
 
-    def __init__(self, base_radius=1.3):
-        super().__init__()
+    def __init__(self, base_radius=1.3, **kwargs):
+        super().__init__(**kwargs)
         self.base_radius = base_radius
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
@@ -99,10 +105,10 @@ class PotentialLoss(nn.Module):
 
         return potential_loss.mean()
 
-class EnergyGradientLoss(nn.Module):
+class EnergyGradientLoss(BaseLoss):
 
-    def __init__(self, base_radius=1.3):
-        super().__init__()
+    def __init__(self, base_radius=1.3, **kwargs):
+        super().__init__(**kwargs)
         self.base_radius = base_radius
         # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
@@ -141,7 +147,7 @@ class EnergyGradientLoss(nn.Module):
 
         return energy_gradient_regularization
 
-class NaNLoss(nn.Module):
+class NaNLoss(BaseLoss):
 
     def forward(self, boundary_b, b_true):
         if torch.isnan(b_true).sum() == 0:
@@ -150,10 +156,10 @@ class NaNLoss(nn.Module):
             min_energy_NaNs_regularization = boundary_b[torch.isnan(b_true)].pow(2).sum() / torch.isnan(b_true).sum()
         return min_energy_NaNs_regularization
 
-class AzimuthBoundaryLoss(nn.Module):
+class AzimuthBoundaryLoss(BaseLoss):
 
-    def __init__(self, disambiguate=True):
-        super().__init__()
+    def __init__(self, disambiguate=True, **kwargs):
+        super().__init__(**kwargs)
         self.disambiguate = disambiguate
 
     def forward(self, boundary_b, b_true, transform=None, *args, **kwargs):
@@ -197,19 +203,20 @@ def img_to_los_trv_azi(transformed_b):
     return transformed_b
 
 
-class BoundaryLoss(nn.Module):
+class BoundaryLoss(BaseLoss):
 
-    def forward(self, boundary_b, b_true, transform=None, b_err=None, *args, **kwargs):
+    def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
         # apply transforms
-        transformed_b = torch.einsum('ijk,ik->ij', transform, boundary_b) if transform is not None else boundary_b
+        transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         # compute diff
+        b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
         b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
 
         assert not torch.isnan(b_diff), 'b_diff is nan'
         return b_diff
 
-class HeightLoss(nn.Module):
+class HeightLoss(BaseLoss):
 
     def forward(self, boundary_coords, original_coords, height_ranges, *args, **kwargs):
         height_diff = torch.abs(boundary_coords[:, 2] - original_coords[:, 2])
@@ -217,6 +224,13 @@ class HeightLoss(nn.Module):
         height_regularization = torch.true_divide(height_diff, normalization).mean()
 
         return height_regularization
+
+
+class FluxPreservationLoss(BaseLoss):
+
+    def forward(self, dflux_dr, *args, **kwargs):
+        flux_preservation_loss = dflux_dr.pow(2).mean()
+        return flux_preservation_loss
 
 class SphericalTransform(nn.Module):
 
@@ -242,9 +256,3 @@ class AzimuthTransform(nn.Module):
         # b = torch.stack([bx, by, bz], -1)
 
         return b, b_true
-
-class FluxPreservationLoss(nn.Module):
-
-    def forward(self, dflux_dr, *args, **kwargs):
-        flux_preservation_loss = dflux_dr.pow(2).mean()
-        return flux_preservation_loss

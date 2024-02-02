@@ -4,19 +4,21 @@ import os
 import shutil
 
 import torch
+from astropy import units as u
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.train.callback import SlicesCallback, BoundaryCallback
-from nf2.loader.base import NumpyDataModule, FITSDataModule
+from nf2.data.dataset import SphereSlicesDataset, SphereDataset
 from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.vsm import VSMDataModule
-from nf2.loader.sharp import SHARPDataModule
+from nf2.loader.base import NumpyDataModule, FITSDataModule
 from nf2.loader.disambiguation import AzimuthDataModule
-from nf2.loader.spherical import SphericalDataModule
 from nf2.loader.potential import PotentialTestDataModule
+from nf2.loader.sharp import SHARPDataModule
+from nf2.loader.spherical import SphericalDataModule, MapDataset, PFSSBoundaryDataset, SliceDataset
 from nf2.loader.synoptic import SynopticDataModule
+from nf2.loader.vsm import VSMDataModule
+from nf2.train.callback import SlicesCallback, BoundaryCallback, MetricsCallback
 from nf2.train.module import NF2Module, save
 
 parser = argparse.ArgumentParser()
@@ -32,29 +34,25 @@ with open(args.config) as config:
 base_path = args.base_path
 os.makedirs(base_path, exist_ok=True)
 
-if 'work_directory' not in args.data or args.data['work_directory'] is None:
-    args.data['work_directory'] = base_path
+if not hasattr(args, 'work_directory') or args.work_directory is None:
+    setattr(args, 'work_directory', os.path.join(base_path, 'work'))
+args.data['work_directory'] = args.work_directory
 os.makedirs(args.data['work_directory'], exist_ok=True)
 
 save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
 # init logging
-wandb_id = args.logging['wandb_id'] if 'wandb_id' in args.logging else None
-log_model = args.logging['wandb_log_model'] if 'wandb_log_model' in args.logging else False
-wandb_logger = WandbLogger(project=args.logging['wandb_project'], name=args.logging['wandb_name'], offline=False,
-                           entity=args.logging['wandb_entity'], id=wandb_id, dir=base_path, log_model=log_model,
-                           save_dir=args.data['work_directory'])
+wandb_logger = WandbLogger(**args.logging, save_dir=args.data['work_directory'])
 wandb_logger.experiment.config.update(vars(args), allow_val_change=True)
 
 # restore model checkpoint from wandb
-if wandb_id is not None:
-    checkpoint_reference = f"{args.logging['wandb_entity']}/{args.logging['wandb_project']}/model-{args.logging['wandb_id']}:latest"
+if 'id' in args.logging:
+    checkpoint_reference = f"{args.logging['entity']}/{args.logging['project']}/model-{args.logging['id']}:latest"
     artifact = wandb_logger.use_artifact(checkpoint_reference, artifact_type="model")
     artifact.download(root=base_path)
     shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
     args.data['plot_overview'] = False  # skip overview plot for restored model
 
-callbacks = []
 if args.data["type"] == 'numpy':
     data_module = NumpyDataModule(**args.data)
 elif args.data["type"] == 'sharp':
@@ -66,11 +64,9 @@ elif args.data["type"] == 'solis':
 elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
 elif args.data["type"] == 'spherical':
-    data_module = SphericalDataModule(**args.data, plot_settings=args.plot)
+    data_module = SphericalDataModule(**args.data)
 elif args.data["type"] == 'azimuth':
     data_module = AzimuthDataModule(**args.data, plot_settings=args.plot)
-    boundary_callback = BoundaryCallback(data_module.cube_shape)
-    callbacks += [boundary_callback]
 elif args.data["type"] == 'synoptic':
     data_module = SynopticDataModule(**args.data, plot_settings=args.plot)
 elif args.data["type"] == 'potential_test':
@@ -78,19 +74,23 @@ elif args.data["type"] == 'potential_test':
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
-plot_slices_callbacks = [
-    SlicesCallback(plot_settings['name'], data_module.slices_datasets[plot_settings['name']].cube_shape)
-    for plot_settings in args.plot if plot_settings['type'] == 'slices']
-# boundary_callback = BoundaryCallback(data_module.cube_shape)
+# initialize callbacks
+callbacks = []
+Mm_per_ds = (1 * u.solRad).to(u.m).value * 1e-6
+G_per_dB = args.data["G_per_dB"]
+for validation_dataset_key in data_module.validation_dataset_mapping.values():
+    ds = data_module.datasets['validation'][validation_dataset_key]
+    if isinstance(ds, SphereSlicesDataset):
+        callback = SlicesCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
+    elif isinstance(ds, SphereDataset):
+        callback = MetricsCallback(validation_dataset_key, G_per_dB, Mm_per_ds)
+    elif isinstance(ds, SliceDataset):
+        callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB)
+    else:
+        raise NotImplementedError(f'Data set {type(ds)} not implemented for validation.')
+    callbacks += [callback]
 
-validation_settings = {'cube_shape': data_module.cube_dataset.coords_shape,
-                       'gauss_per_dB': args.data["b_norm"],
-                       'Mm_per_ds': args.data["Mm_per_pixel"] * args.data[
-                           "spatial_norm"] if "spatial_norm" in args.data else 1,
-                       'names': [plot_settings['name'] for plot_settings in args.plot],
-                       }
-
-nf2 = NF2Module(validation_settings, **args.model, **args.training)
+nf2 = NF2Module(data_module.validation_dataset_mapping, model_kwargs=args.model, **args.training)
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
@@ -104,7 +104,7 @@ checkpoint_callback = ModelCheckpoint(dirpath=base_path,
 
 torch.set_float32_matmul_precision('medium')  # for A100 GPUs
 n_gpus = torch.cuda.device_count()
-callbacks += [checkpoint_callback, save_callback, *plot_slices_callbacks]
+callbacks += [checkpoint_callback, save_callback]
 trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.training else 1,
                   logger=wandb_logger,
                   devices=n_gpus if n_gpus > 0 else None,
