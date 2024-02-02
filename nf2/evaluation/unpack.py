@@ -95,34 +95,29 @@ class SphericalOutput(BaseOutput):
 
         self.radius_range = self.state['data']['radius_range']
 
-    def trace(self, seeds):
-        seeds = self._skycoords_to_cartesian(seeds)
-        field_lines = [self._get_field_line(seed) for seed in tqdm(seeds)]
-        return field_lines
+    def load_spherical(self, radius_range: u.Quantity = None,
+             latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
+             longitude_range: u.Quantity = (0, 2 * np.pi),
+             sampling=[100, 180, 360],):
 
-    def _get_field_line(self, seed, atol = 1e-4,  rtol = 1e-4):
-            forward = solve_ivp(self._get_direction, (0, 1e1), seed, method='RK23', rtol=rtol, atol=atol, args=(1,))
-            backward = solve_ivp(self._get_direction, (0, 1e1), seed, method='RK23', rtol=rtol, atol=atol, args=(-1,))
-            field_line = np.concatenate([forward.y, backward.y[::-1]], axis=-1)
-            field_line = field_line.T
-            return field_line
+        radius_range = radius_range if radius_range is not None else self.radius_range
+        latitude_range += np.pi / 2 * u.rad  # transform coordinate frame
+        spherical_coords = np.stack(
+            np.meshgrid(np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), sampling[0]),
+                        np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), sampling[1]),
+                        np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
+                        indexing='ij'), -1)
+        cartesian_coords = spherical_to_cartesian(spherical_coords)
 
-    def _get_direction(self, t, coord, direction):
-        radius = np.linalg.norm(coord, axis=-1)
-        if radius < (self.radius_range[0].to_value(u.solRad) - 1e-2) or radius > self.radius_range[1].to_value(u.solRad):
-            return np.array([0, 0, 0])
-        coord = np.reshape(coord, (1, 3))
-        b = self.load_coords(coord)['B']
-        b = b[0] # remove batch dimension
-        return np.sign(direction) * b / np.linalg.norm(b, axis=-1, keepdims=True)
+        model_out = self.load_coords(cartesian_coords, compute_currents=True)
+        return {'B': model_out['B'], 'coords': cartesian_coords}
 
     def load(self,
              radius_range: u.Quantity = None,
-             latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
+             latitude_range: u.Quantity = (0, np.pi) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
-        latitude_range += np.pi / 2 * u.rad # transform coordinate frame
         spherical_bounds = np.stack(
             np.meshgrid(np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), 50),
                         np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), 50),
@@ -137,7 +132,7 @@ class SphericalOutput(BaseOutput):
         coords = np.stack(
             np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * res)),
                         np.linspace(y_min, y_max, int((y_max - y_min) * res)),
-                        np.linspace(z_max, z_min, int((z_max - z_min) * res)), indexing='ij'), -1)
+                        np.linspace(z_min, z_max, int((z_max - z_min) * res)), indexing='ij'), -1)
         # flipped z axis
         spherical_coords = cartesian_to_spherical(coords)
         condition = (spherical_coords[..., 0] * u.solRad >= radius_range[0]) & (spherical_coords[..., 0] * u.solRad < radius_range[1]) \
@@ -147,10 +142,6 @@ class SphericalOutput(BaseOutput):
 
         cube_shape = coords.shape[:-1]
         model_out = self.load_coords(sub_coords, compute_currents=True, **kwargs)
-
-        # flip z axis
-        for o in model_out.values():
-            o[..., 2] *= -1
 
         sub_b = model_out['B']
         b = np.zeros(cube_shape + (3,))

@@ -71,8 +71,9 @@ for i, f in enumerate(files):
     vectors = {'B': result['B'], 'B_rtp': result['B_rtp']}
     radius = result['spherical_coords'][..., 0]
     scalars = {'radius': radius, 'current_density': np.sum(result['J'] ** 2, -1) ** 0.5}
+    coords = result['coords']
 
-    args = (vtk_path, vectors, scalars)
+    args = (vtk_path, coords, vectors, scalars)
     save_thread = threading.Thread(target=save_vtk, args=args)
     save_thread.start()
     save_threads.append(save_thread)

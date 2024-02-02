@@ -140,13 +140,13 @@ class MapDataset(SliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            np.pi / 2 + spherical_coords.lat.to_value(u.rad),
+            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
         # load data and transform matrix
-        b_spherical = np.stack([r_map.data, -t_map.data, p_map.data]).transpose()
+        b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
@@ -252,7 +252,6 @@ class PFSSBoundaryDataset(SliceDataset):
         potential_shape = spherical_coords.shape  # required workaround for pfsspy spherical reshape
         spherical_b = pfss_out.get_bvec(spherical_coords.reshape((-1,)))
         spherical_b = spherical_b.reshape((*potential_shape, 3)).value
-        spherical_b[..., 1] *= -1  # flip B_theta
         spherical_b = np.stack([spherical_b[..., 0],
                                 spherical_b[..., 1],
                                 spherical_b[..., 2]]).T
@@ -260,7 +259,7 @@ class PFSSBoundaryDataset(SliceDataset):
         # load coordinates
         spherical_coords = np.stack([
             spherical_coords.radius.value,
-            np.pi / 2 + spherical_coords.lat.to(u.rad).value,
+            np.pi / 2 - spherical_coords.lat.to(u.rad).value,
             spherical_coords.lon.to(u.rad).value]).T
 
         # convert to spherical coordinates

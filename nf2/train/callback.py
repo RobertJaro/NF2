@@ -42,12 +42,12 @@ class SlicesCallback(Callback):
         for i in range(3):
             for j in range(n_samples):
                 v_min_max = np.max(np.abs(b[j, :, :]))
-                extent = [coords[j, :, :, 2].min(), coords[j, :, :, 2].max(),
-                          coords[j, :, :, 1].min(), coords[j, :, :, 1].max()]
+                extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
+                          coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
                 extent = np.rad2deg(extent)
                 height = coords[j, :, :, 0].mean()
                 im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='lower', extent=extent)
+                                      origin='upper', extent=extent)
                 axs[i, j].set_xlabel('Longitude [deg]')
                 axs[i, j].set_ylabel('Latitude [deg]')
                 # add locatable colorbar
@@ -64,11 +64,11 @@ class SlicesCallback(Callback):
         n_samples = j.shape[0]
         fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
         for i in range(n_samples):
-            extent = [coords[i, :, :, 2].min(), coords[i, :, :, 2].max(),
-                      coords[i, :, :, 1].min(), coords[i, :, :, 1].max()]
+            extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
+                      coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
             extent = np.rad2deg(extent)
             height = coords[i, :, :, 0].mean()
-            im = axs[i].imshow(j[i, :, :], cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+            im = axs[i].imshow(j[i, :, :], cmap='plasma', origin='upper', norm=LogNorm(), extent=extent)
             axs[i].set_xlabel('Longitude [deg]')
             axs[i].set_ylabel('Latitude [deg]')
             # add locatable colorbar
@@ -82,7 +82,7 @@ class SlicesCallback(Callback):
         # plot integrated current density
         j = np.sum(j, axis=0)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j.transpose(), cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+        im = ax.imshow(j, cmap='plasma', origin='upper', norm=LogNorm(), extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
