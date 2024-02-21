@@ -1,9 +1,7 @@
-import datetime
 import os
 import uuid
 from collections import OrderedDict
 from copy import copy
-from itertools import repeat
 
 import numpy as np
 import pfsspy
@@ -12,16 +10,15 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pytorch_lightning import LightningDataModule
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
-from torch.utils.data import DataLoader, RandomSampler
 
-from nf2.data.dataset import BatchesDataset, RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset
+from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, BatchesDataset
 from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
+from nf2.loader.base import BaseDataModule
 
 
-class SliceDataset(BatchesDataset):
+class SphericalSliceDataset(BatchesDataset):
 
     def __init__(self, b, coords, spherical_coords, G_per_dB, work_directory, batch_size,
                  error=None, transform=None,
@@ -36,7 +33,7 @@ class SliceDataset(BatchesDataset):
             transform = transform[::strides, ::strides] if transform is not None else None
         self.cube_shape = b.shape[:-1]
         # flatten data
-        b = np.concatenate([b.reshape((-1, 3)) for b in b]).astype(np.float32)
+        b = np.concatenate([f.reshape((-1, 3)) for f in b]).astype(np.float32)
         coords = np.concatenate([c.reshape((-1, 3)) for c in coords]).astype(np.float32)
         if error is not None:
             error = np.concatenate([e.reshape((-1, 3)) for e in error]).astype(np.float32)
@@ -126,7 +123,7 @@ class SliceDataset(BatchesDataset):
         [os.remove(f) for f in self.batches_path.values()]
 
 
-class MapDataset(SliceDataset):
+class SphericalMapDataset(SphericalSliceDataset):
 
     def __init__(self, files, mask_configs=[], **kwargs):
         # load maps
@@ -191,7 +188,8 @@ class MapDataset(SliceDataset):
         m_type = mask_config['type']
         if m_type == 'reference':
             ref_map = Map(mask_config['file'])
-            ref_map.meta['date-obs'] = r_map.date.to_datetime().isoformat() # use reference time to avoid temporal shift
+            ref_map.meta[
+                'date-obs'] = r_map.date.to_datetime().isoformat()  # use reference time to avoid temporal shift
             reprojected_map = ref_map.reproject_to(r_map.wcs)
             mask = ~np.isnan(reprojected_map.data).T
         elif m_type == 'helioprojective':
@@ -232,9 +230,7 @@ class MapDataset(SliceDataset):
         transform[mask] = np.nan
 
 
-
-
-class PFSSBoundaryDataset(SliceDataset):
+class PFSSBoundaryDataset(SphericalSliceDataset):
 
     def __init__(self, Br, height, source_surface_height=2.5, resample=[360, 180], sampling_points=100, **kwargs):
         assert source_surface_height >= height, 'Source surface height must be greater than height (set source_surface_height to >height)'
@@ -270,88 +266,50 @@ class PFSSBoundaryDataset(SliceDataset):
         super().__init__(b=b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
 
 
-class SphericalDataModule(LightningDataModule):
+class SphericalDataModule(BaseDataModule):
 
     def __init__(self, train_configs, validation_configs,
                  max_radius=None, G_per_dB=None, work_directory=None,
-                 batch_size=4096, num_workers=None,
-                 **kwargs):
-        super().__init__()
+                 batch_size=4096, **kwargs):
+
+        self.ds_mapping = {'map': SphericalMapDataset,
+                      'pfss_boundary': PFSSBoundaryDataset,
+                      'random_spherical': RandomSphericalCoordinateDataset,
+                      'sphere': SphereDataset,
+                      'spherical_slices': SphereSlicesDataset}
 
         # data parameters
         self.max_radius = max_radius
         self.G_per_dB = G_per_dB
         self.cube_shape = [1, max_radius]
         self.spatial_norm = 1 * u.solRad
-        # train parameters
-        self.num_workers = num_workers if num_workers is not None else os.cpu_count()
 
         # init boundary datasets
-        datasets = {'train': OrderedDict(),
-                    'validation': OrderedDict()}
+        general_config = {'work_directory': work_directory, 'batch_size': batch_size, 'G_per_dB': G_per_dB,
+                          'height': max_radius, 'radius_range': [1, max_radius]}
 
-        iter_config = list(zip(train_configs, repeat('train'))) + list(zip(validation_configs, repeat('validation')))
-        for i, (config, c_set) in enumerate(iter_config):
+        config = {'type': 'spherical',
+                  'radius_range': [1, max_radius] * u.solRad,
+                  'G_per_dB': G_per_dB * u.G,
+                  'Mm_per_ds': (1 * u.solRad).to(u.Mm)}
+
+        training_datasets = self.load_config(train_configs, general_config, prefix='train')
+        validation_datasets = self.load_config(validation_configs, general_config, prefix='validation')
+
+        super().__init__(training_datasets, validation_datasets, config, **kwargs)
+
+    def load_config(self, configs, general_config, prefix='train'):
+        datasets = OrderedDict()
+        for i, config in enumerate(configs):
             c_type = config.pop('type')
-            c_name = config.pop('name') if 'name' in config else f'dataset_{c_type}_{i}'
-            config['work_directory'] = work_directory if 'work_directory' not in config else config['work_directory']
-            os.makedirs(config['work_directory'], exist_ok=True)
-            config['batch_size'] = batch_size if 'batch_size' not in config else config['batch_size']
-            config['G_per_dB'] = G_per_dB if 'G_per_dB' not in config else config['G_per_dB']
+            c_name = config.pop('name') if 'name' in config else f'{prefix}_{c_type}_{i}'
             config['ds_name'] = c_name
-            if c_type == 'map':
-                dataset = MapDataset(**config)
-            elif c_type == 'pfss_boundary':
-                config['height'] = max_radius if 'height' not in config else config['height']
-                dataset = PFSSBoundaryDataset(**config)
-            elif c_type == 'random_spherical':
-                config['radius_range'] = [1, max_radius] if 'radius_range' not in config else config['radius_range']
-                dataset = RandomSphericalCoordinateDataset(**config)
-            elif c_type == 'sphere':
-                config['radius_range'] = [1, max_radius] if 'radius_range' not in config else config['radius_range']
-                dataset = SphereDataset(**config)
-            elif c_type == 'spherical_slices':
-                config['radius_range'] = [1, max_radius] if 'radius_range' not in config else config['radius_range']
-                dataset = SphereSlicesDataset(**config)
-            else:
-                raise NotImplementedError(f"Unknown data type '{c_type}'. "
-                                          f"Please choose from: ['map', 'potential_boundary', 'random_spherical', 'sphere', 'slices']")
-            datasets[c_set][c_name] = dataset
-
-        # create data loaders
-        self.datasets = datasets
-        self.validation_dataset_mapping = {i: name for i, name in enumerate(datasets['validation'].keys())}
-        self.config = {'type': 'spherical',
-                       'radius_range': [1, max_radius] * u.solRad,
-                       'G_per_dB': G_per_dB * u.G,
-                       'Mm_per_ds': (1 * u.solRad).to(u.Mm)}
-
-    def clear(self):
-        [ds.clear() for ds in self.datasets.values() if isinstance(ds, SliceDataset)]
-
-    def train_dataloader(self):
-        datasets = self.datasets['train']
-        ref_idx = np.argmax([len(ds) for ds in datasets.values()])
-        ref_dataset_name, ref_dataset = list(datasets.items())[ref_idx]
-        loaders = {ref_dataset_name: DataLoader(ref_dataset, batch_size=None, num_workers=self.num_workers,
-                                                pin_memory=True, shuffle=True)
-                   }
-        for i, (name, dataset) in enumerate(datasets.items()):
-            if i == ref_idx:
-                continue # reference dataset already added
-            sampler = RandomSampler(dataset, replacement=True, num_samples=len(ref_dataset))
-            loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
-                                       pin_memory=True, sampler=sampler)
-        return loaders
-
-    def val_dataloader(self):
-        datasets = self.datasets['validation']
-        loaders = []
-        for dataset in datasets.values():
-            loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
-                                shuffle=False)
-            loaders.append(loader)
-        return loaders
+            # update config with general config
+            _ = {config.setdefault(k, v) for k, v in general_config.items()}
+            os.makedirs(config['work_directory'], exist_ok=True)
+            dataset = self.ds_mapping[c_type](**config)
+            datasets[c_name] = dataset
+        return datasets
 
 
 class SphericalSeriesDataModule(SphericalDataModule):
@@ -359,7 +317,7 @@ class SphericalSeriesDataModule(SphericalDataModule):
         self.args = args
         self.kwargs = kwargs
         self.full_disk_files = copy(full_disk_files)
-        self.current_files = self.full_disk_files[0]
+        self.current_id = os.path.basename(self.full_disk_files[0]['Br']).split('.')[-3]
 
         super().__init__(full_disk_files=self.full_disk_files[0], *self.args, **self.kwargs)
 

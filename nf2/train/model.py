@@ -227,19 +227,24 @@ class PositionalEncoding(nn.Module):
         """
         super().__init__()
         freqs = 2 ** torch.linspace(-max_freq, max_freq, num_freqs)
+        freqs = freqs[None, :, None]  # (1, num_freqs, 1)
         self.register_buffer("freqs", freqs)  # (num_freqs)
 
     def forward(self, x):
         """
         Inputs:
-            x: (batch, num_samples, in_features)
+            x: (batch, in_features)
         Outputs:
-            out: (batch, num_samples, 2*num_freqs*in_features)
+            out: (batch, 2*num_freqs*in_features)
         """
-        x_proj = x.unsqueeze(dim=-2) * self.freqs.unsqueeze(dim=-1)  # (num_rays, num_samples, num_freqs, in_features)
-        x_proj = x_proj.reshape(*x.shape[:-1], -1)  # (num_rays, num_samples, num_freqs*in_features)
-        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)],
-                        dim=-1)  # (num_rays, num_samples, 2*num_freqs*in_features)
+        x_proj = x[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
+        x_proj = x_proj.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
+        #
+        normalization = torch.ones_like(x)[:, None, :] * self.freqs # (batch, num_freqs, in_features)
+        normalization = normalization.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
+        out = torch.cat([torch.sin(x_proj) / normalization,
+                         torch.cos(x_proj) / normalization],
+                        dim=-1)  # (batch, 2*num_freqs*in_features)
         return out
 
 

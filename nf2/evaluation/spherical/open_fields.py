@@ -15,7 +15,7 @@ from sunpy.map import Map, all_coordinates_from_map, make_heliographic_header
 from sunpy.visualization.colormaps import cm
 
 from nf2.evaluation.spherical.common import NF2Output
-from nf2.evaluation.unpack import SphericalOutput
+from nf2.evaluation.output import SphericalOutput
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
 parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')

@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import numpy as np
 import wandb
@@ -13,9 +14,85 @@ from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDatase
 from nf2.data.loader import load_potential_field_data
 
 
-class SlicesDataModule(LightningDataModule):
+class TensorsDataset(BatchesDataset):
 
-    def __init__(self, b_slices, height, spatial_norm, b_norm, work_directory,
+    def __init__(self, tensors, work_directory, filter_nans=True, shuffle=True, ds_name=None, **kwargs):
+        # filter nan entries
+        nan_mask = np.any([np.all(np.isnan(t), axis=tuple(range(1, t.ndim))) for t in tensors.values()], axis=0)
+        if nan_mask.sum() > 0 and filter_nans:
+            print(f'Filtering {nan_mask.sum()} nan entries')
+            tensors = {k: v[~nan_mask] for k, v in tensors.items()}
+
+        # shuffle data
+        if shuffle:
+            r = np.random.permutation(list(tensors.values())[0].shape[0])
+            tensors = {k: v[r] for k, v in tensors.items()}
+
+        ds_name = uuid.uuid4() if ds_name is None else ds_name
+        batches_paths = {}
+        for k, v in tensors.items():
+            coords_npy_path = os.path.join(work_directory, f'{ds_name}_{k}.npy')
+            np.save(coords_npy_path, v.astype(np.float32))
+            batches_paths[k] = coords_npy_path
+
+        super().__init__(batches_paths, **kwargs)
+
+
+class BaseDataModule(LightningDataModule):
+
+    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None, iterations=None, **kwargs):
+        super().__init__()
+        self.training_datasets = training_datasets
+        self.validation_datasets = validation_datasets
+        self.datasets = {**self.training_datasets, **self.validation_datasets}
+
+        self.config = module_config
+        self.validation_dataset_mapping = {i: name for i, name in enumerate(self.validation_datasets.keys())}
+        self.num_workers = num_workers if num_workers is not None else os.cpu_count()
+        self.iterations = iterations
+
+
+    def clear(self):
+        [ds.clear() for ds in self.datasets.values() if isinstance(ds, BatchesDataset)]
+
+    def train_dataloader(self):
+        datasets = self.training_datasets
+
+        # data loader with fixed number of iterations
+        if self.iterations is not None:
+            loaders = {}
+            for i, (name, dataset) in enumerate(datasets.items()):
+                sampler = RandomSampler(dataset, replacement=True, num_samples=int(self.iterations))
+                loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
+                                           pin_memory=True, sampler=sampler)
+            return loaders
+
+        # data loader with iterations based on the largest dataset
+        ref_idx = np.argmax([len(ds) for ds in datasets.values()])
+        ref_dataset_name, ref_dataset = list(datasets.items())[ref_idx]
+        loaders = {ref_dataset_name: DataLoader(ref_dataset, batch_size=None, num_workers=self.num_workers,
+                                                pin_memory=True, shuffle=True)}
+        for i, (name, dataset) in enumerate(datasets.items()):
+            if i == ref_idx:
+                continue  # reference dataset already added
+            sampler = RandomSampler(dataset, replacement=True, num_samples=len(ref_dataset))
+            loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
+                                       pin_memory=True, sampler=sampler)
+        return loaders
+
+    def val_dataloader(self):
+        datasets = self.validation_datasets
+        loaders = []
+        for dataset in datasets.values():
+            loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+                                shuffle=False)
+            loaders.append(loader)
+        return loaders
+
+
+class SlicesDataModule(BaseDataModule):
+
+    def __init__(self, b_slices, work_directory, height=160, spatial_norm=160, b_norm=2500,
                  batch_size={"boundary": 1e4, "random": 2e4},
                  iterations=1e5, num_workers=None,
                  error_slices=None, height_mapping={'z': [0]}, boundary={"type": "open"},
@@ -185,115 +262,3 @@ class SlicesDataModule(LightningDataModule):
         boundary_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                      shuffle=False)
         return [boundary_loader, cube_loader]
-
-
-class FITSDataModule(SlicesDataModule):
-
-    def __init__(self, data, *args, **kwargs):
-        # check if single height layer
-        if not isinstance(data, list):
-            data = [data]
-        # load all heights
-        b_list, range_list, error_list, reference_pixel_list, scale_list = [], [], [], [], []
-        height_mapping = []
-        for d in data:
-            # LOAD B and COORDS
-            # use center coordinate of first map
-            b, meta_data = self.load_B(d['B'])
-            error = self.load_error(d['B'])
-            # FLIP SIGN
-            if 'flip_sign' in d:
-                b[..., d['flip_sign']] *= -1
-            # APPLY MASK
-            if "mask" in d:
-                mask = self.load_mask(d["mask"])
-                b[mask] = np.nan
-            # LOAD HEIGHT MAPPING
-            z, z_min, z_max = self.get_height_mapping(d)
-            # flatten data
-            b_list += [b]
-            error_list += [error]
-            height_mapping += [{'z': z, 'z_min': z_min, 'z_max': z_max}]
-
-        # stack data
-        b_slices = np.stack(b_list, axis=2)
-        error_slices = np.stack(error_list, axis=2) if None not in error_list else None
-        height_mapping = {'z': [h['z'] for h in height_mapping],
-                          'z_min': [h['z_min'] for h in height_mapping],
-                          'z_max': [h['z_max'] for h in height_mapping]}
-        super().__init__(b_slices, meta_data=meta_data, height_mapping=height_mapping, error_slices=error_slices, *args,
-                         **kwargs)
-
-    def load_B(self, b_data):
-        if isinstance(b_data, dict):
-            x_map = Map(b_data['x']) if 'x' in b_data else None
-            y_map = Map(b_data['y']) if 'y' in b_data else None
-            z_map = Map(b_data['z']) if 'z' in b_data else None
-        elif isinstance(b_data, str):
-            data = fits.getdata(b_data)
-            meta = fits.getheader(b_data)
-            meta['naxis'] = 2
-            x_map = Map(data[0], meta)
-            y_map = Map(data[1], meta)
-            z_map = Map(data[2], meta)
-        else:
-            raise NotImplementedError(f'Unknown data format for B: {type(b_data)}')
-        # add missing components as NaNs
-        maps = [x_map, y_map, z_map]
-        ref_map = [m for m in maps if m is not None][0]
-        nan_data = np.ones_like(ref_map.data) * np.nan
-
-        x_data = x_map.data if x_map is not None else nan_data
-        y_data = y_map.data if y_map is not None else nan_data
-        z_data = z_map.data if z_map is not None else nan_data
-
-        b = np.stack([x_data, y_data, z_data]).T
-        meta_data = ref_map.meta
-        return b, meta_data
-
-    def load_error(self, b_data, target_scale=None):
-        if isinstance(b_data, dict) and 'x_error' in b_data:
-            x_map = Map(b_data['x_error'])
-            y_map = Map(b_data['y_error'])
-            z_map = Map(b_data['z_error'])
-        elif 'error' in b_data:
-            data = fits.getdata(b_data['error'])
-            meta = fits.getheader(b_data['error'])
-            x_map = Map(data, meta)
-            y_map = Map(data, meta)
-            z_map = Map(data, meta)
-        else:
-            return None
-        b_error = np.stack([x_map.data, y_map.data, z_map.data]).T
-        return b_error
-
-    def get_height_mapping(self, d):
-        if 'height_mapping' in d:
-            z = d['height_mapping']['z']
-            z_min = d['height_mapping']['z_min']
-            z_max = d['height_mapping']['z_max']
-        else:
-            z, z_min, z_max = 0, 0, 0
-        return z, z_min, z_max
-
-    def load_mask(self, mask_data):
-        mask = fits.getdata(mask_data).T
-        return mask == 0
-
-
-class NumpyDataModule(SlicesDataModule):
-
-    def __init__(self, data_path, slices=None, bin=1, use_bz=False, components=False, *args, **kwargs):
-        b_slices = np.load(data_path)
-        if slices:
-            b_slices = b_slices[:, :, slices]
-        if bin > 1:
-            b_slices = block_reduce(b_slices, (bin, bin, 1, 1), np.mean)
-        if use_bz:
-            b_slices[:, :, 1:, 0] = None
-            b_slices[:, :, 1:, 1] = None
-        if components:
-            for i, c in enumerate(components):
-                filter = [i for i in [0, 1, 2] if i not in c]
-                b_slices[:, :, i, filter] = None
-        super().__init__(b_slices, *args, **kwargs)

@@ -4,7 +4,8 @@ import torch
 from torch import nn
 
 from nf2.data.util import vector_cartesian_to_spherical, spherical_to_cartesian
-from nf2.evaluation.unpack import load_coords, SphericalOutput
+from nf2.evaluation.unpack import load_coords
+from nf2.evaluation.output import SphericalOutput
 
 
 # transform NF2 solution to PFSS output

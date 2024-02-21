@@ -1,24 +1,21 @@
 import argparse
-import json
 import os
 import shutil
 
 import torch
-from astropy import units as u
+import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.data.dataset import SphereSlicesDataset, SphereDataset
+from nf2.data.dataset import SphereSlicesDataset, SphereDataset, CubeDataset, SlicesDataset
 from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.base import NumpyDataModule, FITSDataModule
-from nf2.loader.disambiguation import AzimuthDataModule
-from nf2.loader.potential import PotentialTestDataModule
-from nf2.loader.sharp import SHARPDataModule
-from nf2.loader.spherical import SphericalDataModule, MapDataset, PFSSBoundaryDataset, SliceDataset
-from nf2.loader.synoptic import SynopticDataModule
+from nf2.loader.fits import FITSMapModule, SHARPDataModule, FITSDataModule
+from nf2.loader.general import NumpyDataModule
+from nf2.loader.spherical import SphericalDataModule, SphericalSliceDataset
 from nf2.loader.vsm import VSMDataModule
-from nf2.train.callback import SlicesCallback, BoundaryCallback, MetricsCallback
+from nf2.train.callback import SphericalSlicesCallback, BoundaryCallback, MetricsCallback, SlicesCallback
+from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
 
 parser = argparse.ArgumentParser()
@@ -27,7 +24,7 @@ parser.add_argument('--config', type=str, required=True,
 args = parser.parse_args()
 
 with open(args.config) as config:
-    info = json.load(config)
+    info = yaml.safe_load(config)
     for key, value in info.items():
         args.__dict__[key] = value
 
@@ -65,30 +62,11 @@ elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
 elif args.data["type"] == 'spherical':
     data_module = SphericalDataModule(**args.data)
-elif args.data["type"] == 'azimuth':
-    data_module = AzimuthDataModule(**args.data, plot_settings=args.plot)
-elif args.data["type"] == 'synoptic':
-    data_module = SynopticDataModule(**args.data, plot_settings=args.plot)
-elif args.data["type"] == 'potential_test':
-    data_module = PotentialTestDataModule(**args.data, plot_settings=args.plot)
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 
 # initialize callbacks
-callbacks = []
-Mm_per_ds = (1 * u.solRad).to(u.m).value * 1e-6
-G_per_dB = args.data["G_per_dB"]
-for validation_dataset_key in data_module.validation_dataset_mapping.values():
-    ds = data_module.datasets['validation'][validation_dataset_key]
-    if isinstance(ds, SphereSlicesDataset):
-        callback = SlicesCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
-    elif isinstance(ds, SphereDataset):
-        callback = MetricsCallback(validation_dataset_key, G_per_dB, Mm_per_ds)
-    elif isinstance(ds, SliceDataset):
-        callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB)
-    else:
-        raise NotImplementedError(f'Data set {type(ds)} not implemented for validation.')
-    callbacks += [callback]
+callbacks = load_callbacks(data_module)
 
 nf2 = NF2Module(data_module.validation_dataset_mapping, model_kwargs=args.model, **args.training)
 

@@ -6,7 +6,7 @@ import threading
 import numpy as np
 from astropy import units as u
 
-from nf2.evaluation.unpack import SphericalOutput
+from nf2.evaluation.output import SphericalOutput
 from nf2.evaluation.vtk import save_vtk
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')

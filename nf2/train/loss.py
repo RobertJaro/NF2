@@ -34,7 +34,8 @@ class ForceFreeLoss(BaseLoss):
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         jxb = torch.cross(j, b, -1)
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
+        # assure that the normalization does not influence the loss
+        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7).detach()
         force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
         #
         if self.stretch:

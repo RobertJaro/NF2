@@ -1,28 +1,19 @@
 import argparse
 
-import torch
-
-from nf2.evaluation.unpack import load_cube, load_height_cube
+from nf2.evaluation.output import CartesianOutput
 from nf2.evaluation.vtk import save_vtk
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-parser.add_argument('nf2_path', type=str, help='path to the source NF2 file')
-parser.add_argument('vtk_path', type=str, help='path to the target VTK file')
-parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
+parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
+parser.add_argument('--vtk_path', type=str, help='path to the target VTK file', required=False, default=None)
+parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False, default=None)
+parser.add_argument('--height_range', type=float, nargs=2, help='height range in Mm', required=False, default=None)
 
 args = parser.parse_args()
 nf2_path = args.nf2_path
-strides = args.strides
-vtk_path = args.vtk_path
+vtk_path = args.vtk_path if args.vtk_path is not None else nf2_path.replace('.nf2', '.vtk')
 
-device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+n2_out = CartesianOutput(nf2_path)
+output = n2_out.load_cube(Mm_per_pixel=args.Mm_per_pixel, height_range=args.height_range, progress=True)
 
-b = load_cube(nf2_path, device, progress=True, strides=strides)
-
-state = torch.load(nf2_path, map_location=device)
-if state['height_mapping_model'] is not None:
-    tau = load_height_cube(nf2_path, device=device, progress=True, strides=strides)
-else:
-    tau = None
-
-save_vtk(vtk_path, vectors={'B': b}, scalars={'tau': tau}, Mm_per_pix=state['Mm_per_pixel'] * strides)
+save_vtk(vtk_path, vectors={'B': output['B'], 'J': output['J']}, Mm_per_pix=output['Mm_per_pixel'])

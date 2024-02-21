@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -7,13 +9,13 @@ from nf2.data.util import spherical_to_cartesian
 
 class BatchesDataset(Dataset):
 
-    def __init__(self, batches_file_paths, batch_size):
+    def __init__(self, batches_file_paths, batch_size=2 ** 13):
         """Data set for lazy loading a pre-batched numpy data array.
 
         :param batches_path: path to the numpy array.
         """
         self.batches_file_paths = batches_file_paths
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
 
     def __len__(self):
         ref_file = list(self.batches_file_paths.values())[0]
@@ -26,6 +28,8 @@ class BatchesDataset(Dataset):
                 for k, bf in self.batches_file_paths.items()}
         return data
 
+    def clear(self):
+        [os.remove(f) for f in self.batches_file_paths.values()]
 
 class ImageDataset(Dataset):
 
@@ -50,11 +54,17 @@ class ImageDataset(Dataset):
 
 class CubeDataset(Dataset):
 
-    def __init__(self, cube_shape, spatial_norm, strides=1, batch_size=1024):
-        coords = np.stack(np.mgrid[:cube_shape[0]:strides, :cube_shape[1]:strides, :cube_shape[2]:strides], -1)
+    def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13):
+        x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
+        y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
+        z_resolution = int((coord_range[2, 1] - coord_range[2, 0]) / ds_per_pixel)
+        coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
+                                      np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
+                                      np.linspace(coord_range[2, 0], coord_range[2, 1], z_resolution, dtype=np.float32),
+                                      indexing='ij'), -1)
         self.coords_shape = coords.shape[:-1]
-        coords = torch.tensor(coords / spatial_norm, dtype=torch.float32)
-        coords = coords.view((-1, 3))
+        coords = coords.reshape(-1, 3)
+        batch_size = int(batch_size)
         self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
@@ -62,6 +72,7 @@ class CubeDataset(Dataset):
 
     def __getitem__(self, idx):
         coord = self.coords[idx]
+        coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
 
 
@@ -156,21 +167,43 @@ class SphereSlicesDataset(Dataset):
         coord = self.coords[idx]
         return {'coords': coord}
 
+class SlicesDataset(Dataset):
+
+    def __init__(self, coord_range, ds_per_pixel, n_slices=10, batch_size=4096, **kwargs):
+        x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
+        y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
+        coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
+                                        np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
+                                        np.linspace(coord_range[2, 0], coord_range[2, 1], n_slices, dtype=np.float32),
+                                        indexing='ij'), -1)
+        self.cube_shape = coords.shape[:-1]
+        #
+        coords = coords.reshape((-1, 3))
+        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+
+        super().__init__()
+
+    def __len__(self):
+        return len(self.coords)
+
+    def __getitem__(self, idx):
+        coord = self.coords[idx]
+        coord = torch.tensor(coord, dtype=torch.float32)
+        return {'coords': coord}
+
 class RandomCoordinateDataset(Dataset):
 
-    def __init__(self, cube_shape, spatial_norm, batch_size, buffer=None):
+    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None):
         super().__init__()
-        cube_shape = np.array([[0, cube_shape[0] - 1], [0, cube_shape[1] - 1], [0, cube_shape[2] - 1]])
         if buffer:
-            buffer_x = (cube_shape[0, 1] - cube_shape[0, 0]) * buffer
-            buffer_y = (cube_shape[1, 1] - cube_shape[1, 0]) * buffer
-            cube_shape[0, 0] -= buffer_x
-            cube_shape[0, 1] += buffer_x
-            cube_shape[1, 0] -= buffer_y
-            cube_shape[1, 1] += buffer_y
-        self.cube_shape = cube_shape
-        self.spatial_norm = spatial_norm
-        self.batch_size = batch_size
+            buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
+            buffer_y = (coord_range[1, 1] - coord_range[1, 0]) * buffer
+            coord_range[0, 0] -= buffer_x
+            coord_range[0, 1] += buffer_x
+            coord_range[1, 0] -= buffer_y
+            coord_range[1, 1] += buffer_y
+        self.coord_range = coord_range
+        self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
 
     def __len__(self):
@@ -179,10 +212,9 @@ class RandomCoordinateDataset(Dataset):
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
         random_coords[:, 0] = (
-                    random_coords[:, 0] * (self.cube_shape[0, 1] - self.cube_shape[0, 0]) + self.cube_shape[0, 0])
+                    random_coords[:, 0] * (self.coord_range[0, 1] - self.coord_range[0, 0]) + self.coord_range[0, 0])
         random_coords[:, 1] = (
-                    random_coords[:, 1] * (self.cube_shape[1, 1] - self.cube_shape[1, 0]) + self.cube_shape[1, 0])
+                    random_coords[:, 1] * (self.coord_range[1, 1] - self.coord_range[1, 0]) + self.coord_range[1, 0])
         random_coords[:, 2] = (
-                    random_coords[:, 2] * (self.cube_shape[2, 1] - self.cube_shape[2, 0]) + self.cube_shape[2, 0])
-        random_coords /= self.spatial_norm
+                    random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         return {'coords': random_coords}
