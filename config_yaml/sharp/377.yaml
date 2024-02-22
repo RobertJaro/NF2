@@ -1,19 +1,19 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/cartesian/sharp_377_v03"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v03"
+base_path: "/glade/work/rjarolim/nf2/cartesian_series/sharp_377_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v01"
 logging:
   project: nf2-cartesian
   name: vector potential
 data:
   type: sharp
   fits_path:
-    Br: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
-    Bt: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
-    Bp: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
+    Br: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Br.fits"
+    Bt: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Bt.fits"
+    Bp: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Bp.fits"
   error_path:
-    Br_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
-    Bt_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
-    Bp_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
+    Br_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Br_err.fits"
+    Bt_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Bt_err.fits"
+    Bp_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110214_000000_TAI.Bp_err.fits"
   num_workers: 8
 model:
   type: vector_potential

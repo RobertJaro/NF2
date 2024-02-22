@@ -203,10 +203,10 @@ class BoundaryCallback(Callback):
 
         # compute diff error
         if 'b_err' in outputs:
-            b_err = outputs['b_err']
-            b_diff = torch.clip(torch.abs(b - b_true) - b_err, 0)
-            b_diff = torch.nanmean(b_diff.pow(2).sum(-1).pow(0.5))
-            evaluation['b_diff_err'] = b_diff.detach()
+            b_err = outputs['b_err'] * self.gauss_per_dB
+            b_diff_err = torch.clip(torch.abs(b - b_true) - b_err, 0)
+            b_diff_err = torch.nanmean(b_diff_err.pow(2).sum(-1).pow(0.5))
+            evaluation['b_diff_err'] = b_diff_err.detach()
 
         wandb.log({"valid": {self.validation_dataset_key: evaluation}})
 
@@ -279,6 +279,7 @@ class MetricsCallback(Callback):
         angle = (sigma * j_weight).sum() / j_weight.sum()
         angle = torch.clip(angle, -1. + 1e-7, 1. - 1e-7)
         theta_J = torch.arcsin(angle)
+        theta_J = torch.rad2deg(theta_J)
 
         sigma_J = (torch.norm(torch.cross(j, b, dim=-1), dim=-1) / (torch.norm(b, dim=-1) + 1e-7)).sum() / (torch.norm(j, dim=-1).sum() + 1e-7)
 

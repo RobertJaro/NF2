@@ -30,7 +30,7 @@ class BaseOutput:
 
     @property
     def m_per_ds(self):
-        return self.state['data']['Mm_per_ds'] * u.m
+        return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
     def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_currents=False):
         def _load(coords):
@@ -64,7 +64,7 @@ class BaseOutput:
                 j_cube = torch.cat(j_cube)
                 j_cube = j_cube.reshape(*coords_shape).numpy()
                 j = j_cube * self.G_per_dB / self.m_per_ds * self.c / (4 * np.pi)
-                model_out['J'] = j
+                model_out['J'] = j * u.G / u.s
             return model_out
 
         if compute_currents or self._requires_grad:
@@ -83,6 +83,8 @@ class CartesianOutput(BaseOutput):
         self.coord_range = self.state['data']['coord_range']
         self.ds_per_pixel = self.state['data']['ds_per_pixel']
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
+        self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
+        self.wcs = self.state['data']['wcs']
 
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
 
@@ -118,7 +120,7 @@ class SphericalOutput(BaseOutput):
     def load_spherical(self, radius_range: u.Quantity = None,
              latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
-             sampling=[100, 180, 360],):
+             sampling=[100, 180, 360], **kwargs):
 
         radius_range = radius_range if radius_range is not None else self.radius_range
         latitude_range += np.pi / 2 * u.rad  # transform coordinate frame
@@ -129,7 +131,7 @@ class SphericalOutput(BaseOutput):
                         indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
-        model_out = self.load_coords(cartesian_coords, compute_currents=True)
+        model_out = self.load_coords(cartesian_coords, compute_currents=True, **kwargs)
         return {'B': model_out['B'], 'coords': cartesian_coords}
 
     def load(self,
@@ -155,21 +157,29 @@ class SphericalOutput(BaseOutput):
                         np.linspace(z_min, z_max, int((z_max - z_min) * res)), indexing='ij'), -1)
         # flipped z axis
         spherical_coords = cartesian_to_spherical(coords)
-        condition = (spherical_coords[..., 0] * u.solRad >= radius_range[0]) & (spherical_coords[..., 0] * u.solRad < radius_range[1]) \
-                    & (spherical_coords[..., 1] * u.rad > latitude_range[0]) & (spherical_coords[..., 1] * u.rad < latitude_range[1]) \
-            # & (spherical_coords[..., 2] > longitude_range[0]) & (spherical_coords[..., 2] < longitude_range[1])
+        lat_coord = (spherical_coords[..., 1] % np.pi)
+        lon_coord = (spherical_coords[..., 2] % (2 * np.pi))
+        rad_coord = spherical_coords[..., 0]
+
+
+        min_lat, max_lat = latitude_range[0].to_value(u.rad) % np.pi, latitude_range[1].to_value(u.rad) % np.pi
+        min_lon, max_lon = longitude_range[0].to_value(u.rad) % (2 * np.pi), longitude_range[1].to_value(u.rad) % (2 * np.pi)
+
+        condition = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad)) \
+                    & (lat_coord >= min_lat) & (lat_coord < max_lat) \
+                    & (lon_coord >= min_lon) & (lon_coord < max_lon)
         sub_coords = coords[condition]
 
         cube_shape = coords.shape[:-1]
         model_out = self.load_coords(sub_coords, compute_currents=True, **kwargs)
 
         sub_b = model_out['B']
-        b = np.zeros(cube_shape + (3,))
+        b = np.zeros(cube_shape + (3,)) * sub_b.unit
         b[condition] = sub_b
         b_spherical = vector_cartesian_to_spherical(b, spherical_coords)
 
         sub_j = model_out['J']
-        j = np.zeros(cube_shape + (3,))
+        j = np.zeros(cube_shape + (3,)) * sub_j.unit
         j[condition] = sub_j
 
         return {'B': b, 'B_rtp': b_spherical, 'J': j, 'coords': coords, 'spherical_coords': spherical_coords}

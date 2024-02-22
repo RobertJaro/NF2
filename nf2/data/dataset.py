@@ -9,7 +9,7 @@ from nf2.data.util import spherical_to_cartesian
 
 class BatchesDataset(Dataset):
 
-    def __init__(self, batches_file_paths, batch_size=2 ** 13):
+    def __init__(self, batches_file_paths, batch_size=2 ** 13, **kwargs):
         """Data set for lazy loading a pre-batched numpy data array.
 
         :param batches_path: path to the numpy array.

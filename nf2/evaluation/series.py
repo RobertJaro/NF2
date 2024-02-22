@@ -6,8 +6,6 @@ import pickle
 import imageio
 import numpy as np
 import pandas as pd
-import torch.cuda
-from astropy.io import fits
 from dateutil.parser import parse
 from matplotlib import pyplot as plt, cm
 from matplotlib.colors import Normalize
@@ -19,21 +17,26 @@ from sunpy.net import attrs as a
 from tqdm import tqdm
 
 from nf2.evaluation.energy import get_free_mag_energy
-from nf2.evaluation.metric import energy, curl, vector_norm, divergence, weighted_theta
-from nf2.evaluation.unpack import load_cube
+from nf2.evaluation.metric import energy, vector_norm, divergence, theta_J
+from nf2.evaluation.output import CartesianOutput
 
 
-def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
-    b = load_cube(nf2_file, progress=False, z=z, strides=strides, batch_size=batch_size)
-    j = curl(b)
+def evaluate_nf2(nf2_file, max_height, Mm_per_pixel):
+    out = CartesianOutput(nf2_file)
+    res = out.load_cube(np.array([0, max_height]), Mm_per_pixel)
+
+    b = res['B'].value
+    j = res['J'].value
+
     jxb = np.cross(j, b, axis=-1)
     me = energy(b)
     free_me = get_free_mag_energy(b, progress=False)
-    theta = weighted_theta(b, j)
+    theta = theta_J(b, j)
 
     # check free magnetic energy is positive
     # assert free_me.sum() > 0, f'free magnetic energy is negative: {free_me.sum()}'
-    date_str = nf2_file.split('/')[-2].split('_')
+    date_str = os.path.basename(nf2_file).split('_')
+    cm_per_pixel = Mm_per_pixel * 1e8
     result = {
         'date': parse(date_str[0] + 'T' + date_str[1]),
         # torch.load(nf2_file)['meta_data']['DATE-OBS'],
@@ -53,15 +56,16 @@ def evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size):
         'energy_map': me.sum(2) * cm_per_pixel,
         'free_energy_map': free_me.sum(2) * cm_per_pixel,
         'jxb_map': vector_norm(jxb).sum(2),
-        'meta': torch.load(nf2_file)['meta_info']
+        'Mm_per_pixel': res['Mm_per_pixel'],
+        'wcs': out.wcs
     }
     return result
 
 
-def evaluate_nf2_series(nf2_paths, z, cm_per_pixel, strides, batch_size):
+def evaluate_nf2_series(nf2_paths, max_height, Mm_per_pixel):
     results = []
     for nf2_file in tqdm(nf2_paths):
-        results.append(evaluate_nf2(nf2_file, z, cm_per_pixel, strides, batch_size))
+        results.append(evaluate_nf2(nf2_file, max_height, Mm_per_pixel))
     # concatenate dicts to dict of lists
     results = {k: [r[k] for r in results] for k in results[0].keys()}
     return results
@@ -71,28 +75,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
     parser.add_argument('nf2_path', type=str, help='path to the directory of the NF2 files')
     parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
-    parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
+    parser.add_argument('--max_height', type=float, help='max height of the volume in Mm', required=False, default=20)
+    parser.add_argument('--Mm_per_pixel', type=float, help='Mm per pixel', required=False, default=0.72)
     parser.add_argument('--add_flares', action='store_true', help='query for flares and plot', required=False,
                         default=None)
     args = parser.parse_args()
 
-    nf2_files = sorted(glob.glob(os.path.join(args.nf2_path, '**', '*.nf2')))
+    nf2_files = sorted(glob.glob(args.nf2_path))
     result_path = args.result_path
     os.makedirs(result_path, exist_ok=True)
 
-    batch_size = int(1e5 * torch.cuda.device_count())
-
-    # load simulation scaling
-    # assume 0.72 if not given (bin2)
-    Mm_per_pix = torch.load(nf2_files[0])['Mm_per_pix'] if 'Mm_per_pix' in torch.load(nf2_files[0]) else 0.72
-    z_pixels = int(np.ceil(20 / Mm_per_pix))  # 20 Mm --> pixels
-
-    # adjust scale to strides
-    Mm_per_pix *= args.strides
-    cm_per_pix = (Mm_per_pix * 1e8)
-
     # evaluate series
-    series_results = evaluate_nf2_series(nf2_files, z_pixels, cm_per_pix, args.strides, batch_size)
+    series_results = evaluate_nf2_series(nf2_files, args.max_height, args.Mm_per_pixel)
 
     # save with pickle
     with open(os.path.join(result_path, 'results.pkl'), 'wb') as f:
@@ -104,8 +98,10 @@ if __name__ == '__main__':
 
     # save results as csv
     df = pd.DataFrame({'date': series_results['date'],
-                       'energy [ergs]' : series_results['total_energy'], 'free_energy [ergs]' : series_results['total_free_energy'],
-                       'div': series_results['total_div'], 'jxb': series_results['total_jxb'], 'theta': series_results['theta']})
+                       'energy [ergs]': series_results['total_energy'],
+                       'free_energy [ergs]': series_results['total_free_energy'],
+                       'div': series_results['total_div'], 'jxb': series_results['total_jxb'],
+                       'theta': series_results['theta']})
     df.to_csv(os.path.join(result_path, 'series.csv'))
 
     # plot integrated quantities
@@ -133,9 +129,9 @@ if __name__ == '__main__':
 
     ax = axs[2]
     dt = np.diff(x_dates)[0] / 2
-    dz = Mm_per_pix / 2
+    dz = args.Mm_per_pixel
     free_energy_distribution = np.array(series_results['height_free_energy']).T
-    max_height = free_energy_distribution.shape[0] * Mm_per_pix
+    max_height = free_energy_distribution.shape[0] * args.Mm_per_pixel
     mpb = ax.imshow(free_energy_distribution,  # average
                     extent=(x_dates[0] - dt, x_dates[-1] + dt, -dz, max_height + dz), aspect='auto', origin='lower',
                     cmap=cm.get_cmap('jet'), vmin=0)
@@ -205,7 +201,7 @@ if __name__ == '__main__':
         ax = axs[0]
         im = ax.imshow(free_energy_map.T, vmin=0, vmax=free_energy_maps.max(),
                        origin='lower', cmap='jet',
-                       extent=np.array([0, free_energy_map.shape[0], 0, free_energy_map.shape[1]]) * Mm_per_pix)
+                       extent=np.array([0, free_energy_map.shape[0], 0, free_energy_map.shape[1]]) * args.Mm_per_pixel)
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
         ax.set_title(date)
@@ -243,12 +239,10 @@ if __name__ == '__main__':
     # create FITS files
     fits_path = os.path.join(result_path, 'fits')
     os.makedirs(fits_path, exist_ok=True)
-    for date, j_map, free_energy_map, meta in zip(series_results['date'], series_results['current_density_map'], series_results['free_energy_map'], series_results['meta']):
-        ref_map = Map(np.zeros_like(j_map.T), meta)
+    for date, j_map, free_energy_map, wcs in zip(series_results['date'], series_results['current_density_map'],
+                                                  series_results['free_energy_map'], series_results['wcs']):
+        ref_map = Map(np.zeros_like(j_map.T), wcs)
         wcs = ref_map.wcs
         Map(j_map.T, wcs).save(os.path.join(fits_path, f"j_map_{date.isoformat('T', timespec='minutes')}.fits"))
-        Map(free_energy_map.T, wcs).save(os.path.join(fits_path, f"free_energy_map_{date.isoformat('T', timespec='minutes')}.fits"))
-
-
-
-
+        Map(free_energy_map.T, wcs).save(
+            os.path.join(fits_path, f"free_energy_map_{date.isoformat('T', timespec='minutes')}.fits"))

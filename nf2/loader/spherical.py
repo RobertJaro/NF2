@@ -1,5 +1,4 @@
 import os
-import uuid
 from collections import OrderedDict
 from copy import copy
 
@@ -13,73 +12,44 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
-from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, BatchesDataset
+from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset
 from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
-from nf2.loader.base import BaseDataModule
+from nf2.loader.base import BaseDataModule, TensorsDataset
 
 
-class SphericalSliceDataset(BatchesDataset):
+class SphericalSliceDataset(TensorsDataset):
 
-    def __init__(self, b, coords, spherical_coords, G_per_dB, work_directory, batch_size,
-                 error=None, transform=None,
-                 plot_overview=True, filter_nans=True, shuffle=True, strides=1,
-                 ds_name=None, **kwargs):
+    def __init__(self, b, coords, spherical_coords, G_per_dB,
+                 b_err=None, transform=None,
+                 plot_overview=True, strides=1, **kwargs):
         if plot_overview:
             self._plot(b, coords, spherical_coords)
         if strides > 1:
             b = b[::strides, ::strides]
             coords = coords[::strides, ::strides]
-            error = error[::strides, ::strides] if error is not None else None
+            b_err = b_err[::strides, ::strides] if b_err is not None else None
             transform = transform[::strides, ::strides] if transform is not None else None
         self.cube_shape = b.shape[:-1]
         # flatten data
         b = np.concatenate([f.reshape((-1, 3)) for f in b]).astype(np.float32)
         coords = np.concatenate([c.reshape((-1, 3)) for c in coords]).astype(np.float32)
-        if error is not None:
-            error = np.concatenate([e.reshape((-1, 3)) for e in error]).astype(np.float32)
+        if b_err is not None:
+            b_err = np.concatenate([e.reshape((-1, 3)) for e in b_err]).astype(np.float32)
         if transform is not None:
             transform = np.concatenate([t.reshape((-1, 3, 3)) for t in transform]).astype(np.float32)
 
-        # filter nan entries
-        nan_mask = np.all(np.isnan(b), -1) | np.any(np.isnan(coords), -1)
-        if nan_mask.sum() > 0 and filter_nans:
-            print(f'Filtering {nan_mask.sum()} nan entries')
-            b = b[~nan_mask]
-            coords = coords[~nan_mask]
-            transform = transform[~nan_mask] if transform is not None else None
-            error = error[~nan_mask] if error is not None else None
-
         # normalize data
         b /= G_per_dB
-        error = error / G_per_dB if error is not None else None
+        b_err = b_err / G_per_dB if b_err is not None else None
 
-        # shuffle data
-        if shuffle:
-            r = np.random.permutation(coords.shape[0])
-            coords = coords[r]
-            b = b[r]
-            transform = transform[r] if transform is not None else None
-            error = error[r] if error is not None else None
-
-        ds_name = uuid.uuid4() if ds_name is None else ds_name
-        coords_npy_path = os.path.join(work_directory, f'{ds_name}_coords.npy')
-        np.save(coords_npy_path, coords.astype(np.float32))
-        b_npy_path = os.path.join(work_directory, f'{ds_name}_b_true.npy')
-        np.save(b_npy_path, b.astype(np.float32))
-        batches_path = {'coords': coords_npy_path,
-                        'b_true': b_npy_path}
-
+        tensors = {'coords': coords,
+                   'b_true': b, }
         if transform is not None:
-            transform_npy_path = os.path.join(work_directory, f'{ds_name}_transform.npy')
-            np.save(transform_npy_path, transform.astype(np.float32))
-            batches_path['transform'] = transform_npy_path
-        if error is not None:
-            err_npy_path = os.path.join(work_directory, f'{ds_name}_error.npy')
-            np.save(err_npy_path, error.astype(np.float32))
-            batches_path['error'] = err_npy_path
+            tensors['transform'] = transform
+        if b_err is not None:
+            tensors['b_err'] = b_err
 
-        self.batches_path = batches_path
-        super().__init__(batches_path, batch_size)
+        super().__init__(tensors, **kwargs)
 
     def _plot(self, b, coords, spherical_coords):
         b_min_max = np.nanmax(np.abs(b))
@@ -118,9 +88,6 @@ class SphericalSliceDataset(BatchesDataset):
         fig.colorbar(im, ax=axs[2])
         wandb.log({"Spherical Coordinates": fig})
         plt.close('all')
-
-    def clear(self):
-        [os.remove(f) for f in self.batches_path.values()]
 
 
 class SphericalMapDataset(SphericalSliceDataset):
@@ -166,7 +133,7 @@ class SphericalMapDataset(SphericalSliceDataset):
                        transform)
         if np.any(np.isnan(cartesian_coords)):
             # crop nan values
-            nan_coords = np.argwhere(~np.isnan(cartesian_coords[:, :]).any(-1))
+            nan_coords = np.argwhere(~np.isnan(cartesian_coords).any(-1))
             min_x = nan_coords[..., 0].min()
             max_x = nan_coords[..., 0].max()
             min_y = nan_coords[..., 1].min()
@@ -177,10 +144,11 @@ class SphericalMapDataset(SphericalSliceDataset):
             b_spherical = b_spherical[min_x:max_x, min_y:max_y]
             if b_error_spherical is not None:
                 b_error_spherical = b_error_spherical[min_x:max_x, min_y:max_y]
-            transform = transform[min_x:max_x, min_y:max_y] if transform is not None else None
+            if transform is not None:
+                transform = transform[min_x:max_x, min_y:max_y]
 
         super().__init__(b=b_spherical, coords=cartesian_coords, spherical_coords=spherical_coords,
-                         error=b_error_spherical, transform=transform,
+                         b_err=b_error_spherical, transform=transform,
                          **kwargs)
 
     def _mask(self, b_cartesian, b_error_spherical, b_spherical, cartesian_coords, mask_config, r_map,
@@ -232,7 +200,9 @@ class SphericalMapDataset(SphericalSliceDataset):
 
 class PFSSBoundaryDataset(SphericalSliceDataset):
 
-    def __init__(self, Br, height, source_surface_height=2.5, resample=[360, 180], sampling_points=100, **kwargs):
+    def __init__(self, Br, radius_range, source_surface_height=2.5, resample=[360, 180], sampling_points=100, mask=None,
+                 **kwargs):
+        height = radius_range[1]
         assert source_surface_height >= height, 'Source surface height must be greater than height (set source_surface_height to >height)'
 
         # PFSS extrapolation
@@ -258,12 +228,19 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
             np.pi / 2 - spherical_coords.lat.to(u.rad).value,
             spherical_coords.lon.to(u.rad).value]).T
 
+        if mask is not None:
+            condition = (spherical_coords[..., 1] < mask['latitude_range'][0]) | \
+                        (spherical_coords[..., 1] > mask['latitude_range'][1]) | \
+                        (spherical_coords[..., 2] < mask['longitude_range'][0]) | \
+                        (spherical_coords[..., 2] > mask['longitude_range'][1])
+            spherical_b[condition] = np.nan
+            spherical_coords[condition] = np.nan
+
         # convert to spherical coordinates
-        b = vector_spherical_to_cartesian(spherical_b, spherical_coords)
         coords = spherical_to_cartesian(spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
-        super().__init__(b=b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
+        super().__init__(b=spherical_b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
 
 
 class SphericalDataModule(BaseDataModule):
@@ -273,10 +250,10 @@ class SphericalDataModule(BaseDataModule):
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
-                      'pfss_boundary': PFSSBoundaryDataset,
-                      'random_spherical': RandomSphericalCoordinateDataset,
-                      'sphere': SphereDataset,
-                      'spherical_slices': SphereSlicesDataset}
+                           'pfss_boundary': PFSSBoundaryDataset,
+                           'random_spherical': RandomSphericalCoordinateDataset,
+                           'sphere': SphereDataset,
+                           'spherical_slices': SphereSlicesDataset}
 
         # data parameters
         self.max_radius = max_radius
@@ -286,12 +263,12 @@ class SphericalDataModule(BaseDataModule):
 
         # init boundary datasets
         general_config = {'work_directory': work_directory, 'batch_size': batch_size, 'G_per_dB': G_per_dB,
-                          'height': max_radius, 'radius_range': [1, max_radius]}
+                          'radius_range': [1, max_radius]}
 
         config = {'type': 'spherical',
-                  'radius_range': [1, max_radius] * u.solRad,
-                  'G_per_dB': G_per_dB * u.G,
-                  'Mm_per_ds': (1 * u.solRad).to(u.Mm)}
+                  'radius_range': [1, max_radius],
+                  'G_per_dB': G_per_dB,
+                  'Mm_per_ds': (1 * u.solRad).to_value(u.Mm)}
 
         training_datasets = self.load_config(train_configs, general_config, prefix='train')
         validation_datasets = self.load_config(validation_configs, general_config, prefix='validation')
@@ -302,10 +279,12 @@ class SphericalDataModule(BaseDataModule):
         datasets = OrderedDict()
         for i, config in enumerate(configs):
             c_type = config.pop('type')
-            c_name = config.pop('name') if 'name' in config else f'{prefix}_{c_type}_{i}'
+            c_name = config.pop('ds_id') if 'ds_id' in config else f'{prefix}_{c_type}_{i}'
             config['ds_name'] = c_name
             # update config with general config
-            _ = {config.setdefault(k, v) for k, v in general_config.items()}
+            for k, v in general_config.items():
+                if k not in config:
+                    config[k] = v
             os.makedirs(config['work_directory'], exist_ok=True)
             dataset = self.ds_mapping[c_type](**config)
             datasets[c_name] = dataset

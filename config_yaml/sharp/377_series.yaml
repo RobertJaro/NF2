@@ -1,7 +1,7 @@
 ---
 base_path: "/glade/work/rjarolim/nf2/cartesian_series/sharp_377_v01"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_series_v01"
-meta_path: "/glade/work/rjarolim/nf2/cartesian/sharp_377_v03/last.ckpt"
+meta_path: "/glade/work/rjarolim/nf2/cartesian_series/sharp_377_v01/last.ckpt"
 logging:
   project: nf2-cartesian
   name: series

@@ -57,15 +57,17 @@ class HeightMappingModel(nn.Module):
 
 class BModel(nn.Module):
 
-    def __init__(self, in_coords=3, out_values=3, dim=512, positional_encoding=False, activation='swish'):
+    def __init__(self, in_coords=3, out_values=3, dim=512, encoding=None, activation='swish'):
         super().__init__()
 
-        if positional_encoding:
+        if encoding is None or encoding == 'none':
+            self.d_in = nn.Linear(in_coords, dim)
+        elif encoding == 'positional':
             posenc = PositionalEncoding(8, 20)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
-            self.d_in = nn.Linear(in_coords, dim)
+            raise NotImplementedError(f'Unknown encoding {encoding}')
         lin = [nn.Linear(dim, dim) for _ in range(8)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, out_values)
@@ -85,14 +87,16 @@ class BModel(nn.Module):
 
 class VectorPotentialModel(nn.Module):
 
-    def __init__(self, in_coords, dim, positional_encoding=False, activation='swish'):
+    def __init__(self, in_coords, dim, encoding=None, activation='swish'):
         super().__init__()
-        if positional_encoding:
+        if encoding is None or encoding == 'none':
+            self.d_in = nn.Linear(in_coords, dim)
+        elif encoding == 'positional':
             posenc = PositionalEncoding(8, 20)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
-            self.d_in = nn.Linear(in_coords, dim)
+            raise NotImplementedError(f'Unknown encoding {encoding}')
         lin = [nn.Linear(dim, dim) for _ in range(8)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, 3)
@@ -226,7 +230,7 @@ class PositionalEncoding(nn.Module):
             num_freqs (int): number of frequencies between [0, max_freq]
         """
         super().__init__()
-        freqs = 2 ** torch.linspace(-max_freq, max_freq, num_freqs)
+        freqs = 2 ** torch.linspace(0, max_freq, num_freqs)
         freqs = freqs[None, :, None]  # (1, num_freqs, 1)
         self.register_buffer("freqs", freqs)  # (num_freqs)
 
@@ -242,6 +246,7 @@ class PositionalEncoding(nn.Module):
         #
         normalization = torch.ones_like(x)[:, None, :] * self.freqs # (batch, num_freqs, in_features)
         normalization = normalization.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
+        #
         out = torch.cat([torch.sin(x_proj) / normalization,
                          torch.cos(x_proj) / normalization],
                         dim=-1)  # (batch, 2*num_freqs*in_features)

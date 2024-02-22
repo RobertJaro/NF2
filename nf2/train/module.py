@@ -216,7 +216,7 @@ class NF2Module(LightningModule):
 
         for i, outputs in enumerate(outputs_list):
             out_keys = outputs[0].keys()
-            outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
+            outputs = {k: torch.cat([o[k] for o in outputs]).cpu() for k in out_keys}
             self.validation_outputs[self.validation_mapping[i]] = outputs
 
     def on_load_checkpoint(self, checkpoint):

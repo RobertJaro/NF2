@@ -47,7 +47,7 @@ if __name__ == '__main__':
     parser.add_argument('nf2_path', type=str, help='path to the directory of the NF2 files')
     parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
     parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
-    parser.add_argument('--email', type=str, required=True)
+    parser.add_argument('--email', type=str, help='email for the DRMS client', required=True)
     parser.add_argument('--flare_classes', nargs='+', type=str, required=False, default=['X', 'M'])
     args = parser.parse_args()
 

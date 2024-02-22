@@ -66,7 +66,7 @@ class FITSDataModule(BaseDataModule):
 
         # validation datasets
         cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
-        validation_boundary_dataset = self.init_boundary_dataset(fits_path=fits_path,
+        validation_boundary_dataset = self.init_boundary_dataset(fits_path=fits_path, error_path=error_path,
                                                                  Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
                                                                  shuffle=False, filter_nans=False,
                                                                  work_directory=work_directory,
@@ -80,7 +80,7 @@ class FITSDataModule(BaseDataModule):
 
         config = {'type': 'cartesian',
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'max_height': max_height,
-                  'coord_range': coord_range, 'ds_per_pixel': ds_per_pixel}
+                  'coord_range': coord_range, 'ds_per_pixel': ds_per_pixel, 'wcs': boundary_dataset.wcs}
 
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
@@ -118,6 +118,7 @@ class FITSMapModule(TensorsDataset):
                                      [coords[..., 1].min(), coords[..., 1].max()]])
 
         self.cube_shape = coords.shape[:-1]
+        self.wcs = r_map.wcs
 
         tensors = {'b_true': b, 'coords': coords}
 
