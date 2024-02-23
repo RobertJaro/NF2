@@ -178,10 +178,11 @@ class SlicesCallback(Callback):
 
 class BoundaryCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
 
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
@@ -214,6 +215,11 @@ class BoundaryCallback(Callback):
         b_true = b_true.cpu().numpy().reshape([*self.cube_shape, 3])
 
         self.plot_b(b, b_true)
+
+        if 'original_coords' in outputs:
+            original_coords = outputs['original_coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+            transformed_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+            self.plot_coords(original_coords, transformed_coords)
 
     def plot_b(self, b, b_true):
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
@@ -254,6 +260,33 @@ class BoundaryCallback(Callback):
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
+
+    def plot_coords(self, original_coords, transformed_coords):
+        fig, axs = plt.subplots(1, 2, figsize=(8, 8))
+
+        extent = [original_coords[..., 0].min() * self.Mm_per_ds, original_coords[..., 0].max() * self.Mm_per_ds,
+                  original_coords[..., 1].min() * self.Mm_per_ds, original_coords[..., 1].max() * self.Mm_per_ds]
+
+        im = axs[0].imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Z [Mm]')
+        axs[0].set_title('Original')
+        axs[0].set_xlabel('X [Mm]')
+        axs[0].set_ylabel('Y [Mm]')
+
+        im = axs[1].imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent, norm=LogNorm())
+        divider = make_axes_locatable(axs[1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Z [Mm]')
+        axs[1].set_title('Transformed')
+        axs[1].set_xlabel('X [Mm]')
+        axs[1].set_ylabel('Y [Mm]')
+
+        fig.tight_layout()
+        wandb.log({f"{self.validation_dataset_key} - coords": fig})
+        plt.close('all')
+
 
 
 class MetricsCallback(Callback):

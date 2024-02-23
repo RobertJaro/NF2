@@ -3,16 +3,13 @@ import os
 from copy import copy
 
 import numpy as np
-import wandb
 from astropy import units as u
-from matplotlib import pyplot as plt
-from matplotlib.colors import LogNorm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.map import Map
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.data.loader import load_potential_field_data
 from nf2.loader.base import TensorsDataset, BaseDataModule
+from nf2.loader.util import _plot_B, _plot_B_error
 
 
 class FITSDataModule(BaseDataModule):
@@ -56,7 +53,7 @@ class FITSDataModule(BaseDataModule):
         # top and side boundaries
         boundary_config = boundary_config if boundary_config is not None else {'type': 'potential', 'strides': 4}
         if boundary_config['type'] == 'potential':
-            bz = Map(fits_path['Bp']).data.transpose()
+            bz = Map(fits_path['Br']).data.transpose()
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
             potential_dataset = PotentialBoundaryDataset(bz=bz, height_pixel=max_height / (ds_per_pixel * Mm_per_ds),
                                                          ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
@@ -85,16 +82,16 @@ class FITSDataModule(BaseDataModule):
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
     def init_boundary_dataset(self, **kwargs):
-        return FITSMapModule(**kwargs)
+        return FITSDataset(**kwargs)
 
 
 class SHARPDataModule(FITSDataModule):
 
     def init_boundary_dataset(self, **kwargs):
-        return SHARPMapModule(**kwargs)
+        return SHARPDataset(**kwargs)
 
 
-class FITSMapModule(TensorsDataset):
+class FITSDataset(TensorsDataset):
 
     def __init__(self, fits_path, error_path=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
@@ -108,7 +105,6 @@ class FITSMapModule(TensorsDataset):
         p_map = self._process(p_map, slice, bin)
         t_map = self._process(t_map, slice, bin)
         r_map = self._process(r_map, slice, bin)
-
 
         b = np.stack([p_map.data, -t_map.data, r_map.data]).transpose() / G_per_dB
         coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
@@ -139,10 +135,10 @@ class FITSMapModule(TensorsDataset):
             tensors['b_err'] = b_err
 
             if plot:
-                self._plot_B_error(b * G_per_dB, b_err * G_per_dB, coords)
+                _plot_B_error(b * G_per_dB, b_err * G_per_dB, coords)
         else:
             if plot:
-                self._plot_B(b * G_per_dB, coords)
+                _plot_B(b * G_per_dB, coords)
 
         if height_mapping is not None:
             z = height_mapping['z']
@@ -158,95 +154,6 @@ class FITSMapModule(TensorsDataset):
         tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
 
         super().__init__(tensors, **kwargs)
-
-    def _plot_B(self, b, coords):
-        fig, axs = plt.subplots(3, 2, figsize=(10, 15))
-        im = axs[0, 0].imshow(b[..., 0].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[0, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[0, 0].set_title('Bp')
-        im = axs[0, 1].imshow(coords[..., 0].T, origin='lower')
-        divider = make_axes_locatable(axs[0, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[0, 1].set_title('Coordinate x')
-        #
-        im = axs[1, 0].imshow(b[..., 1].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[1, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[1, 0].set_title('Bt')
-        im = axs[1, 1].imshow(coords[..., 1].T, origin='lower')
-        divider = make_axes_locatable(axs[1, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[1, 1].set_title('Coordinate y')
-        #
-        im = axs[2, 0].imshow(b[..., 2].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[2, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[2, 0].set_title('Br')
-        im = axs[2, 1].imshow(coords[..., 2].T, origin='lower')
-        divider = make_axes_locatable(axs[2, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[2, 1].set_title('Coordinate z')
-        wandb.log({'FITS data': wandb.Image(plt)})
-        plt.close(fig)
-
-    def _plot_B_error(self, b, b_err, coords):
-        fig, axs = plt.subplots(3, 3, figsize=(15, 15))
-        im = axs[0, 0].imshow(b[..., 0].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[0, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[0, 0].set_title('Bp')
-        im = axs[0, 1].imshow(b_err[..., 0].T, origin='lower', cmap='Reds', norm=LogNorm(vmin=1, vmax=1000))
-        divider = make_axes_locatable(axs[0, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[0, 1].set_title('Bp error')
-        im = axs[0, 2].imshow(coords[..., 0].T, origin='lower')
-        divider = make_axes_locatable(axs[0, 2])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[0, 2].set_title('Coordinate x')
-        #
-        im = axs[1, 0].imshow(b[..., 1].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[1, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[1, 0].set_title('Bt')
-        im = axs[1, 1].imshow(b_err[..., 1].T, origin='lower', cmap='Reds', norm=LogNorm(vmin=1, vmax=1000))
-        divider = make_axes_locatable(axs[1, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[1, 1].set_title('Bt error')
-        im = axs[1, 2].imshow(coords[..., 1].T, origin='lower')
-        divider = make_axes_locatable(axs[1, 2])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[1, 2].set_title('Coordinate y')
-        #
-        im = axs[2, 0].imshow(b[..., 2].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
-        divider = make_axes_locatable(axs[2, 0])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[2, 0].set_title('Br')
-        im = axs[2, 1].imshow(b_err[..., 2].T, origin='lower', cmap='Reds', norm=LogNorm(vmin=1, vmax=1000))
-        divider = make_axes_locatable(axs[2, 1])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[2, 1].set_title('Br error')
-        im = axs[2, 2].imshow(coords[..., 2].T, origin='lower')
-        divider = make_axes_locatable(axs[2, 2])
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        plt.colorbar(im, cax=cax, orientation='vertical')
-        axs[2, 2].set_title('Coordinate z')
-        wandb.log({'FITS data': wandb.Image(plt)})
-        plt.close(fig)
 
     def _process(self, map, slice, bin):
         if slice:
@@ -281,7 +188,7 @@ class SHARPSeriesDataModule(SHARPDataModule):
         return super().train_dataloader()
 
 
-class SHARPMapModule(FITSMapModule):
+class SHARPDataset(FITSDataset):
 
     def __init__(self, **kwargs):
         super().__init__(Mm_per_pixel=.36, **kwargs)

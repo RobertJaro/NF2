@@ -4,14 +4,16 @@ import torch
 from pytorch_lightning import LightningModule
 from torch.optim.lr_scheduler import ExponentialLR
 
+from nf2.loader.base import MapDataset
 from nf2.train.loss import *
-from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightMappingModel, FluxModel
+from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightTransformModel, FluxModel
 
 
 class NF2Module(LightningModule):
 
     def __init__(self, validation_mapping, model_kwargs, loss_config = None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
+                 coordinate_transform={"type": None},
                  meta_path=None, **kwargs):
         """
         The main module for training the neural field model.
@@ -38,6 +40,16 @@ class NF2Module(LightningModule):
         else:
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
+        # init coordinate mapping model
+        transform_type = coordinate_transform.pop('type')
+        if transform_type is None or transform_type == 'none':
+            transform_module = None
+        elif transform_type == 'height':
+            transform_module = HeightTransformModel(3, 3, **coordinate_transform)
+        else:
+            raise ValueError(f"Invalid coordinate mapping model: {transform_type}")
+
+
         # load meta state
         if meta_path:
             state_dict = torch.load(meta_path)['model'].state_dict() \
@@ -55,7 +67,7 @@ class NF2Module(LightningModule):
         # mapping
         loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_azimuth': AzimuthBoundaryLoss,
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
                                'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
@@ -87,6 +99,7 @@ class NF2Module(LightningModule):
             loss_modules.update(loss_module)
 
         self.model = model
+        self.transform_module = transform_module
         self.validation_mapping = validation_mapping
         self.lr_params = lr_params
         self.scheduled_lambdas = nn.ParameterDict(scheduled_lambdas)
@@ -97,6 +110,8 @@ class NF2Module(LightningModule):
 
     def configure_optimizers(self):
         parameters = list(self.model.parameters())
+        if self.transform_module is not None:
+            parameters += list(self.transform_module.parameters())
         if isinstance(self.lr_params, dict):
             lr_start = self.lr_params['start']
             lr_end = self.lr_params['end']
@@ -115,9 +130,17 @@ class NF2Module(LightningModule):
 
     def training_step(self, batch, batch_nb):
         loader_keys = list(batch.keys())
+
+        # set requires grad for coords
+        for k in loader_keys:
+            batch[k]['coords'].requires_grad = True
+
+        # transform batch
+        if self.transform_module is not None:
+            batch = self.transform_module(batch)
+
         # concatenate all points
         coords = torch.cat([batch[k]['coords'] for k in loader_keys], 0)
-        coords.requires_grad = True
 
         # forward step
         model_out = self.model(coords)
@@ -181,6 +204,10 @@ class NF2Module(LightningModule):
     def validation_step(self, batch, batch_nb, dataloader_idx):
         coords = batch['coords']
         coords.requires_grad = True
+
+        if self.transform_module is not None:
+            if self.validation_mapping[dataloader_idx] in self.transform_module.validation_ds_id:
+                batch = self.transform_module.transform_batch(batch)
 
         model_out = self.model(coords)
         b = model_out['b']

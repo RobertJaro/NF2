@@ -10,8 +10,9 @@ from pytorch_lightning.loggers import WandbLogger
 
 from nf2.data.dataset import SphereSlicesDataset, SphereDataset, CubeDataset, SlicesDataset
 from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.fits import FITSMapModule, SHARPDataModule, FITSDataModule
+from nf2.loader.fits import FITSDataset, SHARPDataModule, FITSDataModule
 from nf2.loader.general import NumpyDataModule
+from nf2.loader.muram import MURaMDataModule
 from nf2.loader.spherical import SphericalDataModule, SphericalSliceDataset
 from nf2.loader.vsm import VSMDataModule
 from nf2.train.callback import SphericalSlicesCallback, BoundaryCallback, MetricsCallback, SlicesCallback
@@ -62,6 +63,8 @@ elif args.data["type"] == 'analytical':
     data_module = AnalyticDataModule(**args.data)
 elif args.data["type"] == 'spherical':
     data_module = SphericalDataModule(**args.data)
+elif args.data["type"] == 'muram':
+    data_module = MURaMDataModule(**args.data)
 else:
     raise NotImplementedError(f'Unknown data loader {args.data["type"]}')
 

@@ -3,15 +3,14 @@ import uuid
 
 import numpy as np
 import wandb
-from astropy.io import fits
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from pytorch_lightning import LightningDataModule
-from sunpy.map import Map
 from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset
 from nf2.data.loader import load_potential_field_data
+from nf2.loader.util import _plot_B, _plot_B_error
 
 
 class TensorsDataset(BatchesDataset):
@@ -40,7 +39,8 @@ class TensorsDataset(BatchesDataset):
 
 class BaseDataModule(LightningDataModule):
 
-    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None, iterations=None, **kwargs):
+    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None, iterations=None,
+                 **kwargs):
         super().__init__()
         self.training_datasets = training_datasets
         self.validation_datasets = validation_datasets
@@ -50,7 +50,6 @@ class BaseDataModule(LightningDataModule):
         self.validation_dataset_mapping = {i: name for i, name in enumerate(self.validation_datasets.keys())}
         self.num_workers = num_workers if num_workers is not None else os.cpu_count()
         self.iterations = iterations
-
 
     def clear(self):
         [ds.clear() for ds in self.datasets.values() if isinstance(ds, BatchesDataset)]
@@ -88,6 +87,54 @@ class BaseDataModule(LightningDataModule):
                                 shuffle=False)
             loaders.append(loader)
         return loaders
+
+
+class MapDataset(TensorsDataset):
+
+    def __init__(self, b, b_err=None,
+                 G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
+                 bin=1, height_mapping=None, plot=True, **kwargs):
+        self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
+
+        b = block_reduce(b, (bin, bin, 1), np.mean) / G_per_dB
+        coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
+        coords = coords[:, :, 0, :]
+
+        self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
+                                     [coords[..., 1].min(), coords[..., 1].max()]])
+
+        self.cube_shape = coords.shape[:-1]
+
+        tensors = {'b_true': b}
+
+        if height_mapping is not None:
+            z = height_mapping['z']
+            z_min = height_mapping['z_min'] if 'z_min' in height_mapping else 0
+            z_max = height_mapping['z_max'] if 'z_max' in height_mapping else 0
+
+            coords[..., 2] = z / Mm_per_ds
+            ranges = np.zeros((*coords.shape[:-1], 2))
+            ranges[..., 0] = z_min / Mm_per_ds
+            ranges[..., 1] = z_max / Mm_per_ds
+            tensors['height_range'] = ranges
+
+        tensors['coords'] = coords
+
+        if b_err is not None:
+            b_err = block_reduce(b_err, (bin, bin, 1), np.mean) / G_per_dB
+            tensors['b_err'] = b_err
+
+            if plot:
+                _plot_B_error(b * G_per_dB, b_err * G_per_dB, coords * Mm_per_ds)
+        else:
+            if plot:
+                _plot_B(b * G_per_dB, coords * Mm_per_ds)
+
+
+
+        tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
+
+        super().__init__(tensors, **kwargs)
 
 
 class SlicesDataModule(BaseDataModule):

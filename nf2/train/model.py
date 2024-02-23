@@ -19,6 +19,15 @@ class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
 
+class Sinsh(nn.Module):
+
+    def __init__(self):
+        super().__init__()
+        self.beta = nn.Parameter(torch.randn((1,), dtype=torch.float32), requires_grad=True)
+
+    def forward(self, x):
+        return x * torch.sin(self.beta * x)
+
 class Sine(nn.Module):
     def __init__(self, w0=1.):
         super().__init__()
@@ -27,9 +36,50 @@ class Sine(nn.Module):
     def forward(self, x):
         return torch.sin(self.w0 * x)
 
-class HeightMappingModel(nn.Module):
+class HeightTransformModel(nn.Module):
 
-    def __init__(self, in_coords, dim, positional_encoding=True):
+    def __init__(self, in_coords, dim, ds_id, validation_ds_id=[], positional_encoding=True, ):
+        super().__init__()
+        if positional_encoding:
+            self.posenc = PositionalEncoding(8, 20)
+            self.embedding = nn.Embedding(4, 40)
+            self.d_in = nn.Linear(2 * 40 + 40, dim)
+        else:
+            self.d_in = nn.Linear(in_coords, dim)
+        lin = [nn.Linear(dim, dim) for _ in range(4)]
+        self.linear_layers = nn.ModuleList(lin)
+        self.d_out = nn.Linear(dim, 1)
+        self.activation = Sine()
+        self.ds_id = ds_id if isinstance(ds_id, list) else [ds_id]
+        self.validation_ds_id = validation_ds_id if isinstance(validation_ds_id, list) else [validation_ds_id]
+
+    def forward(self, batch):
+        for ds_id in self.ds_id:
+            b = self.transform_batch(batch[ds_id])
+            batch[ds_id] = b
+        return batch
+
+    def transform_batch(self, batch):
+        coords = batch['coords']
+        transformed_coords = self._transform_coords(**batch)
+        batch['coords'] = transformed_coords
+        batch['original_coords'] = coords
+        return batch
+
+    def _transform_coords(self, coords, height_range, **kwargs):
+        xy_encoding = self.posenc(coords[..., :2])
+        z_encoding = self.embedding(coords[..., 2].long())
+        x = torch.cat([xy_encoding, z_encoding], -1)
+        x = self.activation(self.d_in(x))
+        for l in self.linear_layers:
+            x = self.activation(l(x))
+        z_coords = torch.sigmoid(self.d_out(x)) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
+        output_coords = torch.cat([coords[:, :2], z_coords], -1)
+        return output_coords
+
+class RadialTransformModel(nn.Module):
+
+    def __init__(self, in_coords, dim, positional_encoding=True, ds_ids=[]):
         super().__init__()
         if positional_encoding:
             posenc = PositionalEncoding(8, 20)
@@ -41,19 +91,29 @@ class HeightMappingModel(nn.Module):
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, 1)
         self.activation = Sine()
+        self.ds_ids = ds_ids
         self.observer_transformer = ObserverTransformer()
 
-    def forward(self, x, obs_coords, height_range):
-        input_coords = self.observer_transformer.transform(x, obs_coords)
-        x = self.activation(self.d_in(x))
+    def forward(self, batch):
+        for ds_id in self.ds_ids:
+            transformed_coords = self.transform(batch[ds_id]['coords'], batch[ds_id]['obs_coords'], batch[ds_id]['height_range'])
+            batch[ds_id]['coords'] = transformed_coords
+            batch[ds_id]['original_coords'] = coords
+
+    def transform(self, coords, obs_coords, height_range, **kwargs):
+
+
+        coords = self.observer_transformer.transform(coords, obs_coords)
+
+        x = self.activation(self.d_in(coords))
         for l in self.linear_layers:
             x = self.activation(l(x))
         z_coords = torch.sigmoid(self.d_out(x)) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
-        # shifted_z_coords = input_coords[:, 2:3] * (1 + z_shift) # max shift in dependence of height estimate
-        output_coords = torch.cat([z_coords, input_coords[:, 1:]], -1)
-        output_coords = self.observer_transformer.inverse_transform(output_coords, obs_coords)
-        return output_coords
+        output_coords = torch.cat([coords[:, :2], z_coords], -1)
 
+        output_coords = self.observer_transformer.inverse_transform(output_coords, obs_coords)
+
+        return output_coords
 
 class BModel(nn.Module):
 

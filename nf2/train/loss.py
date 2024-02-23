@@ -226,6 +226,11 @@ class HeightLoss(BaseLoss):
 
         return height_regularization
 
+class MinHeightLoss(BaseLoss):
+
+    def forward(self, coords, *args, **kwargs):
+        min_height_regularization = torch.abs(coords[:, 2]).mean()
+        return min_height_regularization
 
 class FluxPreservationLoss(BaseLoss):
 

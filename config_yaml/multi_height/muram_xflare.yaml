@@ -1,0 +1,44 @@
+---
+base_path: "/glade/work/rjarolim/nf2/multi_height/muram_xflare_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_xflare"
+logging:
+  project: multi-height
+  name: muram X-flare
+data:
+  type: muram
+  slices:
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_1.000.1300000"
+      height_mapping: {z: 0, z_min:0, z_max: 0}
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.100.1300000"
+      height_mapping: {z: 1, z_min:0, z_max: 10}
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.010.1300000"
+      height_mapping: {z: 2, z_min:0, z_max: 20}
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.001.1300000"
+      height_mapping: {z: 3, z_min:0, z_max: 30 }
+  num_workers: 8
+model:
+  type: vector_potential
+  dim: 256
+  activation: swish
+training:
+  epochs: 1.0e+3
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1 #{start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0e-1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2
+    - type: min_height
+      name: min_height
+      lambda: 1.0e-3
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+  coordinate_transform:
+      type: height
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+      validation_ds_id: [validation_boundary_01, validation_boundary_02, validation_boundary_03, validation_boundary_04]
+  check_val_every_n_epoch: 1
