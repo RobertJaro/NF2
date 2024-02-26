@@ -1,9 +1,12 @@
+import os
+
 import numpy as np
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.loader.base import MapDataset, BaseDataModule
 from nf2.loader.fits import PotentialBoundaryDataset
 
+from astropy import units as u
 
 class MURaMDataModule(BaseDataModule):
 
@@ -64,8 +67,9 @@ class MURaMDataModule(BaseDataModule):
 
         validation_slice_datasets = []
         for slice_config in slices:
+            slice_config['batch_size'] = validation_batch_size # override batch size
             muram_dataset = MURaMSliceDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory,
-                                              shuffle=False, filter_nans=False, batch_size=validation_batch_size, plot=False)
+                                              shuffle=False, filter_nans=False, plot=False)
             validation_slice_datasets.append(muram_dataset)
         validation_slices_dataset = SlicesDataset(coord_range, ds_per_pixel, n_slices=10,
                                                   batch_size=validation_batch_size)
@@ -76,10 +80,23 @@ class MURaMDataModule(BaseDataModule):
 
         config = {'type': 'cartesian',
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'max_height': max_height,
-                  'coord_range': coord_range, 'ds_per_pixel': ds_per_pixel}
+                  'coord_range': [], 'ds_per_pixel': [], 'height_mapping': []}
+        for ds in slice_datasets:
+            config['coord_range'].append(ds.coord_range)
+            config['ds_per_pixel'].append(ds.ds_per_pixel)
+            config['height_mapping'].append(ds.height_mapping)
 
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
+
+muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
+             'By': {'id': 'result_prim_7', 'unit': u.Gauss},
+             'Bx': {'id': 'result_prim_6', 'unit': u.Gauss},
+             'vx': {'id': 'result_prim_1', 'unit': u.cm / u.s},
+             'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
+             'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
+             'tau': {'id': 'tau', 'unit': 1},
+                   }
 
 class MURaMSliceDataset(MapDataset):
 
@@ -93,6 +110,31 @@ class MURaMSliceDataset(MapDataset):
         b = np.stack([bx, by, bz], axis=-1)
 
         super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
+
+class MURaMSnapshot():
+
+    def __init__(self, source_path, iteration):
+        header_file = os.path.join(source_path, f'Header.{iteration:06d}')
+        assert os.path.exists(header_file), f'Header file {header_file} does not exist'
+
+        # load shape information
+        header = np.loadtxt(header_file, dtype=np.float32)
+        shape = header[0:3].astype(int)
+        ds = header[3:6] * u.cm / u.pix  # cm; pixel size
+        # range = (shape * u.pix) * ds  # cm; domain size
+        time = header[6] * u.s
+        # (5, 6, 7) --> (z, x, y)
+
+        files = {k: os.path.join(source_path, f"{v['id']}.{iteration:06d}") for k, v in muram_variables.items()}
+        # (x, y, z) --> (z, y, x) --> (y, z, x)
+        data = {k: np.memmap(f, mode='r', dtype=np.float32, shape=tuple(shape[::-1])).transpose(1, 0, 2)
+                for k, f in files.items()}
+
+        for k, v in data.items():
+            setattr(self, k, v)
+        self.time = time
+        self.shape = (shape[1], shape[2], shape[0])
+        self.ds = (ds[1], ds[2], ds[0])
 
 def read_muram_slice(filepath):
     data = np.fromfile(filepath, dtype=np.float32)

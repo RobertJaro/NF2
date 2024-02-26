@@ -75,7 +75,7 @@ nf2 = NF2Module(data_module.validation_dataset_mapping, model_kwargs=args.model,
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
-    on_validation_end=lambda *args: save(save_path, nf2.model, data_module, config))
+    on_validation_end=lambda *args: save(save_path, nf2, data_module, config))
 checkpoint_callback = ModelCheckpoint(dirpath=base_path,
                                       every_n_train_steps=args.training[
                                           "validation_interval"] if "validation_interval" in args.training else None,
@@ -100,6 +100,6 @@ trainer = Trainer(max_epochs=int(args.training['epochs']) if 'epochs' in args.tr
                   callbacks=callbacks)
 
 trainer.fit(nf2, data_module, ckpt_path='last')
-save(save_path, nf2.model, data_module, config)
+save(save_path, nf2, data_module, config)
 # clean up
 data_module.clear()

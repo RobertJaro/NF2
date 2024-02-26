@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset
 from nf2.data.loader import load_potential_field_data
+from nf2.data.util import img_to_los_trv_azi
 from nf2.loader.util import _plot_B, _plot_B_error
 
 
@@ -93,7 +94,8 @@ class MapDataset(TensorsDataset):
 
     def __init__(self, b, b_err=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
-                 bin=1, height_mapping=None, plot=True, **kwargs):
+                 bin=1, height_mapping=None, plot=True, los_trv_azi_transform=False,
+                 **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
 
         b = block_reduce(b, (bin, bin, 1), np.mean) / G_per_dB
@@ -104,6 +106,8 @@ class MapDataset(TensorsDataset):
                                      [coords[..., 1].min(), coords[..., 1].max()]])
 
         self.cube_shape = coords.shape[:-1]
+        self.los_trv_azi_transform = los_trv_azi_transform
+        self.height_mapping = height_mapping
 
         tensors = {'b_true': b}
 
@@ -113,7 +117,7 @@ class MapDataset(TensorsDataset):
             z_max = height_mapping['z_max'] if 'z_max' in height_mapping else 0
 
             coords[..., 2] = z / Mm_per_ds
-            ranges = np.zeros((*coords.shape[:-1], 2))
+            ranges = np.zeros((*self.cube_shape, 2), dtype=np.float32)
             ranges[..., 0] = z_min / Mm_per_ds
             ranges[..., 1] = z_max / Mm_per_ds
             tensors['height_range'] = ranges
@@ -130,6 +134,8 @@ class MapDataset(TensorsDataset):
             if plot:
                 _plot_B(b * G_per_dB, coords * Mm_per_ds)
 
+        if los_trv_azi_transform:
+            tensors['b_true'] = img_to_los_trv_azi(tensors['b_true'], f=np)
 
 
         tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}

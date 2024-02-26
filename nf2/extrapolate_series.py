@@ -117,7 +117,7 @@ config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(
     on_train_epoch_end=lambda *args:
     save(os.path.join(base_path, data_module.current_id + '.nf2'),
-         nf2.model, data_module, config))
+         nf2, data_module, config))
 
 checkpoint_callback = ModelCheckpoint(dirpath=base_path,
                                       every_n_epochs=args.training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in args.training else 1,

@@ -1,17 +1,15 @@
 import logging
 
-import torch
 from pytorch_lightning import LightningModule
 from torch.optim.lr_scheduler import ExponentialLR
 
-from nf2.loader.base import MapDataset
 from nf2.train.loss import *
-from nf2.train.model import BModel, jacobian, VectorPotentialModel, HeightTransformModel, FluxModel
+from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, MagnetostaticModel
 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_mapping, model_kwargs, loss_config = None,
+    def __init__(self, validation_mapping, model_kwargs, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  coordinate_transform={"type": None},
                  meta_path=None, **kwargs):
@@ -32,11 +30,11 @@ class NF2Module(LightningModule):
         # init model
         model_type = model_kwargs.pop('type')
         if model_type == 'b':
-            model = BModel(3, 3, **model_kwargs)
+            model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
-            model = VectorPotentialModel(3, **model_kwargs)
-        elif model_type == 'flux':
-            model = FluxModel(3, **model_kwargs)
+            model = VectorPotentialModel(**model_kwargs)
+        elif model_type == 'magnetostatic':
+            model = MagnetostaticModel(**model_kwargs)
         else:
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
@@ -45,10 +43,9 @@ class NF2Module(LightningModule):
         if transform_type is None or transform_type == 'none':
             transform_module = None
         elif transform_type == 'height':
-            transform_module = HeightTransformModel(3, 3, **coordinate_transform)
+            transform_module = HeightTransformModel(3, **coordinate_transform)
         else:
             raise ValueError(f"Invalid coordinate mapping model: {transform_type}")
-
 
         # load meta state
         if meta_path:
@@ -61,14 +58,15 @@ class NF2Module(LightningModule):
         if loss_config is None:
             logging.info('Using default loss configuration')
             loss_config = [
-                {"type": "boundary", "lambda":  {"start": 1e3, "end": 1, "iterations": 1e5 } },
-                {"type": "force_free", "lambda": 1e-1},]
+                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5}},
+                {"type": "force_free", "lambda": 1e-1}, ]
 
         # mapping
-        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_azimuth': AzimuthBoundaryLoss,
+        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                                'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
-                               'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss}
+                               'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss,
+                               'magnetostatic': MagnetostaticLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}
@@ -146,16 +144,12 @@ class NF2Module(LightningModule):
         model_out = self.model(coords)
         model_out_keys = model_out.keys()
 
-        # compute derivatives
-        jac_matrix = jacobian(model_out['b'], coords)
-        model_out['jac_matrix'] = jac_matrix
-
         # split back into dataloaders
         result_mapping = {}
         idx = 0
         for k in loader_keys:
             n_coords = batch[k]['coords'].shape[0]
-            result_mapping[k] = {mk: model_out[mk][idx:idx+n_coords] for mk in model_out_keys}
+            result_mapping[k] = {mk: model_out[mk][idx:idx + n_coords] for mk in model_out_keys}
             idx += n_coords
 
         state_dict = {k: {**result_mapping[k], **batch[k]} for k in loader_keys}
@@ -210,9 +204,8 @@ class NF2Module(LightningModule):
                 batch = self.transform_module.transform_batch(batch)
 
         model_out = self.model(coords)
-        b = model_out['b']
 
-        jac_matrix = jacobian(b, coords)
+        jac_matrix = model_out['jac_matrix']
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
@@ -232,7 +225,6 @@ class NF2Module(LightningModule):
 
         model_out['j'] = j
         model_out['div'] = div
-        model_out['jac_matrix'] = jac_matrix
 
         return {k: v.detach() for k, v in {**batch, **model_out}.items()}
 
@@ -259,12 +251,30 @@ class NF2Module(LightningModule):
                 continue
             print(f'Update lambda {k}: {checkpoint_v} --> {v.data}')
             state_dict[f'lambdas.{k}'] = v
+        # remove old lambdas
+        remove_keys = []
+        for k,v in state_dict.items():
+            if 'lambdas' in k and k.split('.')[1] not in self.lambdas.keys():
+                print(f'Remove lambda: {k}')
+                remove_keys.append(k)
+        [state_dict.pop(k) for k in remove_keys]
+        # remove old scheduled lambdas
+        remove_keys = []
+        for k,v in state_dict.items():
+            if 'scheduled_lambdas' in k and k.split('.')[1] not in self.scheduled_lambdas.keys():
+                print(f'Remove scheduled lambda: {k}')
+                remove_keys.append(k)
+        [state_dict.pop(k) for k in remove_keys]
+
 
         self.load_state_dict(state_dict, strict=False)
         self.validation_outputs = {}  # reset validation outputs
 
-def save(save_path, model, data_module, config):
-    save_state = {'model': model,
+
+def save(save_path, nf2, data_module, config):
+    save_state = {'model': nf2.model,
                   'config': config,
-                  'data': data_module.config,}
+                  'data': data_module.config, }
+    if nf2.transform_module is not None:
+        save_state['transform_module'] = nf2.transform_module
     torch.save(save_state, save_path)

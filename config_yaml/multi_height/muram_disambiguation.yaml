@@ -1,0 +1,31 @@
+---
+base_path: "/glade/work/rjarolim/nf2/multi_height/muram_disambiguation_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_disambiguation_v01"
+logging:
+  project: disambiguation
+  name: muram
+data:
+  type: muram
+  slices:
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_1.000.1300000"
+      los_trv_azi_transform: True
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+  activation: sine
+training:
+  epochs: 10
+  loss_config:
+    - type: boundary_los_trv_azi
+      name: boundary
+      lambda: 1.0
+      ds_id: [boundary_01]
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0e-1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2
+  check_val_every_n_epoch: 1

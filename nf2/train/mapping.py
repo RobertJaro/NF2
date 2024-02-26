@@ -2,7 +2,8 @@ from nf2.data.dataset import SphereSlicesDataset, SlicesDataset, SphereDataset, 
 from nf2.loader.base import MapDataset
 from nf2.loader.fits import FITSDataset
 from nf2.loader.spherical import SphericalSliceDataset
-from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback
+from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback, \
+    LosTrvAziBoundaryCallback
 
 
 def load_callbacks(data_module):
@@ -17,8 +18,13 @@ def load_callbacks(data_module):
             callback = SlicesCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
         elif isinstance(ds, SphereDataset) or isinstance(ds, CubeDataset):
             callback = MetricsCallback(validation_dataset_key, G_per_dB, Mm_per_ds)
-        elif isinstance(ds, SphericalSliceDataset) or isinstance(ds, FITSDataset) or isinstance(ds, MapDataset):
+        elif isinstance(ds, SphericalSliceDataset) or isinstance(ds, FITSDataset):
             callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
+        elif isinstance(ds, MapDataset):
+            if ds.los_trv_azi_transform:
+                callback = LosTrvAziBoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
+            else:
+                callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
         else:
             raise NotImplementedError(f'Data set {type(ds)} not implemented for validation.')
         callbacks += [callback]

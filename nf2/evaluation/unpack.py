@@ -8,7 +8,7 @@ from sunpy.map import Map
 from torch import nn
 from tqdm import tqdm
 
-from nf2.train.model import VectorPotentialModel, calculate_current, FluxModel
+from nf2.train.model import VectorPotentialModel, calculate_current
 
 
 def load_cube(save_path, device=None, z=None, strides=1, **kwargs):
@@ -146,9 +146,7 @@ def load_coords(model, spatial_norm, b_norm, coords, device, batch_size=1000, pr
 
     if (compute_currents or
             isinstance(model, VectorPotentialModel) or (
-                    isinstance(model, nn.DataParallel) and isinstance(model.module, VectorPotentialModel)) or \
-            isinstance(model, FluxModel) or (
-                    isinstance(model, nn.DataParallel) and isinstance(model.module, FluxModel))):
+                    isinstance(model, nn.DataParallel) and isinstance(model.module, VectorPotentialModel))):
         return _load(coords)
     else:
         with torch.no_grad():

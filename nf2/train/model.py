@@ -6,8 +6,7 @@ from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
 
-from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian, \
-    vector_spherical_to_cartesian
+from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian
 
 
 class Swish(nn.Module):
@@ -19,6 +18,7 @@ class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
 
+
 class Sinsh(nn.Module):
 
     def __init__(self):
@@ -28,6 +28,7 @@ class Sinsh(nn.Module):
     def forward(self, x):
         return x * torch.sin(self.beta * x)
 
+
 class Sine(nn.Module):
     def __init__(self, w0=1.):
         super().__init__()
@@ -36,14 +37,15 @@ class Sine(nn.Module):
     def forward(self, x):
         return torch.sin(self.w0 * x)
 
+
 class HeightTransformModel(nn.Module):
 
-    def __init__(self, in_coords, dim, ds_id, validation_ds_id=[], positional_encoding=True, ):
+    def __init__(self, in_coords, ds_id, validation_ds_id=[], dim=256, positional_encoding=True, ):
         super().__init__()
         if positional_encoding:
             self.posenc = PositionalEncoding(8, 20)
-            self.embedding = nn.Embedding(4, 40)
-            self.d_in = nn.Linear(2 * 40 + 40, dim)
+            d_in = nn.Linear(in_coords * 40, dim)
+            self.d_in = nn.Sequential(self.posenc, d_in)
         else:
             self.d_in = nn.Linear(in_coords, dim)
         lin = [nn.Linear(dim, dim) for _ in range(4)]
@@ -54,28 +56,33 @@ class HeightTransformModel(nn.Module):
         self.validation_ds_id = validation_ds_id if isinstance(validation_ds_id, list) else [validation_ds_id]
 
     def forward(self, batch):
+        coords = torch.cat([batch[ds_id]['coords'] for ds_id in self.ds_id], 0)
+        height_range = torch.cat([batch[ds_id]['height_range'] for ds_id in self.ds_id], 0)
+        transformed_coords = self.transform_coords(coords, height_range)
+
+        coord_idx = 0
         for ds_id in self.ds_id:
-            b = self.transform_batch(batch[ds_id])
-            batch[ds_id] = b
+            n_coords = batch[ds_id]['coords'].shape[0]
+            batch[ds_id]['original_coords'] = batch[ds_id]['coords']
+            batch[ds_id]['coords'] = transformed_coords[coord_idx:coord_idx + n_coords]
+            coord_idx += n_coords
         return batch
 
     def transform_batch(self, batch):
         coords = batch['coords']
-        transformed_coords = self._transform_coords(**batch)
+        transformed_coords = self.transform_coords(**batch)
         batch['coords'] = transformed_coords
         batch['original_coords'] = coords
         return batch
 
-    def _transform_coords(self, coords, height_range, **kwargs):
-        xy_encoding = self.posenc(coords[..., :2])
-        z_encoding = self.embedding(coords[..., 2].long())
-        x = torch.cat([xy_encoding, z_encoding], -1)
-        x = self.activation(self.d_in(x))
+    def transform_coords(self, coords, height_range, **kwargs):
+        x = self.activation(self.d_in(coords))
         for l in self.linear_layers:
             x = self.activation(l(x))
         z_coords = torch.sigmoid(self.d_out(x)) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
         output_coords = torch.cat([coords[:, :2], z_coords], -1)
         return output_coords
+
 
 class RadialTransformModel(nn.Module):
 
@@ -96,13 +103,12 @@ class RadialTransformModel(nn.Module):
 
     def forward(self, batch):
         for ds_id in self.ds_ids:
-            transformed_coords = self.transform(batch[ds_id]['coords'], batch[ds_id]['obs_coords'], batch[ds_id]['height_range'])
+            transformed_coords = self.transform(batch[ds_id]['coords'], batch[ds_id]['obs_coords'],
+                                                batch[ds_id]['height_range'])
             batch[ds_id]['coords'] = transformed_coords
             batch[ds_id]['original_coords'] = coords
 
     def transform(self, coords, obs_coords, height_range, **kwargs):
-
-
         coords = self.observer_transformer.transform(coords, obs_coords)
 
         x = self.activation(self.d_in(coords))
@@ -115,11 +121,11 @@ class RadialTransformModel(nn.Module):
 
         return output_coords
 
-class BModel(nn.Module):
 
-    def __init__(self, in_coords=3, out_values=3, dim=512, encoding=None, activation='swish'):
+class GenericModel(nn.Module):
+
+    def __init__(self, in_coords, out_coords, dim=256, encoding=None, activation='swish'):
         super().__init__()
-
         if encoding is None or encoding == 'none':
             self.d_in = nn.Linear(in_coords, dim)
         elif encoding == 'positional':
@@ -130,7 +136,7 @@ class BModel(nn.Module):
             raise NotImplementedError(f'Unknown encoding {encoding}')
         lin = [nn.Linear(dim, dim) for _ in range(8)]
         self.linear_layers = nn.ModuleList(lin)
-        self.d_out = nn.Linear(dim, out_values)
+        self.d_out = nn.Linear(dim, out_coords)
         activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
         activation_f = activation_mapping[activation]
         self.in_activation = activation_f()
@@ -141,34 +147,33 @@ class BModel(nn.Module):
         x = self.in_activation(self.d_in(x))
         for l, a in zip(self.linear_layers, self.activations):
             x = a(l(x))
-        b = self.d_out(x)
-        return {'b': b}
+        x = self.d_out(x)
+        return x
 
 
-class VectorPotentialModel(nn.Module):
+class BModel(GenericModel):
 
-    def __init__(self, in_coords, dim, encoding=None, activation='swish'):
-        super().__init__()
-        if encoding is None or encoding == 'none':
-            self.d_in = nn.Linear(in_coords, dim)
-        elif encoding == 'positional':
-            posenc = PositionalEncoding(8, 20)
-            d_in = nn.Linear(in_coords * 40, dim)
-            self.d_in = nn.Sequential(posenc, d_in)
-        else:
-            raise NotImplementedError(f'Unknown encoding {encoding}')
-        lin = [nn.Linear(dim, dim) for _ in range(8)]
-        self.linear_layers = nn.ModuleList(lin)
-        self.d_out = nn.Linear(dim, 3)
-        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
-        activation_f = activation_mapping[activation]
-        self.in_activation = activation_f()
-        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
+    def __init__(self, **kwargs):
+        super().__init__(3, 3, **kwargs)
 
-    def forward(self, x):
-        a = self.potential(x)
+    def forward(self, coords, compute_jacobian=True):
+        b = super().forward(coords)
+        out_dict = {'b': b}
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        return out_dict
+
+
+class VectorPotentialModel(GenericModel):
+
+    def __init__(self, **kwargs):
+        super().__init__(3, 3, **kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        a = super().forward(coords)
         #
-        jac_matrix = jacobian(a, x)
+        jac_matrix = jacobian(a, coords)
         dAy_dx = jac_matrix[:, 1, 0]
         dAz_dx = jac_matrix[:, 2, 0]
         dAx_dy = jac_matrix[:, 0, 1]
@@ -179,100 +184,44 @@ class VectorPotentialModel(nn.Module):
         rot_y = dAx_dz - dAz_dx
         rot_z = dAy_dx - dAx_dy
         b = torch.stack([rot_x, rot_y, rot_z], -1)
+        out_dict = {'b': b, 'a': a}
         #
-        return {'b': b, 'a': a}
-
-    def potential(self, x):
-        x = self.in_activation(self.d_in(x))
-        for l, a in zip(self.linear_layers, self.activations):
-            x = a(l(x))
-        a = self.d_out(x)
-        return a
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
+        return out_dict
 
 
-class FluxModel(nn.Module):
+class PressureModel(GenericModel):
 
-    def __init__(self, in_coords, dim, positional_encoding=False, activation='swish'):
-        super().__init__()
-        if positional_encoding:
-            posenc = PositionalEncoding(8, 20)
-            d_in = nn.Linear(in_coords * 40, dim)
-            self.d_in = nn.Sequential(posenc, d_in)
-        else:
-            self.d_in = nn.Linear(in_coords, dim)
-        lin = [nn.Linear(dim, dim) for _ in range(8)]
-        self.linear_layers = nn.ModuleList(lin)
-        self.flux_out = nn.Linear(dim, 1)
-        self.b_h_out = nn.Linear(dim, 2)
-        activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
-        activation_f = activation_mapping[activation]
-        self.in_activation = activation_f()
-        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
+    def __init__(self, **kwargs):
+        super().__init__(3, 1, **kwargs)
+        self.softplus = nn.Softplus()
 
     def forward(self, x):
-        # compute spherical coordinates
-        spherical_coords = cartesian_to_spherical(x, f=torch)
-        r = spherical_coords[:, 0]
-        theta = spherical_coords[:, 1]
-        phi = spherical_coords[:, 2]
-        # coordinate divs
-        dx_dr = torch.sin(theta) * torch.cos(phi)
-        dy_dr = torch.sin(theta) * torch.sin(phi)
-        dz_dr = torch.cos(theta)
-        #
-        flux, b_h = self._model_forward(x)
-        #
-        jac_matrix = jacobian(flux, x)
-        dflux_dx = jac_matrix[:, :, 0]
-        dflux_dy = jac_matrix[:, :, 1]
-        dflux_dz = jac_matrix[:, :, 2]
-        #
-        dflux_dr = dflux_dx * dx_dr + dflux_dy * dy_dr + dflux_dz * dz_dr
-        #
-        jac_matrix = jacobian(jac_matrix[:, 0], x)
-        dflux_dx_dx = jac_matrix[:, 0, 0]
-        dflux_dx_dy = jac_matrix[:, 0, 1]
-        dflux_dx_dz = jac_matrix[:, 0, 2]
-        dflux_dy_dx = jac_matrix[:, 1, 0]
-        dflux_dy_dy = jac_matrix[:, 1, 1]
-        dflux_dy_dz = jac_matrix[:, 1, 2]
-        dflux_dz_dx = jac_matrix[:, 2, 0]
-        dflux_dz_dy = jac_matrix[:, 2, 1]
-        dflux_dz_dz = jac_matrix[:, 2, 2]
-        #
-        # ============== full version ==============
-        # dx_dtheta = r * torch.cos(theta) * torch.cos(phi)
-        # dy_dtheta = r * torch.cos(theta) * torch.sin(phi)
-        # dz_dtheta = -r * torch.sin(theta)
-        # dx_dphi = -r * torch.sin(theta) * torch.sin(phi)
-        # dy_dphi = r * torch.sin(theta) * torch.cos(phi)
-        # dz_dphi = 0
-        #
-        # dflux_dtheta_dphi = dflux_dx_dx * dx_dtheta * dx_dphi + dflux_dx_dy * dx_dtheta * dy_dphi + dflux_dx_dz * dx_dtheta * dz_dphi + \
-        #                     dflux_dy_dx * dy_dtheta * dx_dphi + dflux_dy_dy * dy_dtheta * dy_dphi + dflux_dy_dz * dy_dtheta * dz_dphi + \
-        #                     dflux_dz_dx * dz_dtheta * dx_dphi + dflux_dz_dy * dz_dtheta * dy_dphi + dflux_dz_dz * dz_dtheta * dz_dphi
-        #
-        # ==============  alternative with canceled terms ==============
-        # cancels -->  area = r ** 2 * torch.sin(theta)
-        dflux_dtheta_dphi = - dflux_dx_dx * torch.cos(theta) * torch.cos(phi) * torch.sin(phi) + dflux_dx_dy * torch.cos(theta) * torch.cos(phi) * torch.cos(phi) + \
-                            - dflux_dy_dx * torch.cos(theta) * torch.sin(phi) * torch.sin(phi) + dflux_dy_dy * torch.cos(theta) * torch.sin(phi) * torch.cos(phi) + \
-                            dflux_dz_dx * torch.sin(theta) * torch.sin(phi) - dflux_dz_dy * torch.sin(theta) * torch.cos(phi)
-        #
-        # area = r ** 2 * torch.sin(theta) + 1e-7  # area element
-        b_r = dflux_dtheta_dphi
-        b_r = b_r[:, None]
-        b_spherical = torch.cat([b_r, b_h], -1)
-        #
-        b = vector_spherical_to_cartesian(b_spherical, spherical_coords, f=torch)
-        return {'b': b, 'dflux_dr': dflux_dr}
+        p = super().forward(x)
+        p = 10 ** p
+        return {'p': p}
 
-    def _model_forward(self, x):
-        x = self.in_activation(self.d_in(x))
-        for l, a in zip(self.linear_layers, self.activations):
-            x = a(l(x))
-        flux = self.flux_out(x)
-        b_h = self.b_h_out(x)
-        return flux, b_h
+
+class MagnetostaticModel(nn.Module):
+
+    def __init__(self, **kwargs):
+        super().__init__()
+        self.b_model = VectorPotentialModel(**kwargs)
+        self.p_model = PressureModel(**kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        b_dict = self.b_model(coords)
+        p_dict = self.p_model(coords)
+        out_dict = {**b_dict, **p_dict}
+        if compute_jacobian:
+            model_out = torch.cat([b_dict['b'], p_dict['p']], -1)
+            jac_matrix = jacobian(model_out, coords)
+            out_dict['jac_matrix'] = jac_matrix
+
+        return out_dict
 
 
 class PositionalEncoding(nn.Module):
@@ -290,7 +239,7 @@ class PositionalEncoding(nn.Module):
             num_freqs (int): number of frequencies between [0, max_freq]
         """
         super().__init__()
-        freqs = 2 ** torch.linspace(0, max_freq, num_freqs)
+        freqs = 2 ** torch.linspace(-max_freq, max_freq, num_freqs)
         freqs = freqs[None, :, None]  # (1, num_freqs, 1)
         self.register_buffer("freqs", freqs)  # (num_freqs)
 
@@ -304,11 +253,10 @@ class PositionalEncoding(nn.Module):
         x_proj = x[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
         x_proj = x_proj.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
         #
-        normalization = torch.ones_like(x)[:, None, :] * self.freqs # (batch, num_freqs, in_features)
+        normalization = torch.ones_like(x)[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
         normalization = normalization.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
         #
-        out = torch.cat([torch.sin(x_proj) / normalization,
-                         torch.cos(x_proj) / normalization],
+        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)],
                         dim=-1)  # (batch, 2*num_freqs*in_features)
         return out
 

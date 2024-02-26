@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 
 def spherical_to_cartesian_matrix(c):
@@ -76,3 +77,19 @@ def cartesian_to_spherical(v, f=np):
     p = f.arctan2(y, x + nudge)
 
     return f.stack([r, t, p], -1)
+
+
+def img_to_los_trv_azi(b, f=np):
+    B_los = b[..., 2]
+    B_trv = (b[..., 0] ** 2 + b[..., 1] ** 2) ** 0.5
+    azi = f.arctan2(b[..., 1], b[..., 0])
+    b = f.stack([B_los, B_trv, azi], -1)
+    return b
+
+def los_trv_azi_to_img(b, ambiguous=False, f=np):
+    B_los, B_trv, azi = b[..., 0], b[..., 1], b[..., 2]
+    B_x = B_trv * f.abs(f.sin(azi)) if ambiguous else B_trv * f.sin(azi)
+    B_y = B_trv * f.abs(f.cos(azi)) if ambiguous else B_trv * f.cos(azi)
+    B_z = B_los
+    b = f.stack([B_x, B_y, B_z], -1)
+    return b
