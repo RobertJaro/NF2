@@ -41,7 +41,7 @@ class ForceFreeLoss(BaseLoss):
         return force_free_loss.mean()
 
 
-class MagnetostaticLoss(BaseLoss):
+class MagnetoStaticLoss(BaseLoss):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

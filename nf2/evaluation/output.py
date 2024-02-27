@@ -135,7 +135,6 @@ class HeightTransformOutput(CartesianOutput):
 
         self.coord_range_list = self.state['data']['coord_range']
         self.height_mapping_list = self.state['data']['height_mapping']
-        print(self.height_mapping_list)
         self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
 
     def load_height_mapping(self, **kwargs):

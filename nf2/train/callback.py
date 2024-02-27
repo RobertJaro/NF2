@@ -407,7 +407,7 @@ class LosTrvAziBoundaryCallback(Callback):
         # compute diff
         b_diff = torch.abs(b_xyz - b_true_xyz)
         b_diff = torch.nanmean(b_diff.pow(2).sum(-1).pow(0.5))
-        evaluation = {'b_amb_diff': b_diff.detach()}
+        evaluation['b_amb_diff'] = b_diff.detach()
 
         wandb.log({"valid": {self.validation_dataset_key: evaluation}})
 

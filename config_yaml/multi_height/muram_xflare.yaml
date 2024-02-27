@@ -24,17 +24,17 @@ data:
       los_trv_azi_transform: False
 #      batch_size: 2048
   num_workers: 8
-  iterations: 1000
+  iterations: 10000
 model:
   type: vector_potential
   dim: 256
   activation: sine
 training:
-  epochs: 200
+  epochs: 10
   loss_config:
     - type: boundary
       name: boundary
-      lambda: 1.0
+      lambda: {start: 1.0e+2, end: 1.0, iterations: 1.0e+5}
       ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
     - type: boundary
       name: potential_boundary
@@ -44,7 +44,7 @@ training:
       lambda: 1.0e-2
     - type: min_height
       name: height
-      lambda: {start: 1.0e-3, end: 1.0e-6, iterations: 1.0e+5}
+      lambda: {start: 1.0e-2, end: 1.0e-6, iterations: 1.0e+5}
       ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
   coordinate_transform:
       type: height

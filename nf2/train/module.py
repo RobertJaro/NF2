@@ -4,7 +4,7 @@ from pytorch_lightning import LightningModule
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import *
-from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, MagnetostaticModel
+from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, MagnetoStaticModel, MagnetoStaticModelV2
 
 
 class NF2Module(LightningModule):
@@ -33,8 +33,10 @@ class NF2Module(LightningModule):
             model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
-        elif model_type == 'magnetostatic':
-            model = MagnetostaticModel(**model_kwargs)
+        elif model_type == 'magneto_static':
+            model = MagnetoStaticModel(**model_kwargs)
+        elif model_type == 'magneto_static_v2':
+            model = MagnetoStaticModelV2(**model_kwargs)
         else:
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
@@ -66,7 +68,7 @@ class NF2Module(LightningModule):
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                                'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
                                'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss,
-                               'magnetostatic': MagnetostaticLoss}
+                               'magneto_static': MagnetoStaticLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}

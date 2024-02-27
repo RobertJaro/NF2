@@ -205,7 +205,23 @@ class PressureModel(GenericModel):
         return {'p': p}
 
 
-class MagnetostaticModel(nn.Module):
+class MagnetoStaticModel(GenericModel):
+
+    def __init__(self, **kwargs):
+        super().__init__(3, 4)
+
+    def forward(self, coords, compute_jacobian=True):
+        model_out = super().forward(coords)
+        b = model_out[:, :3]
+        p = 10 ** model_out[:, 3:]
+        out_dict = {'b': b, 'p': p}
+        if compute_jacobian:
+            jac_matrix = jacobian(model_out, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        return out_dict
+
+
+class MagnetoStaticModelV2(nn.Module):
 
     def __init__(self, **kwargs):
         super().__init__()
@@ -217,8 +233,11 @@ class MagnetostaticModel(nn.Module):
         p_dict = self.p_model(coords)
         out_dict = {**b_dict, **p_dict}
         if compute_jacobian:
-            model_out = torch.cat([b_dict['b'], p_dict['p']], -1)
-            jac_matrix = jacobian(model_out, coords)
+            b = b_dict['b']
+            jac_b_matrix = jacobian(b, coords)
+            p = p_dict['p']
+            jac_p_matrix = jacobian(p, coords)
+            jac_matrix = torch.cat([jac_b_matrix, jac_p_matrix], -2)
             out_dict['jac_matrix'] = jac_matrix
 
         return out_dict
@@ -239,7 +258,7 @@ class PositionalEncoding(nn.Module):
             num_freqs (int): number of frequencies between [0, max_freq]
         """
         super().__init__()
-        freqs = 2 ** torch.linspace(-max_freq, max_freq, num_freqs)
+        freqs = 2 ** torch.linspace(0, max_freq, num_freqs)
         freqs = freqs[None, :, None]  # (1, num_freqs, 1)
         self.register_buffer("freqs", freqs)  # (num_freqs)
 
@@ -256,8 +275,7 @@ class PositionalEncoding(nn.Module):
         normalization = torch.ones_like(x)[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
         normalization = normalization.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
         #
-        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)],
-                        dim=-1)  # (batch, 2*num_freqs*in_features)
+        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)  # (batch, 2*num_freqs*in_features)
         return out
 
 
