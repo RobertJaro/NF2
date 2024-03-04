@@ -85,6 +85,7 @@ class CartesianOutput(BaseOutput):
 
         self.coord_range = self.state['data']['coord_range']
         self.coord_range = self.coord_range[0] if isinstance(self.coord_range, list) else self.coord_range
+        self.max_height = self.state['data']['max_height']
         self.ds_per_pixel = self.state['data']['ds_per_pixel']
         self.ds_per_pixel = self.ds_per_pixel[0] if isinstance(self.ds_per_pixel, list) else self.ds_per_pixel
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
@@ -94,9 +95,10 @@ class CartesianOutput(BaseOutput):
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
-        z_min, z_max = self.coord_range[2] if height_range is None else height_range / self.Mm_per_ds
+        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None else height_range / self.Mm_per_ds
 
-        pixel_per_ds = 1 / self.ds_per_pixel if Mm_per_pixel is None else self.Mm_per_ds / Mm_per_pixel
+        Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
+        pixel_per_ds = self.Mm_per_ds / Mm_per_pixel
 
         coords = np.stack(
             np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
