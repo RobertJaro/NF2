@@ -25,7 +25,7 @@ class BaseOutput:
         self.model = nn.DataParallel(model) if torch.cuda.device_count() > 1 else model
         self.spatial_norm = 1
         self.device = device
-        self.c = constants.c.to_value(u.m / u.s)
+        self.c = constants.c
 
     @property
     def G_per_dB(self):
@@ -67,7 +67,7 @@ class BaseOutput:
                 j_cube = torch.cat(j_cube)
                 j_cube = j_cube.reshape(*coords_shape).numpy()
                 j = j_cube * self.G_per_dB / self.m_per_ds * self.c / (4 * np.pi)
-                model_out['J'] = j * u.G / u.s
+                model_out['J'] = j
             return model_out
 
         if compute_currents or self._requires_grad:
