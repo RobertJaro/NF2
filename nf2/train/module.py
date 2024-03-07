@@ -87,9 +87,15 @@ class NF2Module(LightningModule):
             config['name'] = name
             if isinstance(l, dict):
                 value = torch.tensor(l['start'], dtype=torch.float32)
-                gamma = torch.tensor((l['end'] / l['start']) ** (1 / l['iterations']), dtype=torch.float32)
+                lt = 'exponential' if 'type' not in l else l['type']
+                if lt == 'exponential':
+                    gamma = torch.tensor((l['end'] / l['start']) ** (1 / l['iterations']), dtype=torch.float32)
+                elif lt == 'linear':
+                    gamma = torch.tensor((l['end'] - l['start']) / l['iterations'], dtype=torch.float32)
+                else:
+                    raise ValueError(f"Invalid lambda type: {lt}, must be in ['exponential', 'linear']")
                 end = torch.tensor(l['end'], dtype=torch.float32)
-                scheduled_lambdas[name] = {'gamma': gamma, 'end': end}
+                scheduled_lambdas[name] = {'gamma': gamma, 'end': end, 'type': lt}
             else:
                 value = torch.tensor(l, dtype=torch.float32)
             assert name not in lambdas, f"Duplicate name for loss: {name}"
@@ -181,10 +187,16 @@ class NF2Module(LightningModule):
         for k in self.scheduled_lambdas.keys():
             param = self.lambdas[k]
             gamma = self.scheduled_lambdas[k]['gamma']
-            if (gamma < 1 and param > self.scheduled_lambdas[k]['end']) or \
-                    (gamma > 1 and param < self.scheduled_lambdas[k]['end']):
-                new_lambda = param * gamma
-                param.copy_(new_lambda)
+            if self.scheduled_lambdas[k]['type'] == 'exponential':
+                if (gamma < 1 and param > self.scheduled_lambdas[k]['end']) or \
+                        (gamma > 1 and param < self.scheduled_lambdas[k]['end']):
+                    new_lambda = param * gamma
+                    param.copy_(new_lambda)
+            if self.scheduled_lambdas[k]['type'] == 'linear':
+                if (gamma > 0 and param < self.scheduled_lambdas[k]['end']) or \
+                        (gamma < 0 and param > self.scheduled_lambdas[k]['end']):
+                    new_lambda = param + gamma
+                    param.copy_(new_lambda)
             self.log('lambda_' + k, self.lambdas[k])
         # update learning rate
         scheduler = self.lr_schedulers()
@@ -228,7 +240,7 @@ class NF2Module(LightningModule):
         model_out['j'] = j
         model_out['div'] = div
 
-        return {k: v.detach() for k, v in {**batch, **model_out}.items()}
+        return {k: v.detach().cpu() for k, v in {**batch, **model_out}.items()}
 
     def validation_epoch_end(self, outputs_list):
         self.validation_outputs = {}  # reset validation outputs
@@ -237,7 +249,7 @@ class NF2Module(LightningModule):
 
         for i, outputs in enumerate(outputs_list):
             out_keys = outputs[0].keys()
-            outputs = {k: torch.cat([o[k] for o in outputs]).cpu() for k in out_keys}
+            outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
             self.validation_outputs[self.validation_mapping[i]] = outputs
 
     def on_load_checkpoint(self, checkpoint):

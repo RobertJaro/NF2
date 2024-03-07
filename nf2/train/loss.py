@@ -231,9 +231,9 @@ class BoundaryLoss(BaseLoss):
 
 class HeightLoss(BaseLoss):
 
-    def forward(self, coords, original_coords, height_ranges, *args, **kwargs):
+    def forward(self, coords, original_coords, height_range, *args, **kwargs):
         height_diff = torch.abs(coords[:, 2] - original_coords[:, 2])
-        normalization = (height_ranges[:, 1] - height_ranges[:, 0]) + 1e-6
+        normalization = (height_range[:, 1] - height_range[:, 0]) + 1e-6
         height_regularization = torch.true_divide(height_diff, normalization).mean()
 
         return height_regularization

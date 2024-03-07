@@ -1,30 +1,32 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/multi_height/muram_mfr_single_height_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_single_height_v01"
+base_path: "/glade/work/rjarolim/nf2/multi_height/muram_mfr_single_height_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_single_height_v02"
 logging:
   project: multi-height
   name: muram MFR single-height
 data:
   type: muram
   slices:
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/CMEx/MFR_2304x1536x768/2D/tau_slice_1.000.488900"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
   num_workers: 8
   iterations: 10000
 model:
-  type: vector_potential
+  type: b
   dim: 256
   activation: sine
 training:
-  epochs: 10
+  epochs: 100
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+2, end: 1.0, iterations: 1.0e+5}
-      ds_id: [boundary_01]
+      lambda: 1.0
+      ds_id: boundary_01
     - type: boundary
       name: potential_boundary
-      lambda: 1.0e-1
+      lambda: 1.0
       ds_id: potential
     - type: force_free
-      lambda: 1.0e-2
+      lambda: 1.0e-1
+    - type: divergence
+      lambda: 1.0e-1
   check_val_every_n_epoch: 1

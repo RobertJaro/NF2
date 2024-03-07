@@ -95,7 +95,7 @@ class CartesianOutput(BaseOutput):
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
-        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None else height_range / self.Mm_per_ds
+        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None else (h / self.Mm_per_ds for h in height_range)
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         pixel_per_ds = self.Mm_per_ds / Mm_per_pixel

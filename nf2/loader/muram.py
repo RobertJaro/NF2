@@ -1,6 +1,7 @@
 import os
 
 import numpy as np
+from astropy.nddata import block_reduce
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.loader.base import MapDataset, BaseDataModule
@@ -135,6 +136,29 @@ class MURaMSnapshot():
         self.time = time
         self.shape = (shape[1], shape[2], shape[0])
         self.ds = (ds[1], ds[2], ds[0])
+
+    @property
+    def B(self):
+        return np.stack([self.Bx, self.By, self.Bz], axis=-1) * np.sqrt(4 * np.pi)
+
+    def load_cube(self, resolution=0.192 * u.Mm / u.pix):
+
+        b = self.B
+        tau = self.tau
+
+        x_binning = resolution // self.ds[0]
+        y_binning = resolution // self.ds[1]
+        z_binning = resolution // self.ds[2]
+        b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
+        tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
+
+        pix_height = np.argmin(np.abs(tau - 1), axis=2) * u.pix
+        base_height_pix = pix_height.mean()
+
+        min_height = int(base_height_pix.to_value(u.pix))
+        max_height = int((base_height_pix + 40 * u.Mm / resolution).to_value(u.pix))
+        b = b[:, :, min_height:max_height]
+        return b
 
 def read_muram_slice(filepath):
     data = np.fromfile(filepath, dtype=np.float32)

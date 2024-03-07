@@ -1,32 +1,32 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/multi_height/muram_sma_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_v01"
+base_path: "/glade/work/rjarolim/nf2/multi_height/muram_sma_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_v02"
 logging:
   project: multi-height
   name: muram SMA
 data:
   type: muram
   slices:
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/CMEx/SMA_2304x1536x768/2D/tau_slice_1.000.400000"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_1.000.399000"
       height_mapping: {z: 0.5, z_min: 0, z_max: 1}
       los_trv_azi_transform: False
 #      batch_size: 2048
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/CMEx/SMA_2304x1536x768/2D/tau_slice_0.001.400000"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.010.399000"
       height_mapping: {z: 1.0, z_min: 0, z_max: 2}
       los_trv_azi_transform: False
 #      batch_size: 2048
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/CMEx/SMA_2304x1536x768/2D/tau_slice_0.000100.400000"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.000100.399000"
       height_mapping: {z: 2.0, z_min: 0, z_max: 4}
       los_trv_azi_transform: False
 #      batch_size: 2048
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/CMEx/SMA_2304x1536x768/2D/tau_slice_0.000001.400000"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.000001.399000"
       height_mapping: {z: 6.0, z_min: 0, z_max: 12}
       los_trv_azi_transform: False
 #      batch_size: 2048
   num_workers: 8
   iterations: 10000
 model:
-  type: vector_potential
+  type: b
   dim: 256
   activation: sine
 training:
@@ -34,17 +34,19 @@ training:
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+2, end: 1.0, iterations: 1.0e+5}
+      lambda: 1.0
       ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
     - type: boundary
       name: potential_boundary
-      lambda: 1.0e-1
+      lambda: 1.0
       ds_id: potential
     - type: force_free
-      lambda: 1.0e-2
+      lambda: {start: 1.0e-1, end: 1.0e-3, iterations: 1.0e+5}
+    - type: divergence
+      lambda: {start: 1.0e-1, end: 1.0e-3, iterations: 1.0e+5}
     - type: min_height
       name: height
-      lambda: {start: 1.0e-2, end: 1.0e-6, iterations: 1.0e+5}
+      lambda: {start: 1.0e-3, end: 1.0e-6, iterations: 1.0e+5}
       ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
   coordinate_transform:
       type: height
