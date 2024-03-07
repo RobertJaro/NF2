@@ -173,7 +173,7 @@ class NF2Module(LightningModule):
             j = torch.stack([rot_x, rot_y, rot_z], -1)
             div = torch.abs(dBx_dx + dBy_dy + dBz_dz)
 
-            return {'b': b.detach(), 'j': j.detach(), 'div': div.detach()}
+            return {'b': b.detach().cpu(), 'j': j.detach().cpu(), 'div': div.detach().cpu()}
         if dataloader_idx == 1:
             boundary_coords = batch['coords']
             b_true = batch['values']
@@ -188,7 +188,7 @@ class NF2Module(LightningModule):
             b_diff_error = torch.mean(torch.nansum(b_diff_error.pow(2), -1).pow(0.5))
             b_diff = torch.abs(b - b_true)
             b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1).pow(0.5))
-            return {'b_diff_error': b_diff_error.detach(), 'b_diff': b_diff.detach()}
+            return {'b_diff_error': b_diff_error.detach().cpu(), 'b_diff': b_diff.detach().cpu()}
         else:
             raise NotImplementedError('Validation data loader not supported!')
 
