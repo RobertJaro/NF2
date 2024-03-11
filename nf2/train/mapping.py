@@ -21,7 +21,7 @@ def load_callbacks(data_module):
         elif isinstance(ds, SphericalSliceDataset) or isinstance(ds, FITSDataset):
             callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
         elif isinstance(ds, MapDataset):
-            if ds.los_trv_azi_transform:
+            if ds.los_trv_azi:
                 callback = LosTrvAziBoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
             else:
                 callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)

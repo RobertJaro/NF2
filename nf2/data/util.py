@@ -82,7 +82,7 @@ def cartesian_to_spherical(v, f=np):
 def img_to_los_trv_azi(b, f=np):
     B_los = b[..., 2]
     B_trv = (b[..., 0] ** 2 + b[..., 1] ** 2) ** 0.5
-    azi = f.arctan2(b[..., 1], b[..., 0])
+    azi = f.arctan2(b[..., 0], b[..., 1])
     b = f.stack([B_los, B_trv, azi], -1)
     return b
 

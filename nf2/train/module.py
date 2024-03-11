@@ -240,7 +240,7 @@ class NF2Module(LightningModule):
         model_out['j'] = j
         model_out['div'] = div
 
-        return {k: v.detach().cpu() for k, v in {**batch, **model_out}.items()}
+        return {k: v.detach() for k, v in {**batch, **model_out}.items()}
 
     def validation_epoch_end(self, outputs_list):
         self.validation_outputs = {}  # reset validation outputs

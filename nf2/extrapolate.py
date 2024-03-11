@@ -8,14 +8,12 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.data.dataset import SphereSlicesDataset, SphereDataset, CubeDataset, SlicesDataset
 from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.fits import FITSDataset, SHARPDataModule, FITSDataModule
+from nf2.loader.fits import FITSDataModule
 from nf2.loader.general import NumpyDataModule
 from nf2.loader.muram import MURaMDataModule
-from nf2.loader.spherical import SphericalDataModule, SphericalSliceDataset
+from nf2.loader.spherical import SphericalDataModule
 from nf2.loader.vsm import VSMDataModule
-from nf2.train.callback import SphericalSlicesCallback, BoundaryCallback, MetricsCallback, SlicesCallback
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
 
@@ -53,8 +51,6 @@ if 'id' in args.logging:
 
 if args.data["type"] == 'numpy':
     data_module = NumpyDataModule(**args.data)
-elif args.data["type"] == 'sharp':
-    data_module = SHARPDataModule(**args.data)
 elif args.data["type"] == 'fits':
     data_module = FITSDataModule(**args.data)
 elif args.data["type"] == 'solis':

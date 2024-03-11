@@ -17,9 +17,9 @@ parser.add_argument('--temporal_strides', type=int, default=1, required=False,
 parser.add_argument('--overwrite', action='store_true', help='overwrite existing files')
 
 parser.add_argument('--radius_range', nargs='+', type=float, default=(0.999, 1.3), required=False)
-parser.add_argument('--latitude_range', nargs='+', type=float, default=(- np.pi / 2, np.pi / 2), required=False)
+parser.add_argument('--latitude_range', nargs='+', type=float, default=(0, np.pi), required=False)
 parser.add_argument('--longitude_range', nargs='+', type=float, default=(0 * np.pi, 2 * np.pi), required=False)
-parser.add_argument('--pixels_per_solRad', type=int, default=64, required=False)
+parser.add_argument('--pixels_per_solRad', type=int, default=128, required=False)
 
 args = parser.parse_args()
 nf2_path = args.nf2_path
@@ -35,24 +35,6 @@ pixels_per_solRad = args.pixels_per_solRad * u.pix / u.solRad
 assert len(radius_range) == 2, 'radius_range must be a tuple of length 2'
 assert len(latitude_range) == 2, 'latitude_range must be a tuple of length 2'
 assert len(longitude_range) == 2, 'longitude_range must be a tuple of length 2'
-
-# full disk
-# radius_range = (0.999, 1.2)
-# latitude_range = (0 * np.pi, 1 * np.pi)
-# longitude_range = (0 * np.pi, 2 * np.pi)
-# pixels_per_solRad = 64
-
-# 2106
-# radius_range = (0.999, 1.1)
-# latitude_range = (1.11188089, 1.30852593)
-# longitude_range = (0.39223768, 0.808977)
-# pixels_per_solRad = 512
-
-# 2173
-# radius_range = (1, 1.1)
-# latitude_range = (0.4 * np.pi, 0.6 * np.pi)
-# longitude_range = (0.75 * np.pi, 1.0 * np.pi)
-
 
 files = sorted(glob.glob(nf2_path))[::args.temporal_strides]  # if os.path.isdir(nf2_path) else [nf2_path]
 

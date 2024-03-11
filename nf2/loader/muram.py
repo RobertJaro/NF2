@@ -4,6 +4,7 @@ import numpy as np
 from astropy.nddata import block_reduce
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
+from nf2.data.util import img_to_los_trv_azi
 from nf2.loader.base import MapDataset, BaseDataModule
 from nf2.loader.fits import PotentialBoundaryDataset
 
@@ -11,14 +12,13 @@ from astropy import units as u
 
 class MURaMDataModule(BaseDataModule):
 
-    def __init__(self, slices, work_directory, boundary_config=None,
-                 random_config=None,
+    def __init__(self, slices, work_directory, boundary_config=None, random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, max_height=100, validation_batch_size=2 ** 15, log_shape=False,
                  **kwargs):
         # boundary dataset
         slice_datasets = []
         for slice_config in slices:
-            muram_dataset = MURaMSliceDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory)
+            muram_dataset = MURaMDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory)
             slice_datasets.append(muram_dataset)
 
         bottom_boundary_dataset = slice_datasets[0]
@@ -69,8 +69,8 @@ class MURaMDataModule(BaseDataModule):
         validation_slice_datasets = []
         for slice_config in slices:
             slice_config['batch_size'] = validation_batch_size # override batch size
-            muram_dataset = MURaMSliceDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory,
-                                              shuffle=False, filter_nans=False, plot=False)
+            muram_dataset = MURaMDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory,
+                                         shuffle=False, filter_nans=False, plot=False)
             validation_slice_datasets.append(muram_dataset)
         validation_slices_dataset = SlicesDataset(coord_range, ds_per_pixel, n_slices=10,
                                                   batch_size=validation_batch_size)
@@ -99,7 +99,7 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
              'tau': {'id': 'tau', 'unit': 1},
                    }
 
-class MURaMSliceDataset(MapDataset):
+class MURaMDataset(MapDataset):
 
     def __init__(self, data_path, *args, **kwargs):
         sl, Nvar, shape, time = read_muram_slice(data_path)
@@ -111,6 +111,20 @@ class MURaMSliceDataset(MapDataset):
         b = np.stack([bx, by, bz], axis=-1)
 
         super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
+
+class MURaMLosTrvAziDataset(MapDataset):
+
+    def __init__(self, data_path, *args, **kwargs):
+        sl, Nvar, shape, time = read_muram_slice(data_path)
+
+        bz = sl[5, :, :] * np.sqrt(4 * np.pi)
+        bx = sl[6, :, :] * np.sqrt(4 * np.pi)
+        by = sl[7, :, :] * np.sqrt(4 * np.pi)
+
+        b = np.stack([bx, by, bz], axis=-1)
+        b = img_to_los_trv_azi(b, f=np)
+
+        super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=True, *args, **kwargs)
 
 class MURaMSnapshot():
 
@@ -141,14 +155,19 @@ class MURaMSnapshot():
     def B(self):
         return np.stack([self.Bx, self.By, self.Bz], axis=-1) * np.sqrt(4 * np.pi)
 
-    def load_cube(self, resolution=0.192 * u.Mm / u.pix):
+    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm):
 
         b = self.B
         tau = self.tau
 
+        # integer division
+        assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
+        assert resolution % self.ds[1] == 0, f'resolution {resolution} must be a multiple of {self.ds[1]}'
+        assert resolution % self.ds[2] == 0, f'resolution {resolution} must be a multiple of {self.ds[2]}'
         x_binning = resolution // self.ds[0]
         y_binning = resolution // self.ds[1]
         z_binning = resolution // self.ds[2]
+
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
 
@@ -156,9 +175,11 @@ class MURaMSnapshot():
         base_height_pix = pix_height.mean()
 
         min_height = int(base_height_pix.to_value(u.pix))
-        max_height = int((base_height_pix + 40 * u.Mm / resolution).to_value(u.pix))
+        max_height = int((base_height_pix + height / resolution).to_value(u.pix))
         b = b[:, :, min_height:max_height]
-        return b
+        tau = tau[:, :, min_height:max_height]
+
+        return {'B': b, 'tau': tau}
 
 def read_muram_slice(filepath):
     data = np.fromfile(filepath, dtype=np.float32)

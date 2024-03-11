@@ -251,9 +251,17 @@ class SphericalOutput(BaseOutput):
         min_lon, max_lon = longitude_range[0].to_value(u.rad) % (2 * np.pi), longitude_range[1].to_value(u.rad) % (
                     2 * np.pi)
 
-        condition = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad)) \
-                    & (lat_coord >= min_lat) & (lat_coord < max_lat) \
-                    & (lon_coord >= min_lon) & (lon_coord < max_lon)
+        # only evaluate coordinates in simulation volume
+        if min_lat == max_lat:
+            lat_cond = np.ones_like(lat_coord, dtype=bool)
+        else:
+            lat_cond = (lat_coord >= min_lat) & (lat_coord < max_lat)
+        if min_lon == max_lon:
+            lon_cond = np.ones_like(lon_coord, dtype=bool)
+        else:
+            lon_cond = (lon_coord >= min_lon) & (lon_coord < max_lon)
+        rad_cond = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad))
+        condition =  rad_cond & lat_cond  & lon_cond
         sub_coords = coords[condition]
 
         cube_shape = coords.shape[:-1]

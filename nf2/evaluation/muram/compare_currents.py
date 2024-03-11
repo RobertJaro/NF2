@@ -15,8 +15,8 @@ iteration = 474000
 
 
 muram_snapshot = MURaMSnapshot(muram_path, iteration)
-b_muram = muram_snapshot.load_cube()
-
+muram_cube = muram_snapshot.load_cube()
+b_muram = muram_cube['B']
 
 nf2_single_height = CartesianOutput('/glade/work/rjarolim/nf2/multi_height/muram_mfr_single_height_v02/extrapolation_result.nf2')
 nf2_multi_height = CartesianOutput('/glade/work/rjarolim/nf2/multi_height/muram_mfr_v03/extrapolation_result.nf2')

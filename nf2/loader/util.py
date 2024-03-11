@@ -1,3 +1,4 @@
+import numpy as np
 import wandb
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
@@ -33,6 +34,43 @@ def _plot_B(b, coords):
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(im, cax=cax, orientation='vertical')
     axs[2, 0].set_title('Br')
+    im = axs[2, 1].imshow(coords[..., 2].T, origin='lower')
+    divider = make_axes_locatable(axs[2, 1])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[2, 1].set_title('Coordinate z [Mm]')
+    wandb.log({'FITS data': wandb.Image(plt)})
+    plt.close(fig)
+
+def _plot_los_trv_azi(b, coords):
+    fig, axs = plt.subplots(3, 2, figsize=(10, 15))
+    im = axs[0, 0].imshow(b[..., 0].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
+    divider = make_axes_locatable(axs[0, 0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[0, 0].set_title('B_los')
+    im = axs[0, 1].imshow(coords[..., 0].T, origin='lower')
+    divider = make_axes_locatable(axs[0, 1])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[0, 1].set_title('Coordinate x [Mm]')
+    #
+    im = axs[1, 0].imshow(b[..., 1].T, origin='lower', cmap='gray', vmin=-1000, vmax=1000)
+    divider = make_axes_locatable(axs[1, 0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[1, 0].set_title('B_trv')
+    im = axs[1, 1].imshow(coords[..., 1].T, origin='lower')
+    divider = make_axes_locatable(axs[1, 1])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[1, 1].set_title('Coordinate y [Mm]')
+    #
+    im = axs[2, 0].imshow(b[..., 2].T % (2 * np.pi), origin='lower', cmap='twilight', vmin=0, vmax=2 * np.pi)
+    divider = make_axes_locatable(axs[2, 0])
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    plt.colorbar(im, cax=cax, orientation='vertical')
+    axs[2, 0].set_title('B_azi')
     im = axs[2, 1].imshow(coords[..., 2].T, origin='lower')
     divider = make_axes_locatable(axs[2, 1])
     cax = divider.append_axes('right', size='5%', pad=0.05)

@@ -1,0 +1,70 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sst/7310_v04"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/7310_v04"
+logging:
+  project: nf2-sst
+  name: "7310 SST"
+data:
+  type: fits
+  slices:
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/converted/BLOS_2018-09-30T09:22:00_FeI6173_v3_Robert.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/converted/BTRV_2018-09-30T09:22:00_FeI6173_v3_Robert.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/converted/BAZI_2018-09-30T09:22:00_FeI6173_v3_Robert.fits"
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/converted/BLOS_2018-09-30T09:22:00_NaI5896_v3_Robert.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/converted/BTRV_2018-09-30T09:22:00_NaI5896_v3_Robert.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/converted/BAZI_2018-09-30T09:22:00_NaI5896_v3_Robert.fits"
+      height_mapping: {z: 1.0, z_min: 0.0, z_max: 5.0}
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/converted/BLOS_2018-09-30T09:22:00_CaII8542_v3_Robert.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/converted/BTRV_2018-09-30T09:22:00_CaII8542_v3_Robert.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/converted/BAZI_2018-09-30T09:22:00_CaII8542_v3_Robert.fits"
+      height_mapping: {z: 2.0, z_min: 0.0, z_max: 10.0}
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/converted/hmi_los_masked.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/converted/hmi_trv_masked.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/converted/hmi_azi_masked.fits"
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+  activation: sine
+training:
+  epochs: 100
+  loss_config:
+    - type: boundary_los_trv_azi
+      name: boundary
+      lambda: 1.0
+      ds_id: [boundary_01, boundary_02, boundary_03]
+    - type: boundary_los_trv_azi
+      name: boundary_hmi
+      lambda: 0.1
+      ds_id: boundary_04
+      disambiguate: false
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2
+    - type: divergence
+      lambda: 1.0e-2
+    - type: height
+      name: height
+      lambda: 1.0e-3
+      ds_id: [boundary_02, boundary_03]
+  coordinate_transform:
+      type: height
+      ds_id: [boundary_02, boundary_03]
+      validation_ds_id: [validation_boundary_02, validation_boundary_03]
+  check_val_every_n_epoch: 1

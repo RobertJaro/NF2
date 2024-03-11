@@ -10,7 +10,7 @@ from nf2.data.download import download_HARP, donwload_ds
 parser = argparse.ArgumentParser()
 parser.add_argument('--download_dir', type=str, required=True)
 parser.add_argument('--email', type=str, required=True)
-parser.add_argument('--carrington_rotation', type=int, required=True)
+parser.add_argument('--carrington_rotation', type=int, required=False, default=None)
 parser.add_argument('--t_start', type=str, required=True)
 parser.add_argument('--t_end', type=str, required=False, default=None)
 parser.add_argument('--convert_ptr', action='store_true')
@@ -26,6 +26,7 @@ client = drms.Client(email=(args.email), verbose=True)
 
 # download synoptic data
 if args.download_synoptic:
+    assert args.carrington_rotation is not None, "Carrington rotation must be specified to download synoptic data"
     # download corrected synoptic data
     ds = f'hmi.synoptic_mr_polfil_720s[{args.carrington_rotation}]'
     donwload_ds(ds, args.download_dir, client)
