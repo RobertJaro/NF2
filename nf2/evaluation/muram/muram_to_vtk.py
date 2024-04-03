@@ -22,7 +22,7 @@ args = parser.parse_args()
 Mm_per_pixel = args.Mm_per_pixel * u.Mm / u.pix
 
 snapshot = MURaMSnapshot(args.source_path, args.iteration)
-muram_cube = snapshot.load_cube(args.Mm_per_pixel * u.Mm / u.pix)
+muram_cube = snapshot.load_base(args.Mm_per_pixel * u.Mm / u.pix)
 b = muram_cube['B']
 j = curl(b) * u.G / (args.Mm_per_pixel * u.Mm) * const.c / (4 * np.pi) # Mm_per_pixel
 j = j.to(u.G / u.s)

@@ -155,6 +155,9 @@ class MURaMSnapshot():
     def B(self):
         return np.stack([self.Bx, self.By, self.Bz], axis=-1) * np.sqrt(4 * np.pi)
 
+    def v(self):
+        return np.stack([self.vx, self.vy, self.vz], axis=-1)
+
     def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm):
 
         b = self.B
@@ -178,6 +181,29 @@ class MURaMSnapshot():
         max_height = int((base_height_pix + height / resolution).to_value(u.pix))
         b = b[:, :, min_height:max_height]
         tau = tau[:, :, min_height:max_height]
+
+        return {'B': b, 'tau': tau}
+
+    def load_base(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, base_height=180):
+        b = self.B[:, :, base_height:]
+        tau = self.tau[:, :, base_height:]
+        v = np.stack([self.vx, self.vy, self.vz], axis=-1)
+
+        # integer division
+        assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
+        assert resolution % self.ds[1] == 0, f'resolution {resolution} must be a multiple of {self.ds[1]}'
+        assert resolution % self.ds[2] == 0, f'resolution {resolution} must be a multiple of {self.ds[2]}'
+        x_binning = resolution // self.ds[0]
+        y_binning = resolution // self.ds[1]
+        z_binning = resolution // self.ds[2]
+
+        b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
+        tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
+
+
+        max_height = int((height / resolution).to_value(u.pix))
+        b = b[:, :, :max_height]
+        tau = tau[:, :, :max_height]
 
         return {'B': b, 'tau': tau}
 

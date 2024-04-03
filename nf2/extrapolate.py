@@ -67,7 +67,8 @@ else:
 # initialize callbacks
 callbacks = load_callbacks(data_module)
 
-nf2 = NF2Module(data_module.validation_dataset_mapping, model_kwargs=args.model, **args.training)
+nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
+                model_kwargs=args.model, **args.training)
 
 config = {'data': args.data, 'model': args.model, 'training': args.training}
 save_callback = LambdaCallback(

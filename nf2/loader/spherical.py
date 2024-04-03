@@ -19,7 +19,7 @@ from nf2.loader.base import BaseDataModule, TensorsDataset
 
 class SphericalSliceDataset(TensorsDataset):
 
-    def __init__(self, b, coords, spherical_coords, G_per_dB,
+    def __init__(self, b, coords, spherical_coords, G_per_dB, Mm_per_ds,
                  b_err=None, transform=None,
                  plot_overview=True, strides=1, **kwargs):
         if plot_overview:
@@ -41,6 +41,7 @@ class SphericalSliceDataset(TensorsDataset):
         # normalize data
         b /= G_per_dB
         b_err = b_err / G_per_dB if b_err is not None else None
+        coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
         tensors = {'coords': coords,
                    'b_true': b, }
@@ -179,10 +180,15 @@ class SphericalMapDataset(SphericalSliceDataset):
             slice_lon = mask_config['longitude_range']
             slice_lat = mask_config['latitude_range']
 
-            mask = (spherical_coords[..., 1] > slice_lat[0]) & \
-                   (spherical_coords[..., 1] < slice_lat[1]) & \
-                   (spherical_coords[..., 2] > slice_lon[0]) & \
-                   (spherical_coords[..., 2] < slice_lon[1])
+            lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
+                       (spherical_coords[..., 1] < slice_lat[1])
+            lon_mask = (spherical_coords[..., 2] > slice_lon[0]) & \
+                       (spherical_coords[..., 2] < slice_lon[1])
+            if slice_lon[1] > 2 * np.pi:
+                lon_mask = lon_mask | \
+                           ((spherical_coords[..., 2] > 0) & (spherical_coords[..., 2] < slice_lon[1] - 2 * np.pi))
+
+            mask = lat_mask & lon_mask
         else:
             raise NotImplementedError(f"Unknown mask type '{type}'. "
                                       f"Please choose from: ['reference', 'helioprojective', 'heliographic_carrington']")
@@ -246,7 +252,7 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
 class SphericalDataModule(BaseDataModule):
 
     def __init__(self, train_configs, validation_configs,
-                 max_radius=None, G_per_dB=None, work_directory=None,
+                 max_radius=None, Mm_per_ds=.36 * 320, G_per_dB=None, work_directory=None,
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
@@ -258,17 +264,18 @@ class SphericalDataModule(BaseDataModule):
         # data parameters
         self.max_radius = max_radius
         self.G_per_dB = G_per_dB
+        self.Mm_per_ds = Mm_per_ds
         self.cube_shape = [1, max_radius]
         self.spatial_norm = 1 * u.solRad
 
         # init boundary datasets
         general_config = {'work_directory': work_directory, 'batch_size': batch_size, 'G_per_dB': G_per_dB,
-                          'radius_range': [1, max_radius]}
+                          'radius_range': [1, max_radius], 'Mm_per_ds': Mm_per_ds}
 
         config = {'type': 'spherical',
                   'radius_range': [1, max_radius],
                   'G_per_dB': G_per_dB,
-                  'Mm_per_ds': (1 * u.solRad).to_value(u.Mm)}
+                  'Mm_per_ds': Mm_per_ds}
 
         training_datasets = self.load_config(train_configs, general_config, prefix='train')
         validation_datasets = self.load_config(validation_configs, general_config, prefix='validation')

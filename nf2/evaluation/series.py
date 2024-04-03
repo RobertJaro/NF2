@@ -25,8 +25,8 @@ def evaluate_nf2(nf2_file, max_height, Mm_per_pixel):
     out = CartesianOutput(nf2_file)
     res = out.load_cube(np.array([0, max_height]), Mm_per_pixel)
 
-    b = res['B'].value
-    j = res['J'].value
+    b = res['b'].value
+    j = res['j'].value
 
     jxb = np.cross(j, b, axis=-1)
     me = energy(b)
@@ -73,7 +73,7 @@ def evaluate_nf2_series(nf2_paths, max_height, Mm_per_pixel):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-    parser.add_argument('nf2_path', type=str, help='path to the directory of the NF2 files')
+    parser.add_argument('--nf2_path', type=str, help='path to the directory of the NF2 files')
     parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
     parser.add_argument('--max_height', type=float, help='max height of the volume in Mm', required=False, default=20)
     parser.add_argument('--Mm_per_pixel', type=float, help='Mm per pixel', required=False, default=0.72)

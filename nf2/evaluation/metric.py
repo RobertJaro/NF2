@@ -7,6 +7,12 @@ def divergence(b_field):  # (x, y, z, (xyz-field))
     div_B = np.stack([np.gradient(b_field[..., i], axis=i, edge_order=2) for i in range(3)], axis=-1).sum(-1)
     return div_B
 
+def divergence_jacobian(jac_matrix):
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBz_dz = jac_matrix[..., 2, 2]
+    div_B = dBx_dx + dBy_dy + dBz_dz
+    return div_B
 
 def curl(b_field):  # (x, y, z)
     _, dFx_dy, dFx_dz = np.gradient(b_field[..., 0], axis=[0, 1, 2], edge_order=2)
@@ -96,3 +102,36 @@ def evaluate(b, B):
     result['L2n_B'] = (np.abs(divergence(B)) / (vector_norm(B) + 1e-8)).mean() * 1e2
 
     return result
+
+def b_diff_error(b, B, B_error):
+    b_err_diff = np.abs(b - B)
+    b_err_diff = np.clip(b_err_diff, a_min=0, a_max=None) - B_error
+    b_err_diff = np.linalg.norm(b_err_diff, axis=-1)
+    return b_err_diff
+
+
+def b_nabla_bz(b):
+    bx = b[..., 0]
+    by = b[..., 1]
+    bz = b[..., 2]
+
+    jac_matrix = np.stack(np.gradient(b, axis=(0, 1, 2)), -1)
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBz_dz = jac_matrix[..., 2, 2]
+
+    norm_B = np.linalg.norm(b, axis=-1)
+
+    dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
+    dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
+    dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
+
+    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
+                 (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    return b_nabla_bz

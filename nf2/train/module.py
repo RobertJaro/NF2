@@ -9,7 +9,7 @@ from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_mapping, model_kwargs, loss_config=None,
+    def __init__(self, validation_mapping, data_config, model_kwargs, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  coordinate_transform={"type": None},
                  meta_path=None, **kwargs):
@@ -66,9 +66,9 @@ class NF2Module(LightningModule):
         # mapping
         loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
-                               'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss,
-                               'magneto_static': MagnetoStaticLoss}
+                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                               'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
+                               'flux_preservation': FluxPreservationLoss, 'magneto_static': MagnetoStaticLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}
@@ -101,7 +101,7 @@ class NF2Module(LightningModule):
             assert name not in lambdas, f"Duplicate name for loss: {name}"
             lambdas[name] = value
             # additional kwargs
-            loss_module = {name: loss_module_mapping[k](**config)}
+            loss_module = {name: loss_module_mapping[k](**config, **data_config)}
             loss_modules.update(loss_module)
 
         self.model = model
@@ -267,19 +267,18 @@ class NF2Module(LightningModule):
             state_dict[f'lambdas.{k}'] = v
         # remove old lambdas
         remove_keys = []
-        for k,v in state_dict.items():
+        for k, v in state_dict.items():
             if 'lambdas' in k and k.split('.')[1] not in self.lambdas.keys():
                 print(f'Remove lambda: {k}')
                 remove_keys.append(k)
         [state_dict.pop(k) for k in remove_keys]
         # remove old scheduled lambdas
         remove_keys = []
-        for k,v in state_dict.items():
+        for k, v in state_dict.items():
             if 'scheduled_lambdas' in k and k.split('.')[1] not in self.scheduled_lambdas.keys():
                 print(f'Remove scheduled lambda: {k}')
                 remove_keys.append(k)
         [state_dict.pop(k) for k in remove_keys]
-
 
         self.load_state_dict(state_dict, strict=False)
         self.validation_outputs = {}  # reset validation outputs

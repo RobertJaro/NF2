@@ -33,6 +33,8 @@ class SphericalSlicesCallback(Callback):
         c_cube = cartesian_to_spherical(c_cube)
         b_cube = vector_cartesian_to_spherical(b_cube, c_cube)
 
+        c_cube[..., 0] *= self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
+
         self.plot_b(b_cube, c_cube)
         self.plot_current(j_cube, c_cube)
 
@@ -269,8 +271,7 @@ class BoundaryCallback(Callback):
             self.plot_b(b, b_true, original_coords)
 
     def plot_b(self, b, b_true, original_coords):
-        extent = [original_coords[..., 0].min() * self.Mm_per_ds, original_coords[..., 0].max(),
-                  original_coords[..., 1].min() * self.Mm_per_ds, original_coords[..., 1].max()]
+        extent = None
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
 

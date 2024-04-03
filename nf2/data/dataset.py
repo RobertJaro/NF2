@@ -5,7 +5,7 @@ import torch
 from torch.utils.data import Dataset
 
 from nf2.data.util import spherical_to_cartesian
-
+from astropy import units as u
 
 class BatchesDataset(Dataset):
 
@@ -78,10 +78,11 @@ class CubeDataset(Dataset):
 
 class RandomSphericalCoordinateDataset(Dataset):
 
-    def __init__(self, radius_range, batch_size,
+    def __init__(self, radius_range, batch_size, Mm_per_ds,
                  latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi),
                  radial_weighted_sampling=False, latitude_weighted_sampling=False, **kwargs):
         self.radius_range = radius_range
+        self.Mm_per_ds = Mm_per_ds
         self.latitude_range = latitude_range
         self.longitude_range = longitude_range
         self.batch_size = batch_size
@@ -116,12 +117,13 @@ class RandomSphericalCoordinateDataset(Dataset):
         random_coords[:, 2] = lon_r[0] + random_coords[:, 2] * (lon_r[1] - lon_r[0])
         # convert to cartesian
         random_coords = spherical_to_cartesian(random_coords, f=torch)
+        random_coords = random_coords * (1 * u.solRad).to_value(u.Mm) / self.Mm_per_ds
         return {'coords': random_coords}
 
 
 class SphereDataset(Dataset):
 
-    def __init__(self, radius_range, resolution=256, batch_size=1024, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), **kwargs):
+    def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), **kwargs):
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(resolution * ratio)
         coords = np.stack(
@@ -134,6 +136,7 @@ class SphereDataset(Dataset):
         coords = spherical_to_cartesian(coords)
         coords = torch.tensor(coords, dtype=torch.float32)
         coords = coords.reshape((-1, 3))
+        coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
         self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
@@ -145,7 +148,7 @@ class SphereDataset(Dataset):
 
 class SphereSlicesDataset(Dataset):
 
-    def __init__(self, radius_range, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+    def __init__(self, radius_range, Mm_per_ds, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
         coords = np.stack(
@@ -158,6 +161,7 @@ class SphereSlicesDataset(Dataset):
         coords = spherical_to_cartesian(coords)
         coords = torch.tensor(coords, dtype=torch.float32)
         coords = coords.reshape((-1, 3))
+        coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
         self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
 
     def __len__(self):
