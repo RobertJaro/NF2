@@ -58,18 +58,22 @@ data:
   max_radius: 1.3
   G_per_dB: 2000
   num_workers: 8
-  batch_size: 65536
-  iterations: 10000
+  batch_size: 16384
+  iterations: 1000
 model:
   type: vector_potential
   dim: 512
 training:
-  epochs: 100
+  epochs: 1000
   loss_config:
     - type: boundary
       name: boundary
       lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4} #1
-      ds_id: [AR]
+      ds_id: AR
     - type: force_free
       lambda: 0.1
+    - type: energy_gradient
+      lambda: 1.0
+      ds_id: random
+      base_radius: 1.04
   check_val_every_n_epoch: 1

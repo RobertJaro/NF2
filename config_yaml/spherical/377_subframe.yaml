@@ -79,12 +79,12 @@ training:
       ds_id: [AR]
     - type: force_free
       lambda: 0.1
-#    - type: radial
-#      lambda: 1.0e-4
-#      ds_id: [random]
-#      base_radius: 7.246875
     - type: energy_gradient
-      lambda: 1.0
+      lambda: 1.0e+2
       ds_id: [random]
       base_radius: 1.04
+    - type: potential
+      lambda: 0.1
+      ds_id: [random]
+      base_radius: 1.1
   check_val_every_n_epoch: 1

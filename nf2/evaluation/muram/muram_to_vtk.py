@@ -27,4 +27,5 @@ b = muram_cube['B']
 j = curl(b) * u.G / (args.Mm_per_pixel * u.Mm) * const.c / (4 * np.pi) # Mm_per_pixel
 j = j.to(u.G / u.s)
 
-save_vtk(args.vtk_path, vectors={'B': b, 'J': j.value}, scalars={'tau': muram_cube['tau']}, Mm_per_pix=args.Mm_per_pixel)
+save_vtk(args.vtk_path, vectors={'B': b, 'J': j.value},
+         scalars={'tau': muram_cube['tau']}, Mm_per_pix=args.Mm_per_pixel)

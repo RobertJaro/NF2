@@ -171,7 +171,6 @@ class EnergyGradientLoss(BaseLoss):
 
         sampled_dE_dr = dE_dr
         energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight ** 2
-        # energy_gradient_regularization = torch.asinh(energy_gradient_regularization * 1e3) / self.asinh_stretch
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization

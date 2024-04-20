@@ -12,6 +12,34 @@ from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.train.model import VectorPotentialModel, calculate_current_from_jacobian
 
+def current_density(jac_matrix, **kwargs):
+    j = calculate_current_from_jacobian(jac_matrix, f=np)
+    return j.to(u.G / u.Mm)
+
+def b_nabla_bz(b, jac_matrix, **kwargs):
+    # compute B * nabla * Bz
+    bx = b[..., 0]
+    by = b[..., 1]
+    bz = b[..., 2]
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBz_dz = jac_matrix[..., 2, 2]
+
+    norm_B = np.linalg.norm(b, axis=-1)
+
+    dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
+    dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
+    dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
+
+    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
+                 (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    return b_nabla_bz
 
 class BaseOutput:
 
@@ -35,7 +63,7 @@ class BaseOutput:
     def m_per_ds(self):
         return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
-    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True):
+    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True, metrics={'j' : current_density}):
         def _load(coords):
             # normalize and to tensor
             coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
@@ -68,8 +96,8 @@ class BaseOutput:
             jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
             model_out['jac_matrix'] = jac_matrix
 
-            j = calculate_current_from_jacobian(jac_matrix, f=np)
-            model_out['j'] = j.to(u.G / u.Mm)
+            for k, f in metrics.items():
+                model_out[k] = f(**model_out)
 
             return model_out
         else:
