@@ -18,6 +18,8 @@ class FITSDataModule(BaseDataModule):
                  random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, max_height=100, validation_batch_size=2 ** 15, log_shape=False,
                  **kwargs):
+        # wrap data if only one slice is provided
+        slices = slices if isinstance(slices, list) else [slices]
         # boundary dataset
         slice_datasets = []
         for config in slices:
@@ -176,17 +178,20 @@ class FITSSeriesDataModule(FITSDataModule):
 
         self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
 
-        super().__init__(self.fits_paths[0], error_paths=self.error_paths[0], *args, **kwargs)
+        self.initialized = True  # only required for first iteration
+        super().__init__({'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]}, *args, **kwargs)
 
     def train_dataloader(self):
-        # update ID
-        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
-        # re-initialize
-        super().__init__(fits_path=self.fits_paths[0], error_path=self.error_paths[0],
-                         *self.args, **self.kwargs)
+        if not self.initialized:
+            # update ID
+            self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
+            # re-initialize
+            super().__init__(slices={'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]},
+                             *self.args, **self.kwargs)
         # continue with next file in list
         del self.fits_paths[0]
         del self.error_paths[0]
+        self.initialized = False
         return super().train_dataloader()
 
 

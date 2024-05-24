@@ -44,9 +44,10 @@ class SphericalSlicesCallback(Callback):
         for i in range(3):
             for j in range(n_samples):
                 v_min_max = np.max(np.abs(b[j, :, :]))
-                extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
-                          coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
-                extent = np.rad2deg(extent)
+                # extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
+                #           coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
+                # extent = np.rad2deg(extent)
+                extent = None
                 height = coords[j, :, :, 0].mean()
                 im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
                                       origin='upper', extent=extent)
@@ -66,9 +67,10 @@ class SphericalSlicesCallback(Callback):
         n_samples = j.shape[0]
         fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
         for i in range(n_samples):
-            extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
-                      coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
-            extent = np.rad2deg(extent)
+            # extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
+            #           coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
+            # extent = np.rad2deg(extent)
+            extent = None
             height = coords[i, :, :, 0].mean()
             im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
             axs[i].set_xlabel('Longitude [deg]')

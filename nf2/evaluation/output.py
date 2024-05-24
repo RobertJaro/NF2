@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from astropy import units as u, constants
 from astropy.coordinates import SkyCoord
+from dateutil.parser import parse
 from sunpy.coordinates import frames
 from sunpy.map import Map
 from torch import nn
@@ -9,12 +10,14 @@ from tqdm import tqdm
 
 from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical
 from nf2.evaluation.energy import get_free_mag_energy
-from nf2.evaluation.metric import energy
+from nf2.evaluation.metric import energy, normalized_divergence
 from nf2.train.model import VectorPotentialModel, calculate_current_from_jacobian
+
 
 def current_density(jac_matrix, **kwargs):
     j = calculate_current_from_jacobian(jac_matrix, f=np)
     return j.to(u.G / u.Mm)
+
 
 def b_nabla_bz(b, jac_matrix, **kwargs):
     # compute B * nabla * Bz
@@ -30,8 +33,8 @@ def b_nabla_bz(b, jac_matrix, **kwargs):
     dBz_dx = jac_matrix[..., 2, 0]
     dBz_dy = jac_matrix[..., 2, 1]
     dBz_dz = jac_matrix[..., 2, 2]
-
-    norm_B = np.linalg.norm(b, axis=-1)
+    #
+    norm_B = np.linalg.norm(b, axis=-1) + 1e-10 * b.unit
 
     dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
     dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
@@ -39,7 +42,70 @@ def b_nabla_bz(b, jac_matrix, **kwargs):
 
     b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
                  (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    b_nabla_bz = b_nabla_bz.to(1 / u.Mm)
     return b_nabla_bz
+
+def magnetic_helicity(b, a, **kwargs):
+    return np.sum(a * b, axis=-1)
+
+def twist(b, jac_matrix, **kwargs):
+    j = calculate_current_from_jacobian(jac_matrix, f=np)
+    twist = np.linalg.norm(j, axis=-1) / np.linalg.norm(b, axis=-1)
+    threshold = np.linalg.norm(b, axis=-1).to_value(u.G) < 10 # set twist to 0 for weak fields (coronal holes)
+    twist[threshold] = 0 * u.Mm ** -1
+    twist = twist.to(u.Mm ** -1)
+    return twist
+
+
+def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dz = jac_matrix[..., 2, 2]
+    # E = b^2 = b_x^2 + b_y^2 + b_z^2
+    # dE/dx = 2 * (b_x * dBx_dx + b_y * dBy_dx + b_z * dBz_dx)
+    # dE/dy = 2 * (b_x * dBx_dy + b_y * dBy_dy + b_z * dBz_dy)
+    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
+    dE_dx = 2 * (b[..., 0] * dBx_dx + b[..., 1] * dBy_dx + b[..., 2] * dBz_dx)
+    dE_dy = 2 * (b[..., 0] * dBx_dy + b[..., 1] * dBy_dy + b[..., 2] * dBz_dy)
+    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
+
+    coords_spherical = cartesian_to_spherical(coords, f=np)
+    t = coords_spherical[..., 1]
+    p = coords_spherical[..., 2]
+    dE_dr = (np.sin(t) * np.cos(p)) * dE_dx + \
+            (np.sin(t) * np.sin(p)) * dE_dy + \
+            np.cos(p) * dE_dz
+
+    return dE_dr
+
+
+def energy_gradient(b, jac_matrix, **kwargs):
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dz = jac_matrix[..., 2, 2]
+    # E = b^2 = b_x^2 + b_y^2 + b_z^2
+    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
+    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
+
+    return dE_dz
+
+
+def los_trv_azi(b, **kwargs):
+    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
+    b_los = bz.to_value(u.G)
+    b_trv = np.sqrt(bx ** 2 + by ** 2).to_value(u.G)
+    azimuth = np.arctan2(by, bx).to_value(u.deg)
+    return np.stack([b_los, b_trv, azimuth], -1)
+
+def free_energy(b, **kwargs):
+    free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
+    return free_energy
 
 class BaseOutput:
 
@@ -63,7 +129,8 @@ class BaseOutput:
     def m_per_ds(self):
         return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
-    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True, metrics={'j' : current_density}):
+    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True,
+                    metrics={'j': current_density}):
         def _load(coords):
             # normalize and to tensor
             coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
@@ -88,6 +155,8 @@ class BaseOutput:
             model_out = {k: v.reshape(*coords_shape[:-1], *v.shape[1:]).numpy() for k, v in model_out.items()}
 
             model_out['b'] = model_out['b'] * self.G_per_dB
+            if 'a' in model_out:
+                model_out['a'] = model_out['a'] * self.G_per_dB * self.m_per_ds
             return model_out
 
         if compute_jacobian or self._requires_grad:
@@ -96,8 +165,10 @@ class BaseOutput:
             jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
             model_out['jac_matrix'] = jac_matrix
 
+            state = {**model_out, 'coords': coords}
+
             for k, f in metrics.items():
-                model_out[k] = f(**model_out)
+                model_out[k] = f(**state)
 
             return model_out
         else:
@@ -109,7 +180,7 @@ class CartesianOutput(BaseOutput):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert self.state['data']['type'] == 'cartesian', 'Requires spherical NF2 data!'
+        assert self.state['data']['type'] == 'cartesian', 'Requires cartesian NF2 data!'
 
         self.coord_range = self.state['data']['coord_range']
         self.coord_range = self.coord_range[0] if isinstance(self.coord_range, list) else self.coord_range
@@ -119,6 +190,8 @@ class CartesianOutput(BaseOutput):
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
         self.wcs = self.state['data']['wcs'] if 'wcs' in self.state['data'] else None
+        self.time = parse(self.wcs[0].wcs.dateobs) if (self.wcs is not None) and len(self.wcs) >= 1 else None
+        self.data_config = self.state['data']
 
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]
@@ -167,6 +240,80 @@ class CartesianOutput(BaseOutput):
                 'j': Map(j_map, wcs=self.wcs),
                 'energy': Map(energy_map, wcs=self.wcs),
                 'free_energy': Map(free_energy_map, wcs=self.wcs)}
+
+    def trace_bottom(self, Mm_per_pixel=None, **kwargs):
+        x_min, x_max = self.coord_range[0]
+        y_min, y_max = self.coord_range[1]
+
+        Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
+        pixel_per_ds = self.Mm_per_ds / Mm_per_pixel
+
+        coords = np.stack(
+            np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds + 1)),
+                        np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds + 1)),
+                        np.zeros((1,), dtype=np.float32), indexing='ij'), -1)
+        forward_trace = self.trace(coords, **kwargs)
+        backward_trace = self.trace(coords, direction=-1, **kwargs)
+        traces = {i: list(reversed(backward_trace[i][1:])) + forward_trace[i] for i in forward_trace.keys()}
+        return traces
+
+    def trace(self, start_coords, direction=1, max_iterations=None, **kwargs):
+        '''
+        Trace the field line from the given coordinates using a 4th order Runge-Kutta method.
+        '''
+        base_step = np.array([self.ds_per_pixel / 4], dtype=np.float32).reshape((1, 1))  # quarter of a pixel
+
+        x_min, x_max = self.coord_range[0]
+        y_min, y_max = self.coord_range[1]
+        z_min, z_max = (0, self.max_height / self.Mm_per_ds)
+
+        max_iterations = ((x_max - x_min) + (y_max - y_min) + (
+                    z_max - z_min)) / base_step * 3 if max_iterations is None else max_iterations
+
+        field_lines = {i: [c] for i, c in enumerate(start_coords)}
+
+        coords = start_coords
+        iteration = 0
+        while np.isnan(coords).sum() != 0 and iteration < max_iterations:
+            nan_mask = np.isnan(coords)  # only trace non-nan coordinates
+
+            coords_k1 = coords[~nan_mask]
+            model_out_k1 = self.load_coords(coords_k1, **kwargs)
+            b_k1 = model_out_k1['b']
+            k1 = b_k1 / np.linalg.norm(b_k1, axis=-1, keepdims=True)
+
+            coords_k2 = coords_k1 + k1 * base_step / 2
+            # check this too
+            model_out_k2 = self.load_coords(coords_k2, **kwargs)
+            b_k2 = model_out_k2['b'] * np.sign(direction)
+            k2 = b_k2 / np.linalg.norm(b_k2, axis=-1, keepdims=True)
+
+            coords_k3 = coords_k1 + k2 * base_step / 2
+            model_out_k3 = self.load_coords(coords_k3, **kwargs)
+            b_k3 = model_out_k3['b'] * np.sign(direction)
+            k3 = b_k3 / np.linalg.norm(b_k3, axis=-1, keepdims=True)
+
+            coords_k4 = coords_k1 + k3 * base_step
+            model_out_k4 = self.load_coords(coords_k4, **kwargs)
+            b_k4 = model_out_k4['b'] * np.sign(direction)
+            k4 = b_k4 / np.linalg.norm(b_k4, axis=-1, keepdims=True)
+
+            next_coords = coords_k1 + (k1 + 2 * k2 + 2 * k3 + k4) * base_step / 6
+
+            mask = (next_coords[..., 0] >= x_min) & (next_coords[..., 0] <= x_max) & \
+                   (next_coords[..., 1] >= y_min) & (next_coords[..., 1] <= y_max) & \
+                   (next_coords[..., 2] >= z_min) & (next_coords[..., 2] <= z_max)
+            next_coords[~mask] = None
+            # todo write final value at the boundary
+
+            coords[~nan_mask] = next_coords
+
+            for i, c in enumerate(coords):
+                if c is None:
+                    continue
+                field_lines[i].append(c)
+            iteration += 1
+        return field_lines
 
 
 class HeightTransformOutput(CartesianOutput):
@@ -309,25 +456,21 @@ class SphericalOutput(BaseOutput):
         cube_shape = coords.shape[:-1]
         model_out = self.load_coords(sub_coords, **kwargs)
 
-        sub_b = model_out['b']
-        b = np.zeros(cube_shape + (3,)) * sub_b.unit * nan_value
-        b[condition] = sub_b
-        b_spherical = vector_cartesian_to_spherical(b, spherical_coords)
+        spherical_out = {'spherical_coords': spherical_coords, 'coords': coords}
+        for k, sub_v in model_out.items():
+            volume = np.ones(cube_shape + sub_v.shape[1:]) * nan_value
+            if hasattr(sub_v, 'unit'): # preserve units
+                volume = volume * sub_v.unit
+            volume[condition] = sub_v
+            spherical_out[k] = volume
 
-        sub_j = model_out['j']
-        j = np.zeros(cube_shape + (3,)) * sub_j.unit * nan_value
-        j[condition] = sub_j
+        spherical_out['b_rtp'] = vector_cartesian_to_spherical(spherical_out['b'], spherical_coords)
 
-        sub_jac = model_out['jac_matrix']
-        jac_matrix = np.zeros(cube_shape + (3, 3)) * sub_jac.unit * nan_value
-        jac_matrix[condition] = sub_jac
+        return spherical_out
 
-        return {'b': b, 'b_rtp': b_spherical, 'j': j, 'jac_matrix': jac_matrix, 'coords': coords,
-                'spherical_coords': spherical_coords}
-
-    def load_spherical_coords(self, spherical_coords: SkyCoord):
+    def load_spherical_coords(self, spherical_coords: SkyCoord, **kwargs):
         cartesian_coords, spherical_coords = self._skycoords_to_cartesian(spherical_coords)
-        model_out = self.load_coords(cartesian_coords)
+        model_out = self.load_coords(cartesian_coords, **kwargs)
         model_out['spherical_coords'] = spherical_coords
         model_out['coords'] = cartesian_coords
         return model_out
@@ -340,6 +483,6 @@ class SphericalOutput(BaseOutput):
             r.to(u.solRad).value,
             np.pi / 2 - spherical_coords.lat.to(u.rad).value,
             spherical_coords.lon.to(u.rad).value,
-        ]).transpose()
+        ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
         return cartesian_coords, spherical_coords

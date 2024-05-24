@@ -10,7 +10,6 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset
 from nf2.data.loader import load_potential_field_data
-from nf2.data.util import img_to_los_trv_azi
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 

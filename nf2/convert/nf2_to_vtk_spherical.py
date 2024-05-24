@@ -6,7 +6,8 @@ import threading
 import numpy as np
 from astropy import units as u
 
-from nf2.evaluation.output import SphericalOutput
+from nf2.evaluation.metric import normalized_divergence
+from nf2.evaluation.output import SphericalOutput, current_density, twist
 from nf2.evaluation.vtk import save_vtk
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
@@ -19,7 +20,8 @@ parser.add_argument('--overwrite', action='store_true', help='overwrite existing
 parser.add_argument('--radius_range', nargs='+', type=float, default=(0.999, 1.3), required=False)
 parser.add_argument('--latitude_range', nargs='+', type=float, default=(0, 180), required=False)
 parser.add_argument('--longitude_range', nargs='+', type=float, default=(0, 360), required=False)
-parser.add_argument('--radians', action='store_true', help='latitude and longitude in radians', required=False, default=False)
+parser.add_argument('--radians', action='store_true', help='latitude and longitude in radians', required=False,
+                    default=False)
 parser.add_argument('--pixels_per_solRad', type=int, default=64, required=False)
 
 args = parser.parse_args()
@@ -53,11 +55,12 @@ for i, f in enumerate(files):
     print('Processing file {} of {}'.format(i + 1, len(files)))
 
     output = SphericalOutput(f)
-    result = output.load(radius_range, latitude_range, longitude_range, pixels_per_solRad, progress=True)
+    result = output.load(radius_range, latitude_range, longitude_range, pixels_per_solRad, progress=True,
+                         metrics={'j': current_density, 'twist': twist})
 
     vectors = {'B': result['b'], 'B_rtp': result['b_rtp']}
     radius = result['spherical_coords'][..., 0]
-    scalars = {'radius': radius, 'current_density': np.sum(result['j'] ** 2, -1) ** 0.5}
+    scalars = {'radius': radius, 'current_density': np.sum(result['j'] ** 2, -1) ** 0.5, 'twist': result['twist']}
     coords = result['coords']
 
     args = (vtk_path, coords, vectors, scalars)

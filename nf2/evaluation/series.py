@@ -2,13 +2,16 @@ import argparse
 import glob
 import os
 import pickle
+from copy import copy
 
 import imageio
 import numpy as np
 import pandas as pd
+from astropy import units as u
+from astropy.io import fits
 from dateutil.parser import parse
 from matplotlib import pyplot as plt, cm
-from matplotlib.colors import Normalize
+from matplotlib.colors import Normalize, LogNorm
 from matplotlib.dates import date2num, DateFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.map import Map
@@ -21,59 +24,74 @@ from nf2.evaluation.metric import energy, vector_norm, divergence, theta_J
 from nf2.evaluation.output import CartesianOutput
 
 
-def evaluate_nf2(nf2_file, max_height, Mm_per_pixel):
+def evaluate_nf2(nf2_file, **kwargs):
     out = CartesianOutput(nf2_file)
-    res = out.load_cube(np.array([0, max_height]), Mm_per_pixel)
+    res = out.load_cube(**kwargs)
 
-    b = res['b'].value
-    j = res['j'].value
+    b = res['b']
+    j = res['j']
+    a = res['a']
+    Mm_per_pixel = res['Mm_per_pixel'] * u.Mm
 
-    jxb = np.cross(j, b, axis=-1)
     me = energy(b)
-    free_me = get_free_mag_energy(b, progress=False)
-    theta = theta_J(b, j)
+    free_me = get_free_mag_energy(b.to_value(u.G), progress=False) * (u.erg * u.cm ** -3)
+    theta = theta_J(b.value, j.value)
+    magnetic_helicity = (a * b).sum(-1)
+    current_helicity = (b * j).sum(-1)
+    jxb = np.cross(j, b, axis=-1)
 
-    # check free magnetic energy is positive
-    # assert free_me.sum() > 0, f'free magnetic energy is negative: {free_me.sum()}'
-    date_str = os.path.basename(nf2_file).split('_')
-    cm_per_pixel = Mm_per_pixel * 1e8
     result = {
-        'date': parse(date_str[0] + 'T' + date_str[1]),
-        # torch.load(nf2_file)['meta_data']['DATE-OBS'],
-        # bottom boundary
-        'b_0': b[:, :, 0, 2],
-        # integrated quantities
-        'total_energy': me.sum() * cm_per_pixel ** 3,
-        'total_free_energy': free_me.sum() * cm_per_pixel ** 3,
-        'total_div': (np.abs(divergence(b)) / vector_norm(b)).mean(),
-        'total_jxb': vector_norm(jxb).mean(),
-        'theta': theta,
-        # heigth distribution
-        'height_free_energy': free_me.mean((0, 1)),
-        'height_current_density': vector_norm(j).mean((0, 1)) * cm_per_pixel ** 2,
-        # maps
-        'current_density_map': vector_norm(j).sum(2) * cm_per_pixel,
-        'energy_map': me.sum(2) * cm_per_pixel,
-        'free_energy_map': free_me.sum(2) * cm_per_pixel,
-        'jxb_map': vector_norm(jxb).sum(2),
-        'Mm_per_pixel': res['Mm_per_pixel'],
-        'wcs': out.wcs
+        'time': out.time,
+        'integrated_quantities': {
+            'energy': me.sum() * Mm_per_pixel ** 3,
+            'free_energy': free_me.sum() * Mm_per_pixel ** 3,
+            'current_helicity': current_helicity.sum() * Mm_per_pixel ** 3,
+            'magnetic_helicity': magnetic_helicity.sum() * Mm_per_pixel ** 3,
+        },
+        'metrics': {
+            'divergence': (np.abs(divergence(b)) / vector_norm(b)).mean(),
+            'jxb': vector_norm(jxb).mean(),
+            'theta': theta
+        },
+        'maps': {
+            'b_0': b[:, :, 0, 2],  # bottom boundary
+            'current_density_map': vector_norm(j).sum(2) * Mm_per_pixel,
+            'energy_map': me.sum(2) * Mm_per_pixel,
+            'free_energy_map': free_me.sum(2) * Mm_per_pixel,
+            'jxb_map': vector_norm(jxb).sum(2) * Mm_per_pixel,
+        },
+        'height_distribution': {
+            'height_free_energy': free_me.mean((0, 1)) * Mm_per_pixel ** 2,
+            'height_current_density': vector_norm(j).mean((0, 1)) * Mm_per_pixel ** 2,
+        },
+        'info': {
+            'data_config': out.data_config,
+            'Mm_per_pixel': res['Mm_per_pixel'],
+            'wcs': out.wcs
+        }
     }
     return result
 
 
-def evaluate_nf2_series(nf2_paths, max_height, Mm_per_pixel):
+def evaluate_nf2_series(nf2_paths, result_path, **kwargs):
     results = []
     for nf2_file in tqdm(nf2_paths):
-        results.append(evaluate_nf2(nf2_file, max_height, Mm_per_pixel))
-    # concatenate dicts to dict of lists
-    results = {k: [r[k] for r in results] for k in results[0].keys()}
+        save_file = os.path.join(result_path, os.path.basename(nf2_file).replace('.nf2', '.pkl'))
+        if os.path.exists(save_file):
+            results.append(save_file)
+            continue
+        result = evaluate_nf2(nf2_file, **kwargs)
+        with open(save_file, 'wb') as f:
+            pickle.dump(result, f)
+        results.append(save_file)
+
     return results
 
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-    parser.add_argument('--nf2_path', type=str, help='path to the directory of the NF2 files')
+    parser.add_argument('--nf2_path', type=str, help='path to the directory of the NF2 files', required=True)
+    parser.add_argument('--euv_path', type=str, help='path to the directory of the EUV files', required=True)
     parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
     parser.add_argument('--max_height', type=float, help='max height of the volume in Mm', required=False, default=20)
     parser.add_argument('--Mm_per_pixel', type=float, help='Mm per pixel', required=False, default=0.72)
@@ -82,58 +100,120 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     nf2_files = sorted(glob.glob(args.nf2_path))
-    result_path = args.result_path
+    result_path = args.result_path if args.result_path is not None else args.nf2_path
     os.makedirs(result_path, exist_ok=True)
 
     # evaluate series
-    series_results = evaluate_nf2_series(nf2_files, args.max_height, args.Mm_per_pixel)
+    series_results = evaluate_nf2_series(nf2_files, result_path,
+                                         height_range=[0, args.max_height],
+                                         Mm_per_pixel=args.Mm_per_pixel, batch_size=int(2 ** 14))
 
-    # save with pickle
-    with open(os.path.join(result_path, 'results.pkl'), 'wb') as f:
-        pickle.dump(series_results, f)
-
-    # restore from pickle
-    with open(os.path.join(result_path, 'results.pkl'), 'rb') as f:
-        series_results = pickle.load(f)
-
-    # save results as csv
-    df = pd.DataFrame({'date': series_results['date'],
-                       'energy [ergs]': series_results['total_energy'],
-                       'free_energy [ergs]': series_results['total_free_energy'],
-                       'div': series_results['total_div'], 'jxb': series_results['total_jxb'],
-                       'theta': series_results['theta']})
-    df.to_csv(os.path.join(result_path, 'series.csv'))
+    times, integrated_quantities, metrics, maps, height_distribution, wcs = _load_files(series_results)
 
     # plot integrated quantities
-    x_dates = date2num(series_results['date'])
-    date_format = DateFormatter('%d-%H:%M')
+    _plot_integrated_qunatities(times, integrated_quantities, height_distribution,
+                                result_path,
+                                args.Mm_per_pixel, add_flares=args.add_flares)
 
+    _plot_map_videos(times, maps, wcs, args.euv_path, result_path, args.Mm_per_pixel)
+
+def _plot_map_videos(times, maps, wcs, euv_path, result_path, Mm_per_pixel):
+    euv_files = np.array(sorted(glob.glob(euv_path)))
+    euv_dates = np.array([parse(fits.getheader(f, 1)['DATE-OBS']) for f in euv_files])
+
+    video_path = os.path.join(result_path, 'video')
+    os.makedirs(video_path, exist_ok=True)
+
+    j_norm = LogNorm(vmin=1, vmax=1e4)
+    free_energy_norm = LogNorm(vmin=1e1, vmax=1e6)
+
+    for i, time in enumerate(times):
+
+        euv_file = euv_files[np.argmin(np.abs(euv_dates - time))]
+        euv_map = Map(euv_file)
+        exposure = euv_map.exposure_time.to_value(u.s)
+        euv_map = euv_map.reproject_to(wcs[i][0])
+
+        b_0 = maps['b_0'][i].value
+        current_density_map = maps['current_density_map'][i].value
+        free_energy_map = maps['free_energy_map'][i].value
+
+        fig, axs = plt.subplots(2, 2, figsize=(10, 6))
+
+        ax = axs[0, 0]
+
+        extent = np.array([0, b_0.shape[0], 0, b_0.shape[1]]) * Mm_per_pixel
+        im = ax.imshow(b_0.T, origin='lower', cmap='gray', extent=extent, norm=Normalize(vmin=-2000, vmax=2000))
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('Magnetic Field - B$_z$')
+
+        ax = axs[0, 1]
+        cm = copy(plt.get_cmap('sdoaia131'))
+        cm.set_bad('black')
+        im = ax.imshow(euv_map.data / exposure, origin='lower', cmap=cm, extent=extent, norm=LogNorm(vmin=5, vmax=1e4))
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax, label='[DN/s]')
+        ax.set_title('EUV - AIA 131')
+
+
+
+        ax = axs[1, 0]
+
+        im = ax.imshow(current_density_map.T, origin='lower', cmap='inferno', extent=extent, norm=j_norm)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax, label='[G/Mm]')
+        ax.set_title('Current Density - |J|')
+
+        ax = axs[1, 1]
+        im = ax.imshow(free_energy_map.T, origin='lower', cmap='jet', extent=extent, norm=free_energy_norm)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="3%", pad=0.05)
+        cbar = fig.colorbar(im, cax=cax, label='[erg/cm^3]')
+        ax.set_title('Free Magnetic Energy')
+
+
+        [ax.set_xlabel('X [Mm]') for ax in axs[1, :]]
+        [ax.set_ylabel('Y [Mm]') for ax in axs[:, 0]]
+
+        fig.suptitle(f'Time: {time.isoformat(" ", timespec="minutes")}')
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(video_path, f'{time.isoformat("T", timespec="minutes")}.jpg'), dpi=300)
+        plt.close()
+
+
+def _plot_integrated_qunatities(times, integrated_quantities, height_distribution, result_path, Mm_per_pixel,
+                                add_flares):
+    # df = pd.DataFrame({'times': times})
+    # df.groupby(pd.Grouper(freq='12Min')).first()
+
+    date_format = DateFormatter('%d-%H:%M')
     fig, full_axs = plt.subplots(5, 2, figsize=(8, 12), gridspec_kw={"width_ratios": [1, 0.05]})
     axs = full_axs[:, 0]
     [ax.axis('off') for ax in full_axs[:, 1]]
     # make date axis
     for ax in axs:
         ax.xaxis_date()
-        ax.set_xlim(x_dates[0], x_dates[-1])
+        ax.set_xlim(times[0], times[-1])
         ax.xaxis.set_major_formatter(date_format)
-
     fig.autofmt_xdate()
-
     ax = axs[0]
-    ax.plot(x_dates, np.array(series_results['total_energy']) * 1e-32)
+    ax.plot(times, integrated_quantities['energy'].to_value(u.G ** 2 * u.cm ** 3) * 1e-32)
     ax.set_ylabel('Energy\n[$10^{32}$ erg]')
-
     ax = axs[1]
-    ax.plot(x_dates, np.array(series_results['total_free_energy']) * 1e-32)
+    ax.plot(times, integrated_quantities['free_energy'].to_value(u.erg) * 1e-32)
     ax.set_ylabel('Free Energy\n[$10^{32}$ erg]')
-
     ax = axs[2]
-    dt = np.diff(x_dates)[0] / 2
-    dz = args.Mm_per_pixel
-    free_energy_distribution = np.array(series_results['height_free_energy']).T
-    max_height = free_energy_distribution.shape[0] * args.Mm_per_pixel
+    dt = np.diff(times)[0] / 2
+    dz = Mm_per_pixel
+    free_energy_distribution = height_distribution['height_free_energy'].to_value(u.erg * u.cm ** -1).T
+    max_height = free_energy_distribution.shape[0] * Mm_per_pixel
     mpb = ax.imshow(free_energy_distribution,  # average
-                    extent=(x_dates[0] - dt, x_dates[-1] + dt, -dz, max_height + dz), aspect='auto', origin='lower',
+                    extent=(times[0] - dt, times[-1] + dt, -dz, max_height + dz), aspect='auto', origin='lower',
                     cmap=cm.get_cmap('jet'), vmin=0)
     ax.set_ylabel('Altitude\n[Mm]')
     ax.set_ylim(0, 20)
@@ -145,104 +225,67 @@ if __name__ == '__main__':
     full_axs[2, 1].remove()
 
     ax = axs[3]
-    ax.plot(x_dates, np.array(series_results['total_div']))
-    ax.set_ylabel(r'$|\mathbf{\nabla} \cdot B| / |B|$' + '\n[1/pixel]')
-
+    ax.plot(times, integrated_quantities['current_helicity'])
+    ax.set_ylabel('Current Helicity')
     ax = axs[4]
-    ax.plot(x_dates, np.array(series_results['theta']))
-    ax.set_ylabel(r'$\theta_J$' + '\n[deg]')
+    ax.plot(times, integrated_quantities['magnetic_helicity'])
+    ax.set_ylabel('Magnetic Helicity')
 
-    if args.add_flares:
-        flares = Fido.search(a.Time(min(series_results['date']), max(series_results['date'])),
+    f_axs = axs[[0, 1, 3, 4]]
+    if add_flares:
+        flares = Fido.search(a.Time(min(times), max(times)),
                              a.hek.EventType("FL"),
                              a.hek.OBS.Observatory == "GOES")["hek"]
         goes_mapping = {c: 10 ** (i) for i, c in enumerate(['B', 'C', 'M', 'X'])}
         for t, goes_class in zip(flares['event_peaktime'], flares['fl_goescls']):
             flare_intensity = np.log10(float(goes_class[1:]) * goes_mapping[goes_class[0]])
-            if flare_intensity >= np.log10(1 * 10 ** 2):
-                [ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='black') for ax in axs]
+            if flare_intensity >= np.log10(5 * 10 ** 2):
+                [ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='black') for ax in f_axs]
             if flare_intensity >= np.log10(1 * 10 ** 3):
-                [ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='red') for ax in axs]
+                [ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='red') for ax in f_axs]
 
     plt.tight_layout()
-    plt.savefig(os.path.join(result_path, 'series.jpg'))
+    plt.savefig(os.path.join(result_path, 'integrated_quantities.jpg'))
     plt.close()
 
-    # create video of maps
-    # j_map
-    j_maps = np.array(series_results['current_density_map'])
-    images = [cm.get_cmap('viridis')(Normalize(vmin=0, vmax=j_maps.max())(j_map.T)) for j_map in j_maps]
-    images = np.flip(images, axis=1)
-    imageio.mimsave(os.path.join(result_path, 'j_maps.mp4'), images)
-    # free_energy_map
-    free_energy_maps = np.array(series_results['free_energy_map'])
-    images = [cm.get_cmap('jet')(Normalize(vmin=0, vmax=free_energy_maps.max())(free_energy_map.T)) for free_energy_map
-              in free_energy_maps]
-    images = np.flip(images, axis=1)
-    imageio.mimsave(os.path.join(result_path, 'free_energy_maps.mp4'), images)
-    # free_energy_change_map
-    free_energy_change_maps = np.gradient(np.array(series_results['free_energy_map']), axis=0)
-    v_min_max = np.max(np.abs(free_energy_change_maps))
-    images = [cm.get_cmap('seismic')(Normalize(vmin=-v_min_max, vmax=v_min_max)(free_energy_change_map.T)) for
-              free_energy_change_map in free_energy_change_maps]
-    images = np.flip(images, axis=1)
-    imageio.mimsave(os.path.join(result_path, 'free_energy_change_maps.mp4'), images)
-    # jxb_map
-    jxb_maps = np.array(series_results['jxb_map'])
-    images = [cm.get_cmap('plasma')(Normalize(vmin=0, vmax=jxb_maps.max())(jxb_map.T)) for jxb_map in jxb_maps]
-    images = np.flip(images, axis=1)
-    imageio.mimsave(os.path.join(result_path, 'jxb_maps.mp4'), images)
 
-    # create video of free energy with timeline
-    video_path = os.path.join(result_path, 'free_energy_video')
-    os.makedirs(video_path, exist_ok=True)
-    for date, free_energy_map in zip(series_results['date'], series_results['free_energy_map']):
-        fig, axs = plt.subplots(2, 1, figsize=(5, 5))
-        ax = axs[0]
-        im = ax.imshow(free_energy_map.T, vmin=0, vmax=free_energy_maps.max(),
-                       origin='lower', cmap='jet',
-                       extent=np.array([0, free_energy_map.shape[0], 0, free_energy_map.shape[1]]) * args.Mm_per_pixel)
-        ax.set_xlabel('X [Mm]')
-        ax.set_ylabel('Y [Mm]')
-        ax.set_title(date)
-        # add locatable colorbar
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="2%", pad=0.05)
-        cbar = fig.colorbar(im, cax=cax, label='Free Energy Density\n' + r'[erg $cm^{-2}]$')
-        #
-        ax = axs[1]
-        ax.plot(x_dates, np.array(series_results['total_free_energy']) * 1e-32)
-        ax.set_ylabel('Free Energy\n[$10^{32}$ erg]')
-        ax.xaxis_date()
-        ax.set_xlim(x_dates[0], x_dates[-1])
-        ax.xaxis.set_major_formatter(date_format)
-        # tilt x-axis labels
-        fig.autofmt_xdate()
-        # add flares
-        if args.add_flares:
-            for t, goes_class in zip(flares['event_peaktime'], flares['fl_goescls']):
-                flare_intensity = np.log10(float(goes_class[1:]) * goes_mapping[goes_class[0]])
-                if flare_intensity >= np.log10(1 * 10 ** 2):
-                    ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='black')
-                if flare_intensity >= np.log10(1 * 10 ** 3):
-                    ax.axvline(x=date2num(t.datetime), linestyle='dotted', c='red')
-        # add vertical line
-        ax.axvline(x=date2num(date), linestyle='solid', c='red')
-        #
-        plt.tight_layout()
-        plt.savefig(os.path.join(video_path, 'free_energy_map_' + str(date) + '.jpg'))
-        plt.close()
+def _load_files(series_results):
+    # load files
+    integrated_quantities = {'energy': [], 'free_energy': [], 'current_helicity': [], 'magnetic_helicity': []}
+    metrics = {'divergence': [], 'jxb': [], 'theta': []}
+    maps = {'b_0': [], 'current_density_map': [], 'energy_map': [], 'free_energy_map': [], 'jxb_map': []}
+    height_distribution = {'height_free_energy': [], 'height_current_density': []}
+    times = []
+    wcs = []
+    for f in series_results:
+        with open(f, 'rb') as file:
+            data = pickle.load(file)
+            integrated_quantities['energy'].append(data['integrated_quantities']['energy'])
+            integrated_quantities['free_energy'].append(data['integrated_quantities']['free_energy'])
+            integrated_quantities['current_helicity'].append(data['integrated_quantities']['current_helicity'])
+            integrated_quantities['magnetic_helicity'].append(data['integrated_quantities']['magnetic_helicity'])
+            metrics['divergence'].append(data['metrics']['divergence'])
+            metrics['jxb'].append(data['metrics']['jxb'])
+            metrics['theta'].append(data['metrics']['theta'])
+            maps['b_0'].append(data['maps']['b_0'])
+            maps['current_density_map'].append(data['maps']['current_density_map'])
+            maps['energy_map'].append(data['maps']['energy_map'])
+            maps['free_energy_map'].append(data['maps']['free_energy_map'])
+            maps['jxb_map'].append(data['maps']['jxb_map'])
+            height_distribution['height_free_energy'].append(data['height_distribution']['height_free_energy'])
+            height_distribution['height_current_density'].append(data['height_distribution']['height_current_density'])
+            times.append(data['time'])
+            wcs.append(data['info']['wcs'])
 
-    images = [plt.imread(image) for image in sorted(glob.glob(os.path.join(video_path, '*.jpg')))]
-    imageio.mimsave(os.path.join(result_path, 'free_energy_series.mp4'), images)
+    integrated_quantities = {k: np.stack(v) for k, v in integrated_quantities.items()}
+    metrics = {k: np.stack(v) for k, v in metrics.items()}
+    maps = {k: np.stack(v) for k, v in maps.items()}
+    height_distribution = {k: np.stack(v) for k, v in height_distribution.items()}
+    times = np.array(times)
+    wcs = np.array(wcs)
 
-    # create FITS files
-    fits_path = os.path.join(result_path, 'fits')
-    os.makedirs(fits_path, exist_ok=True)
-    for date, j_map, free_energy_map, wcs in zip(series_results['date'], series_results['current_density_map'],
-                                                  series_results['free_energy_map'], series_results['wcs']):
-        ref_map = Map(np.zeros_like(j_map.T), wcs)
-        wcs = ref_map.wcs
-        Map(j_map.T, wcs).save(os.path.join(fits_path, f"j_map_{date.isoformat('T', timespec='minutes')}.fits"))
-        Map(free_energy_map.T, wcs).save(
-            os.path.join(fits_path, f"free_energy_map_{date.isoformat('T', timespec='minutes')}.fits"))
+    return times, integrated_quantities, metrics, maps, height_distribution, wcs
+
+
+if __name__ == '__main__':
+    main()

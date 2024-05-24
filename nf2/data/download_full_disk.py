@@ -22,7 +22,7 @@ time = parse(args.t_start)
 t_end = parse(args.t_end) if args.t_end is not None else None
 
 os.makedirs(args.download_dir, exist_ok=True)
-client = drms.Client(email=(args.email), verbose=True)
+client = drms.Client(email=args.email, verbose=True)
 
 # download synoptic data
 if args.download_synoptic:

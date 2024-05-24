@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/2154_v01"
+base_path: "/glade/work/rjarolim/nf2/spherical/2154_v02"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/2154_v01"
 logging:
   project: spherical
@@ -8,7 +8,7 @@ data:
   type: spherical
   train_configs:
     - type: map
-      ds_id: AR
+      ds_id: full_disk
       batch_size: 4096
       files:
         Br: "/glade/work/rjarolim/data/global/fd_2154/full_disk/hmi.b_720s.20140902_120000_TAI.Br.fits"
@@ -29,7 +29,7 @@ data:
       latitude_range: [  0.186, 2.699 ]
   validation_configs:
     - type: map
-      ds_id: AR_valid
+      ds_id: full_disk_valid
       filter_nans: false
       shuffle: false
       plot_overview: false
@@ -68,12 +68,15 @@ training:
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: AR
-    - type: force_free
-      lambda: 0.1
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4} #1
+      ds_id: full_disk
     - type: energy_gradient
-      lambda: 1.0e+01
+      lambda: 1.0
       ds_id: random
       base_radius: 1.04
-  check_val_every_n_epoch: 1
+    - type: potential
+      lambda: 1.0e-2
+      ds_id: random
+      base_radius: 1.04
+    - type: force_free
+      lambda: 0.1

@@ -66,6 +66,10 @@ def theta_J(b, j=None):
     t_angle = np.rad2deg(t_angle)
     return t_angle
 
+def sigma_J(b, j):
+    return (vector_norm(np.cross(j, b, -1)) / vector_norm(b)).sum() / (vector_norm(j).sum() + 1e-6)
+
+
 def energy(b):
     return (b ** 2).sum(-1) / (8 * np.pi)
 
@@ -88,9 +92,9 @@ def evaluate(b, B):
     # result['eps_p_ll'] = (vector_norm(B[:, :, :64]) ** 2).sum() / (vector_norm(B_potential) ** 2).sum()
 
     j = curl(b)
-    result['sig_J'] = (vector_norm(np.cross(j, b, -1)) / vector_norm(b)).sum() / (vector_norm(j).sum() + 1e-6) * 1e2
+    result['sig_J'] = sigma_J(b, j) * 1e2
     J = curl(B)
-    result['sig_J_ll'] = (vector_norm(np.cross(J, B, -1)) / vector_norm(B)).sum() / (vector_norm(J).sum() + 1e-6) * 1e2
+    result['sig_J_ll'] = sigma_J(B, J) * 1e2
 
     result['L1'] = (vector_norm(np.cross(j, b, -1)) ** 2 / vector_norm(b) ** 2).mean()
     result['L2'] = (divergence(b) ** 2).mean()
@@ -102,6 +106,9 @@ def evaluate(b, B):
     result['L2n_B'] = (np.abs(divergence(B)) / (vector_norm(B) + 1e-8)).mean() * 1e2
 
     return result
+
+
+
 
 def b_diff_error(b, B, B_error):
     b_err_diff = np.abs(b - B)

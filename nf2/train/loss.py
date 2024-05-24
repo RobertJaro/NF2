@@ -107,6 +107,7 @@ class PotentialLoss(BaseLoss):
     def __init__(self, base_radius, Mm_per_ds, **kwargs):
         super().__init__(**kwargs)
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -128,7 +129,7 @@ class PotentialLoss(BaseLoss):
 
         if self.base_radius is not None:
             radius = coords.pow(2).sum(-1).pow(0.5) + 1e-7
-            radius_weight = torch.clip(radius - self.base_radius, min=0)
+            radius_weight = torch.clip(radius - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
             potential_loss *= radius_weight ** 2
 
         return potential_loss.mean()
@@ -139,6 +140,7 @@ class EnergyGradientLoss(BaseLoss):
     def __init__(self, base_radius, Mm_per_ds, **kwargs):
         super().__init__(**kwargs)
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
         # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
@@ -167,7 +169,7 @@ class EnergyGradientLoss(BaseLoss):
                 torch.cos(p) * dE_dz
 
         radius_weight = coords.pow(2).sum(-1).pow(0.5)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+        radius_weight = torch.clip(radius_weight - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
 
         sampled_dE_dr = dE_dr
         energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight ** 2
