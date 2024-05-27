@@ -15,8 +15,8 @@ from nf2.train.model import VectorPotentialModel, calculate_current_from_jacobia
 
 
 def current_density(jac_matrix, **kwargs):
-    j = calculate_current_from_jacobian(jac_matrix, f=np)
-    return j.to(u.G / u.Mm)
+    j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
+    return j.to(u.G / u.s)
 
 
 def b_nabla_bz(b, jac_matrix, **kwargs):

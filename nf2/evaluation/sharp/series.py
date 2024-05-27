@@ -33,7 +33,7 @@ def evaluate_nf2(nf2_file, **kwargs):
     a = res['a']
     Mm_per_pixel = res['Mm_per_pixel'] * u.Mm
 
-    me = energy(b)
+    me = energy(b).value * (u.erg * u.cm ** -3) # erg = G^2 cm^3
     free_me = get_free_mag_energy(b.to_value(u.G), progress=False) * (u.erg * u.cm ** -3)
     theta = theta_J(b.value, j.value)
     magnetic_helicity = (a * b).sum(-1)
@@ -74,9 +74,11 @@ def evaluate_nf2(nf2_file, **kwargs):
 
 
 def evaluate_nf2_series(nf2_paths, result_path, **kwargs):
+    series_result_path = os.path.join(result_path, 'pkl')
+    os.makedirs(series_result_path, exist_ok=True)
     results = []
     for nf2_file in tqdm(nf2_paths):
-        save_file = os.path.join(result_path, os.path.basename(nf2_file).replace('.nf2', '.pkl'))
+        save_file = os.path.join(series_result_path, os.path.basename(nf2_file).replace('.nf2', '.pkl'))
         if os.path.exists(save_file):
             results.append(save_file)
             continue
@@ -124,19 +126,19 @@ def _plot_map_videos(times, maps, wcs, euv_path, result_path, Mm_per_pixel):
     video_path = os.path.join(result_path, 'video')
     os.makedirs(video_path, exist_ok=True)
 
-    j_norm = LogNorm(vmin=1, vmax=1e4)
-    free_energy_norm = LogNorm(vmin=1e1, vmax=1e6)
+    j_norm = LogNorm()
+    free_energy_norm = LogNorm(1e9, 1e14)
 
     for i, time in enumerate(times):
-
+        print(time)
         euv_file = euv_files[np.argmin(np.abs(euv_dates - time))]
         euv_map = Map(euv_file)
         exposure = euv_map.exposure_time.to_value(u.s)
         euv_map = euv_map.reproject_to(wcs[i][0])
 
         b_0 = maps['b_0'][i].value
-        current_density_map = maps['current_density_map'][i].value
-        free_energy_map = maps['free_energy_map'][i].value
+        current_density_map = maps['current_density_map'][i].to_value(u.G * u.cm * u.s ** -1)
+        free_energy_map = maps['free_energy_map'][i].to_value(u.erg * u.cm ** -2)
 
         fig, axs = plt.subplots(2, 2, figsize=(10, 6))
 
@@ -152,27 +154,25 @@ def _plot_map_videos(times, maps, wcs, euv_path, result_path, Mm_per_pixel):
         ax = axs[0, 1]
         cm = copy(plt.get_cmap('sdoaia131'))
         cm.set_bad('black')
-        im = ax.imshow(euv_map.data / exposure, origin='lower', cmap=cm, extent=extent, norm=LogNorm(vmin=5, vmax=1e4))
+        im = ax.imshow(euv_map.data / exposure, origin='lower', cmap=cm, extent=extent, norm=LogNorm(vmin=5, vmax=1e3))
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
-        cbar = fig.colorbar(im, cax=cax, label='[DN/s]')
+        cbar = fig.colorbar(im, cax=cax, label='[DN / s]')
         ax.set_title('EUV - AIA 131')
-
-
 
         ax = axs[1, 0]
 
         im = ax.imshow(current_density_map.T, origin='lower', cmap='inferno', extent=extent, norm=j_norm)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
-        cbar = fig.colorbar(im, cax=cax, label='[G/Mm]')
+        cbar = fig.colorbar(im, cax=cax, label='[G cm / s]')
         ax.set_title('Current Density - |J|')
 
         ax = axs[1, 1]
         im = ax.imshow(free_energy_map.T, origin='lower', cmap='jet', extent=extent, norm=free_energy_norm)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)
-        cbar = fig.colorbar(im, cax=cax, label='[erg/cm^3]')
+        cbar = fig.colorbar(im, cax=cax, label='[erg / cm$^2$]')
         ax.set_title('Free Magnetic Energy')
 
 
