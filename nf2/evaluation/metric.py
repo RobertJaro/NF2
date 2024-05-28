@@ -45,12 +45,22 @@ def weighted_theta(b, j=None):
     j = j if j is not None else curl(b)
     sigma = vector_norm(lorentz_force(b, j)) / vector_norm(b) / vector_norm(j)
     w_sigma = np.average((sigma), weights=vector_norm(j))
-    theta_j = np.arcsin(w_sigma) * (180 / np.pi)
+    theta_j = np.rad2deg(np.arcsin(w_sigma))
     return theta_j
 
 
 def energy(b):
     return (b ** 2).sum(-1) / (8 * np.pi)
+
+def sigma_J(b, j=None):
+    j = j if j is not None else curl(b)
+    sigma = (vector_norm(np.cross(j, b, -1)) / vector_norm(b)).sum() / vector_norm(j).sum()
+    return sigma
+
+def theta_J(b, j=None):
+    sigma = sigma_J(b, j)
+    theta_j = np.rad2deg(np.arcsin(sigma))
+    return theta_j
 
 
 def evaluate(b, B):
