@@ -1,18 +1,31 @@
 import argparse
+import os
 
-import torch
 from astropy.io import fits
 
-from nf2.evaluation.unpack import load_cube
+from nf2.evaluation.output import CartesianOutput, current_density
 
 
-def convert(nf2_path, fits_path, strides):
-    fits_path = fits_path if fits_path is not None else nf2_path.replace('.nf2', '.fits')
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    b = load_cube(nf2_path, device, progress=True, strides=strides)
-    hdu = fits.PrimaryHDU(b)
-    hdul = fits.HDUList([hdu])
-    hdul.writeto(fits_path)
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None):
+    out_path = out_path if out_path is not None \
+        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.hdf5')
+
+    nf2_out = CartesianOutput(nf2_path)
+    output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, progress=True,
+                               metrics={'j': current_density})
+
+    b = output['b']
+    j = output['j']
+
+    header = {'Mm_per_pix': output['Mm_per_pixel'],
+              'data': nf2_out.data_config,
+              'wcs': nf2_out.wcs,
+              'DATE_OBS': nf2_out.time}
+
+    b_hdu = fits.PrimaryHDU(b, header=header)
+    j_hdu = fits.FitsHDU(j)
+    hdul = fits.HDUList([b_hdu, j_hdu])
+    hdul.writeto(out_path)
 
 
 def main():

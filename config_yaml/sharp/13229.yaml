@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/sharp/13229_v01"
+base_path: "/glade/work/rjarolim/nf2/sharp/13229_custom_v02"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13229_v01"
 logging:
   project: nf2-cartesian
@@ -8,13 +8,13 @@ data:
   type: fits
   slices:
     - fits_path:
-        Br: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Br.fits"
-        Bt: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Bt.fits"
-        Bp: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Bp.fits"
+        Br: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Br.fits"
+        Bt: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Bp.fits"
       error_path:
-        Br_err: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Br_err.fits"
-        Bt_err: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Bt_err.fits"
-        Bp_err: "/glade/work/rjarolim/data/nf2/13229/hmi.sharp_cea_720s.9121.20230224_140000_TAI.Bp_err.fits"
+        Br_err: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/nf2/13229_custom/hmi.Bptr_720s_mod.20230224_140000_TAI.JSOC_20240609_003437_IN.Bp_err.fits"
   num_workers: 8
   iterations: 10000
   max_height: 150

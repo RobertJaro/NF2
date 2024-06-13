@@ -6,20 +6,21 @@ import h5py
 from nf2.evaluation.output import CartesianOutput, current_density, los_trv_azi, b_nabla_bz
 
 
-def convert(nf2_path, hdf5_path=None, Mm_per_pixel=None, height_range=None):
-    hdf5_path = hdf5_path if hdf5_path is not None \
-        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.vtk')
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None):
+    out_path = out_path if out_path is not None \
+        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.hdf5')
 
     nf2_out = CartesianOutput(nf2_path)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, progress=True,
-                               metrics={'j': current_density, 'b_nabla_bz': b_nabla_bz, 'los_trv_azi': los_trv_azi})
+                               metrics={'j': current_density})
 
-    f = h5py.File(hdf5_path, 'w')
+    f = h5py.File(out_path, 'w')
     f.create_dataset('B', data=output['b'], dtype='f4')
     f.create_dataset('J', data=output['j'], dtype='f4')
-    f.create_dataset('b_nabla_bz', data=output['b_nabla_bz'], dtype='f4')
     f.attrs['Mm_per_pix'] = output['Mm_per_pixel']
     f.attrs['data'] = nf2_out.data_config
+    f.attrs['wcs'] = nf2_out.wcs
+    f.attrs['time'] = nf2_out.time
     f.close()
 
 

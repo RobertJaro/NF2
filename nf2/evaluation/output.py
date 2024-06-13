@@ -131,6 +131,7 @@ class BaseOutput:
 
     def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True,
                     metrics={'j': current_density}):
+        batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
         def _load(coords):
             # normalize and to tensor
             coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)

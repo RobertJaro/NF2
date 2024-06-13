@@ -5,18 +5,16 @@ from nf2.evaluation.output import CartesianOutput, current_density, b_nabla_bz, 
 from nf2.evaluation.vtk import save_vtk
 
 
-def convert(nf2_path, vtk_path=None, Mm_per_pixel=None, height_range=None):
-    vtk_path = vtk_path if vtk_path is not None \
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None):
+    out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.vtk')
 
     nf2_out = CartesianOutput(nf2_path)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, progress=True,
-                               metrics={'j': current_density, 'b_nabla_bz': b_nabla_bz,
-                                        'magnetic_helicity': magnetic_helicity})
+                               metrics={'j': current_density, 'b_nabla_bz': b_nabla_bz})
 
-    save_vtk(vtk_path, vectors={'B': output['b'], 'J': output['j']},
-             scalars={'b_nabla_bz': output['b_nabla_bz'],
-                      'magnetic_helicity': output['magnetic_helicity']}, Mm_per_pix=output['Mm_per_pixel'])
+    save_vtk(out_path, vectors={'B': output['b'], 'J': output['j']},
+             scalars={'b_nabla_bz': output['b_nabla_bz']}, Mm_per_pix=output['Mm_per_pixel'])
 
 
 def main():
