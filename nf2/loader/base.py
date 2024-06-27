@@ -91,7 +91,7 @@ class BaseDataModule(LightningDataModule):
 
 class MapDataset(TensorsDataset):
 
-    def __init__(self, b, b_err=None,
+    def __init__(self, b, b_err=None, coords=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
                  bin=1, height_mapping=None, plot=True, los_trv_azi=False,
                  wcs=None, **kwargs):
@@ -105,8 +105,9 @@ class MapDataset(TensorsDataset):
         else:
             b /= G_per_dB
 
-        coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
-        coords = coords[:, :, 0, :]
+        if coords is None:
+            coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
+            coords = coords[:, :, 0, :]
 
         self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
                                      [coords[..., 1].min(), coords[..., 1].max()]])
