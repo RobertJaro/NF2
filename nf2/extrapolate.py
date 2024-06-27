@@ -81,7 +81,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None
     val_every_n_epochs = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else None
-    max_epochs = int(training['epochs']) if 'epochs' in training else 1
+    max_epochs = int(training['epochs']) if 'epochs' in training else 10
 
     save_callback = LambdaCallback(
         on_validation_end=lambda *_: save(save_path, nf2, data_module, config_dict))
