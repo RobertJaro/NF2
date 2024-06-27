@@ -6,13 +6,12 @@ import numpy as np
 from nf2.evaluation.output import CartesianOutput
 
 
-def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None):
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwargs):
     out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.npy')
 
     nf2_out = CartesianOutput(nf2_path)
-    output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, progress=True,
-                               metrics={})
+    output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, **kwargs)
     np.save(out_path, output['b'])
 
 

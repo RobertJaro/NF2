@@ -140,7 +140,7 @@ class BaseOutput:
 
             model_out = {}
             it = range(int(np.ceil(coords.shape[0] / batch_size)))
-            it = tqdm(it) if progress else it
+            it = tqdm(it, desc='Load NF2') if progress else it
             for k in it:
                 self.model.zero_grad()
                 coord = coords[k * batch_size: (k + 1) * batch_size]
