@@ -108,6 +108,8 @@ class MapDataset(TensorsDataset):
         if coords is None:
             coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
             coords = coords[:, :, 0, :]
+        else:
+            coords = coords / Mm_per_ds
 
         self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
                                      [coords[..., 1].min(), coords[..., 1].max()]])
