@@ -5,6 +5,7 @@ from copy import copy
 import numpy as np
 from astropy import units as u
 from astropy.io import fits
+from astropy.nddata import block_reduce
 from sunpy.map import Map
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
@@ -153,17 +154,35 @@ class FITSDataset(MapDataset):
 class LosTrvAziFITSDataset(MapDataset):
 
     def __init__(self, fits_path,
-                 bin=1, slice=None, **kwargs):
+                 bin=1, slice=None, load_map=True, **kwargs):
         file_los = fits_path['B_los']
         file_trv = fits_path['B_trv']
         file_azi = fits_path['B_azi']
-        los_map, trv_map, azi_map = Map(file_los), Map(file_trv), Map(file_azi)
-        los_map = process_map(los_map, slice, bin)
-        trv_map = process_map(trv_map, slice, bin)
-        azi_map = process_map(azi_map, slice, bin)
 
-        b = np.stack([los_map.data, trv_map.data, np.pi - azi_map.data]).transpose()
-        wcs = los_map.wcs
+        if load_map:
+            los_map, trv_map, azi_map = Map(file_los), Map(file_trv), Map(file_azi)
+            los_map = process_map(los_map, slice, bin)
+            trv_map = process_map(trv_map, slice, bin)
+            azi_map = process_map(azi_map, slice, bin)
+            los_data = los_map.data
+            trv_data = trv_map.data
+            azi_data = azi_map.data
+            wcs = los_map.wcs
+        else:
+            los_data = fits.getdata(file_los)
+            trv_data = fits.getdata(file_trv)
+            azi_data = fits.getdata(file_azi)
+            if slice:
+                los_data = los_data[slice[0]:slice[1], slice[2]:slice[3]]
+                trv_data = trv_data[slice[0]:slice[1], slice[2]:slice[3]]
+                azi_data = azi_data[slice[0]:slice[1], slice[2]:slice[3]]
+            if bin > 1:
+                los_data = block_reduce(los_data, (bin, bin), func=np.mean)
+                trv_data = block_reduce(trv_data, (bin, bin), func=np.mean)
+                azi_data = block_reduce(azi_data, (bin, bin), func=np.mean)
+            wcs = None
+
+        b = np.stack([los_data, trv_data, np.pi - azi_data]).transpose()
 
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
 

@@ -104,10 +104,13 @@ class RadialLoss(BaseLoss):
 
 class PotentialLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
+    def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
         super().__init__(**kwargs)
-        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
+        if base_radius is not None:
+            self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+            self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
+        else:
+            self.base_radius = None
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -215,8 +218,8 @@ class LosTrvAziBoundaryLoss(BaseLoss):
         b_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         b_pred = img_to_los_trv_azi(b_pred, f=torch)
 
-        bxyz_true = los_trv_azi_to_img(b_true, ambiguous=True, f=torch)
-        bxyz_pred = los_trv_azi_to_img(b_pred, ambiguous=True, f=torch)
+        bxyz_true = los_trv_azi_to_img(b_true, ambiguous=self.disambiguate, f=torch)
+        bxyz_pred = los_trv_azi_to_img(b_pred, ambiguous=self.disambiguate, f=torch)
 
         # compute diff
         b_diff = bxyz_pred - bxyz_true

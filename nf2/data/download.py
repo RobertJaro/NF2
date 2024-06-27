@@ -1,18 +1,33 @@
 import os
 
+import drms
+from dateutil.parser import parse
+
 
 def download_HARP(harpnum, time, dir, client, series='sharp_cea_720s', segments='Br, Bp, Bt, Br_err, Bp_err, Bt_err'):
     ds = 'hmi.%s[%d][%s]{%s}' % (
-    series, harpnum, time.isoformat('_', timespec='seconds'), segments)
+        series, harpnum, time.isoformat('_', timespec='seconds'), segments)
     donwload_ds(ds, dir, client)
 
-def download_HARP_series(harp_num, t_start, t_end, cadence, download_dir, client, series='sharp_cea_720s', segments='Br, Bp, Bt, Br_err, Bp_err, Bt_err'):
+
+def download_SHARP_series(download_dir, email, t_start, t_end=None, noaa_num=None, sharp_num=None,
+             cadence='720s', segments='Br, Bp, Bt, Br_err, Bp_err, Bt_err', series='sharp_cea_720s'):
+    assert sharp_num is not None or noaa_num is not None, 'Either sharp_num or noaa_num must be provided'
+    os.makedirs(download_dir, exist_ok=True)
+    client = drms.Client(email=email, verbose=True)
+    if noaa_num is not None:
+        sharp_num = find_HARP(t_start, noaa_num, client)
+        print(f'Found HARP number {sharp_num} for NOAA number {noaa_num}')
+    else:
+        sharp_num = sharp_num
+
     if t_end is None:
-        ds = f'hmi.{series}[{harp_num}][{t_start.isoformat("_", timespec="seconds")}]{{{segments}}}'
+        ds = f'hmi.{series}[{sharp_num}][{t_start.isoformat("_", timespec="seconds")}]{{{segments}}}'
     else:
         duration = (t_end - t_start).total_seconds()
-        ds = f'hmi.{series}[{harp_num}][{t_start.isoformat("_", timespec="seconds")}/{duration}s@{cadence}]{{{segments}}}'
-    donwload_ds(ds, download_dir, client)
+        ds = f'hmi.{series}[{sharp_num}][{t_start.isoformat("_", timespec="seconds")}/{duration}s@{cadence}]{{{segments}}}'
+    return donwload_ds(ds, download_dir, client)
+
 
 def donwload_ds(ds, dir, client, process=None):
     os.makedirs(dir, exist_ok=True)
