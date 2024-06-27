@@ -1,3 +1,4 @@
+import copy
 import logging
 
 from pytorch_lightning import LightningModule
@@ -9,7 +10,7 @@ from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_mapping, data_config, model_kwargs, loss_config=None,
+    def __init__(self, validation_mapping, data_config, model_kwargs=None, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  coordinate_transform={"type": None},
                  meta_path=None, **kwargs):
@@ -27,7 +28,9 @@ class NF2Module(LightningModule):
             **kwargs: Additional keyword arguments.
         """
         super().__init__()
+        model_kwargs = model_kwargs if model_kwargs is not None else {'type': 'b', 'dim': 256}
         # init model
+        model_kwargs = copy.deepcopy(model_kwargs)
         model_type = model_kwargs.pop('type')
         if model_type == 'b':
             model = BModel(**model_kwargs)
@@ -41,6 +44,7 @@ class NF2Module(LightningModule):
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
         # init coordinate mapping model
+        coordinate_transform = copy.deepcopy(coordinate_transform)
         transform_type = coordinate_transform.pop('type')
         if transform_type is None or transform_type == 'none':
             transform_module = None
@@ -60,8 +64,11 @@ class NF2Module(LightningModule):
         if loss_config is None:
             logging.info('Using default loss configuration')
             loss_config = [
-                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5}},
-                {"type": "force_free", "lambda": 1e-1}, ]
+                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5},
+                 'ds_id': ['boundary_01', 'potential']},
+                {"type": "force_free", "lambda": 1e-1},
+                {"type": "divergence", "lambda": 1e-1},
+            ]
 
         # mapping
         loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
@@ -73,6 +80,7 @@ class NF2Module(LightningModule):
         scheduled_lambdas = {}
         lambdas = {}
         loss_modules = {}
+        loss_config = copy.deepcopy(loss_config)
         for config in loss_config:
             k = config.pop('type')
             l = config.pop('lambda')
