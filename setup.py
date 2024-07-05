@@ -20,7 +20,7 @@ setup(
             'nf2-noaa-to-sharp = nf2.data.noaa_to_sharp:main',
             'nf2-download = nf2.data.download_range:main',
             'nf2-to-vtk = nf2.convert.nf2_to_vtk:main',
-            'nf2-to-npy = nf2.convert.nf2_to_vtk:main',
+            'nf2-to-npy = nf2.convert.nf2_to_npy:main',
             'nf2-to-fits = nf2.convert.nf2_to_fits:main',
             'nf2-to-hdf5 = nf2.convert.nf2_to_hdf5:main',
             'nf2-convert-series = nf2.convert.convert_series:main',
