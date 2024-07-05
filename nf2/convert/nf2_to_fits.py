@@ -30,15 +30,15 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwa
 def main():
     parser = argparse.ArgumentParser(description='Convert NF2 file to fits.')
     parser.add_argument('nf2_path', type=str, help='path to the source NF2 file')
-    parser.add_argument('--fits_path', type=str, help='path to the target numpy file', required=False, default=None)
+    parser.add_argument('--out_path', type=str, help='path to the target numpy file', required=False, default=None)
     parser.add_argument('--strides', type=int, help='downsampling of the volume', required=False, default=1)
 
     args = parser.parse_args()
     nf2_path = args.nf2_path
     strides = args.strides
-    fits_path = args.fits_path
+    out_path = args.out_path
 
-    convert(nf2_path, fits_path, strides)
+    convert(nf2_path, out_path, strides)
 
 
 if __name__ == '__main__':

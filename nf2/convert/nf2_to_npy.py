@@ -18,7 +18,7 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwa
 def main():
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
     parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
-    parser.add_argument('--npy_path', type=str, help='path to the target NPY file', required=False, default=None)
+    parser.add_argument('--out_path', type=str, help='path to the target NPY file', required=False, default=None)
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False,
                         default=None)
     parser.add_argument('--height_range', type=float, nargs=2, help='height range in Mm', required=False, default=None)
@@ -27,10 +27,10 @@ def main():
     nf2_path = args.nf2_path
 
     Mm_per_pixel = args.Mm_per_pixel
-    npy_path = args.npy_path
+    out_path = args.out_path
     height_range = args.height_range
 
-    convert(nf2_path, npy_path, Mm_per_pixel, height_range)
+    convert(nf2_path, out_path, Mm_per_pixel, height_range)
 
 
 if __name__ == '__main__':
