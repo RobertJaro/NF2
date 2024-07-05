@@ -117,7 +117,7 @@ class FITSDataModule(BaseDataModule):
 
 class FITSDataset(MapDataset):
 
-    def __init__(self, fits_path, error_path=None,
+    def __init__(self, fits_path, error_path=None, coords_path=None,
                  bin=1, slice=None, **kwargs):
 
         file_p = fits_path['Bp']
@@ -148,7 +148,16 @@ class FITSDataset(MapDataset):
         else:
             b_err = None
 
-        super().__init__(b=b, b_err=b_err, wcs=wcs, **kwargs)
+        if coords_path is not None:
+            coords_x, coords_y, coords_z = Map(coords_path['x']), Map(coords_path['y']), Map(coords_path['z'])
+            coords_x = process_map(coords_x, slice, bin)
+            coords_y = process_map(coords_y, slice, bin)
+            coords_z = process_map(coords_z, slice, bin)
+            coords = np.stack([coords_x.data, coords_y.data, coords_z.data]).transpose()
+        else:
+            coords = None
+
+        super().__init__(b=b, b_err=b_err, coords=coords, wcs=wcs, **kwargs)
 
 
 class LosTrvAziFITSDataset(MapDataset):
