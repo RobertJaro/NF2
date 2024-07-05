@@ -101,7 +101,7 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
 
 class MURaMDataset(MapDataset):
 
-    def __init__(self, data_path, *args, **kwargs):
+    def __init__(self, data_path, los_trv_azi_transform=False, *args, **kwargs):
         sl, Nvar, shape, time = read_muram_slice(data_path)
 
         bz = sl[5, :, :] * np.sqrt(4 * np.pi)
@@ -110,21 +110,10 @@ class MURaMDataset(MapDataset):
 
         b = np.stack([bx, by, bz], axis=-1)
 
-        super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
+        if los_trv_azi_transform:
+            b = img_to_los_trv_azi(b, f=np)
 
-class MURaMLosTrvAziDataset(MapDataset):
-
-    def __init__(self, data_path, *args, **kwargs):
-        sl, Nvar, shape, time = read_muram_slice(data_path)
-
-        bz = sl[5, :, :] * np.sqrt(4 * np.pi)
-        bx = sl[6, :, :] * np.sqrt(4 * np.pi)
-        by = sl[7, :, :] * np.sqrt(4 * np.pi)
-
-        b = np.stack([bx, by, bz], axis=-1)
-        b = img_to_los_trv_azi(b, f=np)
-
-        super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=True, *args, **kwargs)
+        super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=los_trv_azi_transform, *args, **kwargs)
 
 class MURaMSnapshot():
 

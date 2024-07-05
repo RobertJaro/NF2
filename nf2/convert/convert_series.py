@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 def main():
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-    parser.add_argument('--nf2_dir', type=str, help='path to the source NF2 files')
+    parser.add_argument('--nf2_dir', type=str, help='path to the source NF2 files', nargs='+', required=True)
     parser.add_argument('--out_dir', type=str, help='path to the target VTK directory', required=False, default=None)
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False,
                         default=None)
@@ -18,7 +18,8 @@ def main():
                         default=False)
 
     args = parser.parse_args()
-    nf2_paths = sorted(glob.glob(args.nf2_dir))
+    nf2_paths = [sorted(glob.glob(f)) for f in args.nf2_dir]
+    nf2_paths = [f for files in nf2_paths for f in files]  # flatten list
 
     Mm_per_pixel = args.Mm_per_pixel
     out_dir = args.out_dir if args.out_dir is not None else os.path.dirname(args.nf2_dir)

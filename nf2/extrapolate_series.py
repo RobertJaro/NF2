@@ -55,7 +55,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
         shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
         data['plot_overview'] = False  # skip overview plot for restored model
 
-    fits_paths, error_paths = _load_paths(data)
+    fits_paths, error_paths = _load_paths(data['data_path'])
 
     # reload model training
     ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
@@ -105,9 +105,12 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
     trainer.fit(nf2, data_module, ckpt_path=ckpt_path)
 
 
-def _load_paths(data):
-    data_path = data['data_path']
-    if isinstance(data_path, str):
+def _load_paths(data_path):
+    if isinstance(data_path, list):
+        results = [_load_paths(d) for d in data_path]
+        fits_paths = [f for r in results for f in r[0]]
+        error_paths = [f for r in results for f in r[1]]
+    elif isinstance(data_path, str):
         p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
         t_files = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))  # y
         r_files = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))  # z

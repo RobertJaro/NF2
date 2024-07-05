@@ -18,7 +18,7 @@ def main():
     parser.add_argument('--segments', type=str, required=False, default='Br, Bp, Bt, Br_err, Bp_err, Bt_err')
     args = parser.parse_args()
 
-    sharp_num = args.harp_num
+    sharp_num = args.sharp_num
     noaa_num = args.noaa_num
     t_start = args.t_start
     t_end = args.t_end
