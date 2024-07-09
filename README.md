@@ -18,124 +18,213 @@ A systematic comparison of the time evolution of free magnetic energy and magnet
 
 NF2 can be used as framework to download SHARP data, perform extrapolations and to verify the results. 
 The colab notebook provides a basic example that can be adjusted for arbitrary active regions.
+For local usage configuration files can be used to perform extrapolations of single active regions or series.
 
-### Scripts (command line)
+## Installation
 
-Before you start download and install the requirements.txt in your Python3 environment.
-Make sure that PyTorch is properly installed if you use a GPU environment.
-
+Use pip to install the NF2 package.
 ```
-pip install git+https://github.com/RobertJaro/NF2.git
-```
-
-In the config file you have to specify the path to your data. You need the three vector components (Bp, Br, Bt) and their corresponding errors.
-The base path defines where the results and the trained model are stored. The bin defines spatial reduction of the input data (bin 2 is recommended for SHARP data).
-Other parameters are used for model training and can be set to their default value.
-
-Example for SHARP 377 (hmi_7115.json):
-```json
-{
-  "base_path": "/<<your path>>/hmi_377",
-  "logging": {
-    "wandb_entity": "<<your wandb username>>",
-    "wandb_project": "<<your project name>>",
-    "wandb_name": "hmi_377",
-    "wandb_id": null
-  },
-  
-  "data": {
-    "type": "sharp",
-    "data_path": [
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Bp.fits",
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Bp_err.fits",
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Bt.fits",
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Bt_err.fits",
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Br.fits",
-    "/<<your path>>/hmi.sharp_cea_720s.377.20110212_000000_TAI.Br_err.fits"
-    ],
-    "bin": 2,
-    "height_mapping": {"z":  [0.000]},
-    "Mm_per_pixel": 0.72,
-    "boundary": {"type":  "potential", "strides":  4},
-    "height": 160,
-    "b_norm": 2500,
-    "spatial_norm": 160,
-    "batch_size": {"boundary":  1e4, "random":  2e4},
-    "iterations": 1e5,
-    "work_directory": null,
-    "num_workers": 8
-  },
-
-  "model": {
-    "dim": 256
-  },
-
-  "training": {
-    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
-    "lambda_div": 1e-1,
-    "lambda_ff": 1e-1,
-    "lambda_height_reg": 1e-3,
-    "validation_interval": 1e4,
-    "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
-  }
-}
+pip install nf2
 ```
 
-Training requires about 1 hour on a single V100 GPU.
+For the latest version use the following command.
+```
+pip install git+https://github.com/RobertJaro/NF2@v0.3.0
+```
+
+Make sure that PyTorch is installed if you use a GPU environment. Run in python console:
+```python
+import torch
+    
+print('PyTorch version:', torch.__version__)
+print('GPU available:', torch.cuda.is_available())
+print('Number of GPUs:', torch.cuda.device_count())
+```
+
+## Scripts (command line)
+
+NF2 runs can be configured through yaml files.
+The method can be used for single active regions or time series.
+
+### Data download
+
+NF2 provides direct data download of SHARP data from JSOC.
+
+Download of single SHARP region:
+```
+nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00
+```
+
+Download of SHARP series:
+```
+nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00 --t_end 2011-02-16T00:00:00
+```
+
+To use near real-time data add `--series sharp_cea_720s_nrt`
+
+### AR - Extrapolation
+The code provides NLFF extrapolations where a trade-off between the observation and the force-free magnetic field assumption is found. The weighting is controlled through the lambda parameters in the configuration file. Increase the force-free lambda to enforce the force-free magnetic field assumption. If solutions closer to the observation are desired, decrease the force-free lambda.
+
+Basic example for NOAA AR 11158 (377.yaml):
+```yaml
+---
+base_path: "<<PATH TO SAVE THE RESULTS>>"
+work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
+logging:
+  project: "<<YOUR WANDB PROJECT>>"
+  name: "SHARP 377"
+data:
+  type: fits
+  slices:
+    - fits_path:
+        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
+        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
+        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
+      error_path: # optional
+        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
+        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
+        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
+  num_workers: 8
+  iterations: 10000
+model:
+  type: b
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, potential]
+    - type: force_free
+      lambda: 1.0e-1
+    - type: divergence
+      lambda: 1.0e-1
+```
+The training can be started with the following command and requires about 1 hour on a single V100 GPU.
+```
+nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377.yaml
+```
+
+### AR - Divergence free
+
+To enforce a divergence free magnetic field, the magnetic field can be computed through a vector potential.
+For this we specify the model type as vector_potential and remove the divergence loss term. The divergence free condition can be kept for monitoring but should be close to zero. 
+Extrapolations that use the vector potential will require more computational resources and training time since the optimization is performed through second order derivatives.
+
+Example for a divergence-free extrapolation of NOAA AR 11158 (377_vp.yaml):
+```yaml
+---
+base_path: "<<PATH TO SAVE THE RESULTS>>"
+work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
+logging:
+  project: "<<YOUR WANDB PROJECT>>"
+  name: "SHARP 377 - VP"
+data:
+  type: fits
+  slices:
+    - fits_path:
+        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
+        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
+        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
+      error_path: # optional
+        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
+        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
+        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, potential]
+    - type: force_free
+      lambda: 1.0e-1
+```
 
 ```
-python -m nf2.extrapolate --config <<your path>>/hmi_7115.json
+nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377_vp.yaml
 ```
+
+### Time series
 
 For the extrapolations of time series we can use the model weights of the previous time step. A single time step can then be performed in a few minutes.
-For this we also create a configuration that specifies our data.
+For this we also create a configuration that specifies our data set.
 
-Example for the time series of SHARP 377 (hmi_377_series.json):
-```json
-{
-  "base_path": "/<<your path>>/hmi_series_377",
-  "meta_path": "/<<your previous training path>>/extrapolation_result.nf2",
-  "logging": {
-    "wandb_entity": "<<your wandb username>>",
-    "wandb_project": "<<your project name>>",
-    "wandb_name": "hmi_series_377",
-    "wandb_id": null
-  },
-  
-  "data": {
-    "type": "sharp",
-    "paths": "/<<your path>>/",
-    "bin": 2,
-    "height_mapping": {"z":  [0.000]},
-    "Mm_per_pixel": 0.72,
-    "boundary": {"type":  "potential", "strides":  4},
-    "height": 160,
-    "b_norm": 2500,
-    "spatial_norm": 160,
-    "batch_size": {"boundary":  1e4, "random":  2e4},
-    "iterations": 2e3,
-    "work_directory": null,
-    "num_workers": 12
-  },
+Example for the time series of NOAA 13664 (related to the May 2024 geomagnetic storm; SHARP 11149).
 
-  "model": {
-    "dim": 256
-  },
+(initial frame - 13664.yaml)
+```yaml
+---
+base_path: "<<PATH TO SAVE THE RESULTS>>/init"
+work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
+logging:
+  project: "<<YOUR WANDB PROJECT>>"
+  name: "NOAA 13664 - init"
+data:
+  type: fits
+  slices:
+    - fits_path:
+        Br: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br.fits"
+        Bt: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt.fits"
+        Bp: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp.fits"
+      error_path:
+        Br_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br_err.fits"
+        Bt_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt_err.fits"
+        Bp_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp_err.fits"
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, potential]
+    - type: force_free
+      lambda: 1.0e-1
+```
+(series - 13664_series.yaml)
 
-  "training": {
-    "lambda_b": 1,
-    "lambda_div": 1e-1,
-    "lambda_ff": 1e-1,
-    "lr_params": 5e-4,
-    "check_val_every_n_epoch": 100
-  }
-}
+```yaml
+---
+base_path: "<<PATH TO SAVE THE RESULTS>>/series"
+work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
+meta_path: "<<PATH TO SAVE THE RESULTS>>/init/last.ckpt"
+logging:
+  project: "<<YOUR WANDB PROJECT>>"
+  name: "NOAA 13664 - series"
+data:
+  type: sharp
+  data_path: "<<ABSOLUTE PATH TO DATA>>"
+  num_workers: 8
+  iterations: 2.0e+3
+model:
+  type: vector_potential
+  dim: 256
+training:
+  check_val_every_n_epoch: 5 # validation plots in 1h steps
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1
+      ds_id: [boundary_01, potential]
+    - type: force_free
+      lambda: 1.0e-1
 ```
 
-
-
+Run initial extrapolation and series extrapolation:
 ``` 
-python -m nf2.extrapolate_series --config <<your path>>/hmi_377_series.json
+nf2-extrapolate --config <<your path>>/13664.yaml
+nf2-extrapolate-series --config <<your path>>/13664_series.yaml
 ```
 
 ### Visualization
@@ -145,17 +234,66 @@ https://www.paraview.org/download/
 
 ![](images/paraview.jpeg)
 
-NF2 models can be converted to VTK files that can be used by Paraview.
+NF2 models can be converted to VTK files that can be used by Paraview. 
+Full resolution extrapolations typically exceed the memory capacity. 
+`--Mm_per_pixel 0.72` can be used to reduce the resolution to bin2 SHARP data (the default SHARP resolution is 0.36 Mm per pixel).
 
 ``` 
-python -m nf2.evaluation.convert_vtk_file <<path to your nf2 file>> <<path to the output vtk file>>
+nf2-to-vtk --nf2_path <<path to your nf2 file>> --out_path <<path to the output vtk file>> --Mm_per_pixel 0.72
 ```
 
-## Paper
+## Publications
 
-accepted; Nature Astronomy (Jarolim et al. 2023)
+### Original method paper
+[Jarolim et al. 2023, Nature Astronomy](https://doi.org/10.1038/s41550-023-02030-9) \
+Jarolim, R., Thalmann, J.K., Veronig, A.M. et al. **Probing the solar coronal magnetic field with physics-informed neural networks**. Nat Astron 7, 1171–1179 (2023). https://doi-org.cuucar.idm.oclc.org/10.1038/s41550-023-02030-9
 
-Preprint available: https://doi.org/10.21203/rs.3.rs-1415262/v1
+BibTeX:
+```
+@ARTICLE{2023NatAs...7.1171J,
+       author = {{Jarolim}, R. and {Thalmann}, J.~K. and {Veronig}, A.~M. and {Podladchikova}, T.},
+        title = "{Probing the solar coronal magnetic field with physics-informed neural networks.}",
+      journal = {Nature Astronomy},
+         year = 2023,
+        month = oct,
+       volume = {7},
+        pages = {1171-1179},
+          doi = {10.1038/s41550-023-02030-9},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2023NatAs...7.1171J},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
+### Multi-height extrapolations
+[Jarolim et al. 2024, ApJL](https://doi.org/10.3847/2041-8213/ad2450) \
+Jarolim, R., Tremblay, B., Rempel, M., Molnar, M., Veronig, A. M., Thalmann, J. K., & Podladchikova, T. (2024). **Advancing solar magnetic field extrapolations through multiheight magnetic field measurements**. The Astrophysical Journal Letters, 963(1), L21.
+
+BibTeX:
+```
+@ARTICLE{2024ApJ...963L..21J,
+       author = {{Jarolim}, Robert and {Tremblay}, Benoit and {Rempel}, Matthias and {Molnar}, Momchil and {Veronig}, Astrid M. and {Thalmann}, Julia K. and {Podladchikova}, Tatiana},
+        title = "{Advancing Solar Magnetic Field Extrapolations through Multiheight Magnetic Field Measurements}",
+      journal = {\apjl},
+     keywords = {Solar magnetic fields, Neural networks, Solar corona, 1503, 1933, 1483},
+         year = 2024,
+        month = mar,
+       volume = {963},
+       number = {1},
+          eid = {L21},
+        pages = {L21},
+          doi = {10.3847/2041-8213/ad2450},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...963L..21J},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
+### Applications
+
+Purkhart, S., Veronig, A.M., Dickson, E.C., Battaglia, A.F., Krucker, S., Jarolim, R., Kliem, B., Dissauer, K. and Podladchikova, T., 2023. **Multipoint study of the energy release and transport in the 28 March 2022, M4 flare using STIX, EUI, and AIA during the first Solar Orbiter nominal mission perihelion**. Astronomy & Astrophysics, 679, p.A99.
+
+McKevitt, J., Jarolim, R., Matthews, S., Baker, D., Temmer, M., Veronig, A., Reid, H. and Green, L., 2024. **The Link between Nonthermal Velocity and Free Magnetic Energy in Solar Flares**. The Astrophysical Journal Letters, 961(2), p.L29.
+
+Korsós, M.B., Jarolim, R., Erdélyi, R., Veronig, A.M., Morgan, H. and Zuccarello, F., 2024. **First Insights into the Applicability and Importance of Different 3D Magnetic Field Extrapolation Approaches for Studying the Preeruptive Conditions of Solar Active Regions**. The Astrophysical Journal, 962(2), p.171.
 
 ## Data
 All our simulation results are publicly available (parameter variation, time series, 66 individual active regions).

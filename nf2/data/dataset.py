@@ -197,7 +197,7 @@ class SlicesDataset(Dataset):
 
 class RandomCoordinateDataset(Dataset):
 
-    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None):
+    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None, z_sampling_exponent=1):
         super().__init__()
         if buffer:
             buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
@@ -209,6 +209,7 @@ class RandomCoordinateDataset(Dataset):
         self.coord_range = coord_range
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
+        self.z_sampling_exponent = torch.tensor(z_sampling_exponent, dtype=torch.float32)
 
     def __len__(self):
         return 1
@@ -219,6 +220,7 @@ class RandomCoordinateDataset(Dataset):
                     random_coords[:, 0] * (self.coord_range[0, 1] - self.coord_range[0, 0]) + self.coord_range[0, 0])
         random_coords[:, 1] = (
                     random_coords[:, 1] * (self.coord_range[1, 1] - self.coord_range[1, 0]) + self.coord_range[1, 0])
+        random_coords[:, 2] = random_coords[:, 2] ** self.z_sampling_exponent
         random_coords[:, 2] = (
                     random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         return {'coords': random_coords}
