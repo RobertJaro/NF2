@@ -38,8 +38,10 @@ integrated_quantities = output['integrated_quantities']
 result_path = args.result_path
 Mm_per_pixel = output['Mm_per_pixel']
 
+os.makedirs(result_path, exist_ok=True)
+
 o_free_energy = integrated_quantities['free_energy'].to_value(u.erg) * 1e-32
-o_energy = integrated_quantities['energy'].value * 1e-32
+o_energy = integrated_quantities['energy'].to_value(u.erg) * 1e-32
 o_current = output['maps']['current_density_map'].sum((1, 2)) * Mm_per_pixel ** 2
 
 date_format = DateFormatter('%d-%H:%M')
@@ -97,8 +99,8 @@ ax.tick_params(axis='y', colors=color)
 
 twin_ax = ax.twinx()
 color = 'tab:red'
-twin_ax.plot(times, np.gradient(free_energy) / dt, color=color)
-twin_ax.set_ylabel('$\Delta$ Free Energy\n [$10^{32}$ erg/s]', color=color)
+twin_ax.plot(times, np.gradient(free_energy) / dt * 1e3, color=color)
+twin_ax.set_ylabel('$\Delta$ Free Energy\n [$10^{29}$ erg/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
@@ -114,8 +116,8 @@ ax.tick_params(axis='y', colors=color)
 
 twin_ax = ax.twinx()
 color = 'tab:red'
-twin_ax.plot(times, np.gradient(energy) / dt, color=color)
-twin_ax.set_ylabel('$\Delta$ Energy\n [$10^{32}$ erg/s]', color=color)
+twin_ax.plot(times, np.gradient(energy) / dt * 1e3, color=color)
+twin_ax.set_ylabel('$\Delta$ Energy\n [$10^{29}$ erg/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)

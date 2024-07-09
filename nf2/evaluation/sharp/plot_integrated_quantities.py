@@ -84,7 +84,7 @@ max_height = filled_energy_distribution.shape[1] * Mm_per_pixel
 im = ax.imshow(filled_energy_distribution.T,  # average
                 extent=(filled_times[0] - dt, filled_times[-1] + dt, -dz, max_height + dz), aspect='auto',
                 origin='lower',
-                cmap=cm.get_cmap('jet'), norm=LogNorm(vmin=1e17))
+                cmap=cm.get_cmap('jet'), )
 ax.set_ylabel('Height\n[Mm]')
 ax.set_ylim(0, 20)
 # add colorbar
@@ -94,8 +94,7 @@ cbar = fig.colorbar(im, cax=full_axs[1, 1], label='Free Energy Density\n' + r'[e
 # cbar.set_ticks([2e2, 4e2, 6e2, 8e2])
 
 ax = axs[2]
-ax.plot(goes.data.index, goes.data['xrsb'], label='xrsb')
-ax.plot(goes.data.index, goes.data['xrsa'], label='xrsa')
+ax.plot(goes.data.index, goes.data['xrsb'], label='1-8 $\AA$')
 ax.legend( loc='upper left')
 ax.set_yscale("log")
 ax.set_ylim(1e-6, 1e-3)
