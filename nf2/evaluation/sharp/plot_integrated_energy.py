@@ -61,15 +61,13 @@ free_energy = df['free_energy'].values
 energy = df['energy'].values
 current = df['current'].values
 
-
-fig, axs = plt.subplots(4, 1, figsize=(8, 6))
+fig, axs = plt.subplots(4, 1, figsize=(12, 6))
 
 # make date axis
 for ax in axs:
     ax.xaxis_date()
     ax.set_xlim(datetime(2024, 5, 7), times[-1])
     ax.xaxis.set_major_formatter(date_format)
-
 
 fig.autofmt_xdate()
 
@@ -91,23 +89,6 @@ twin_ax.tick_params(axis='y', colors=color)
 
 ax = axs[1]
 color = 'tab:blue'
-ax.plot(times, free_energy, color=color)
-ax.set_ylabel('Free Energy\n[$10^{32}$ erg]', color=color)
-ax.spines['left'].set_color(color)
-ax.yaxis.label.set_color(color)
-ax.tick_params(axis='y', colors=color)
-
-twin_ax = ax.twinx()
-color = 'tab:red'
-twin_ax.plot(times, np.gradient(free_energy) / dt * 1e3, color=color)
-twin_ax.set_ylabel('$\Delta$ Free Energy\n [$10^{29}$ erg/s]', color=color)
-twin_ax.spines['right'].set_color(color)
-twin_ax.yaxis.label.set_color(color)
-twin_ax.tick_params(axis='y', colors=color)
-
-
-ax = axs[2]
-color = 'tab:blue'
 ax.plot(times, energy)
 ax.set_ylabel('Energy\n[$10^{32}$ erg]', color=color)
 ax.spines['left'].set_color(color)
@@ -118,6 +99,22 @@ twin_ax = ax.twinx()
 color = 'tab:red'
 twin_ax.plot(times, np.gradient(energy) / dt * 1e3, color=color)
 twin_ax.set_ylabel('$\Delta$ Energy\n [$10^{29}$ erg/s]', color=color)
+twin_ax.spines['right'].set_color(color)
+twin_ax.yaxis.label.set_color(color)
+twin_ax.tick_params(axis='y', colors=color)
+
+ax = axs[2]
+color = 'tab:blue'
+ax.plot(times, free_energy, color=color)
+ax.set_ylabel('Free Energy\n[$10^{32}$ erg]', color=color)
+ax.spines['left'].set_color(color)
+ax.yaxis.label.set_color(color)
+ax.tick_params(axis='y', colors=color)
+
+twin_ax = ax.twinx()
+color = 'tab:red'
+twin_ax.plot(times, np.gradient(free_energy) / dt * 1e3, color=color)
+twin_ax.set_ylabel('$\Delta$ Free Energy\n [$10^{29}$ erg/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
@@ -139,61 +136,68 @@ twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
 
-for ax in axs:
-    ax.axvline(x=datetime(2024, 5, 7, 11, 50), linestyle='dotted', c='black') # M2.5
-    ax.axvline(x=datetime(2024, 5, 7, 21, 59), linestyle='dotted', c='black')  # M3.3
-    ax.axvline(x=datetime(2024, 5, 7, 20, 22), linestyle='dotted', c='black')  # M2.1
+m_flare_times = [
+    (datetime(2024, 5, 7, 8, 18), datetime(2024, 5, 7, 8, 40)),  # M1.3
+    (datetime(2024, 5, 7, 11, 40), datetime(2024, 5, 7, 12, 7)),  # M2.5
+    (datetime(2024, 5, 7, 20, 18), datetime(2024, 5, 7, 20, 34)),  # M2.1
+    (datetime(2024, 5, 7, 21, 42), datetime(2024, 5, 7, 22, 21)),  # M3.3
     #
-    ax.axvline(x=datetime(2024, 5, 8, 2, 27), linestyle='dotted', c='black')  # M3.4
-    ax.axvline(x=datetime(2024, 5, 8, 12, 4), linestyle='dotted', c='black')  # M8.7
-    # ax.axvline(x=datetime(2024, 5, 8, 17, 53), linestyle='dotted', c='black')  # M7.9
-    # ax.axvline(x=datetime(2024, 5, 8, 19, 21), linestyle='dotted', c='black')  # M2.0
-    # ax.axvline(x=datetime(2024, 5, 8, 22, 27), linestyle='dotted', c='black')  # M9.9
-    # ax.axvline(x=datetime(2024, 5, 8, 21, 40), linestyle='dotted', c='red')  # X1.0
-    # ax.axvline(x=datetime(2024, 5, 8, 20, 34), linestyle='dotted', c='black')  # M1.8
-    ax.axvline(x=datetime(2024, 5, 8, 6, 53), linestyle='dotted', c='black')  # M7.2
-    ax.axvline(x=datetime(2024, 5, 8, 5, 9), linestyle='dotted', c='red')  # X1.0
-    ax.axvline(x=datetime(2024, 5, 8, 3, 30), linestyle='dotted', c='black')  # M3.6
-    ax.axvline(x=datetime(2024, 5, 8, 3, 42), linestyle='dotted', c='black')  # M2.0
-    ax.axvline(x=datetime(2024, 5, 8, 3, 27), linestyle='dotted', c='black')  # M1.9
+    (datetime(2024, 5, 8, 2, 16), datetime(2024, 5, 8, 2, 36)),  # M3.4
+    (datetime(2024, 5, 8, 3, 38), datetime(2024, 5, 8, 3, 46)),  # M2.0
+    (datetime(2024, 5, 8, 3, 19), datetime(2024, 5, 8, 3, 46)),  # M1.9
+    (datetime(2024, 5, 8, 4, 20), datetime(2024, 5, 8, 4, 49)),  # M3.6
+    (datetime(2024, 5, 8, 6, 44), datetime(2024, 5, 8, 7, 10)),  # M7.2
+    (datetime(2024, 5, 8, 11, 26), datetime(2024, 5, 8, 12, 22)),  # M8.7
+    # (datetime(2024, 5, 8, 17, 32), datetime(2024, 5, 8, 18, 0)),  # M7.9
+    # (datetime(2024, 5, 8, 19, 15), datetime(2024, 5, 8, 19, 29)),  # M2.0
     #
-    ax.axvline(x=datetime(2024, 5, 9, 20, 34), linestyle='dotted', c='black')  # M1.8
-    ax.axvline(x=datetime(2024, 5, 9, 3, 17), linestyle='dotted', c='black')  # M4.0
-    ax.axvline(x=datetime(2024, 5, 9, 3, 32), linestyle='dotted', c='black')  # M4.6
-    ax.axvline(x=datetime(2024, 5, 9, 4, 49), linestyle='dotted', c='black')  # M1.7
-    ax.axvline(x=datetime(2024, 5, 9, 6, 12), linestyle='dotted', c='black')  # M2.3
-    ax.axvline(x=datetime(2024, 5, 9, 6, 27), linestyle='dotted', c='black')  # M2.5
-    ax.axvline(x=datetime(2024, 5, 9, 11, 56), linestyle='dotted', c='black')  # M3.1
-    ax.axvline(x=datetime(2024, 5, 9, 12, 12), linestyle='dotted', c='black')  # M2.9
-    ax.axvline(x=datetime(2024, 5, 9, 13, 23), linestyle='dotted', c='black')  # M3.7
-    ax.axvline(x=datetime(2024, 5, 9, 22, 41), linestyle='dotted', c='black')  # M2.6
-    ax.axvline(x=datetime(2024, 5, 9, 17, 44), linestyle='dotted', c='red')  # X1.1
-    ax.axvline(x=datetime(2024, 5, 9, 9, 13), linestyle='dotted', c='red')  # X2.3
-    ax.axvline(x=datetime(2024, 5, 9, 21, 40), linestyle='dotted', c='red')  # X1.0
-    ax.axvline(x=datetime(2024, 5, 9, 19, 21), linestyle='dotted', c='black')  # M2.0
-    ax.axvline(x=datetime(2024, 5, 9, 22, 27), linestyle='dotted', c='black')  # M9.9
-    ax.axvline(x=datetime(2024, 5, 9, 22, 27), linestyle='dotted', c='black')  # M9.7
+    (datetime(2024, 5, 9, 3, 7), datetime(2024, 5, 9, 3, 23)),  # M4.0
+    (datetime(2024, 5, 9, 3, 23), datetime(2024, 5, 9, 3, 49)),  # M4.6
+    (datetime(2024, 5, 9, 4, 44), datetime(2024, 5, 9, 4, 55)),  # M1.7
+    (datetime(2024, 5, 9, 6, 3), datetime(2024, 5, 9, 6, 31)),  # M2.3
+    (datetime(2024, 5, 9, 6, 24), datetime(2024, 5, 9, 6, 31)),  # M2.5
+    (datetime(2024, 5, 9, 11, 52), datetime(2024, 5, 9, 12, 2)),  # M3.1
+    (datetime(2024, 5, 9, 12, 5), datetime(2024, 5, 9, 12, 20)),  # M2.9
+    (datetime(2024, 5, 9, 13, 16), datetime(2024, 5, 9, 13, 29)),  # M3.7
+    # (datetime(2024, 5, 8, 22, 4), datetime(2024, 5, 8, 23, 30)),  # M9.9
+    # (datetime(2024, 5, 8, 22, 5), datetime(2024, 5, 8, 22, 45)),  # M9.7
+    (datetime(2024, 5, 9, 22, 24), datetime(2024, 5, 9, 22, 47)),  # M2.6
+    (datetime(2024, 5, 9, 23, 44), datetime(2024, 5, 9, 23, 55)),  # M1.6
     #
-    ax.axvline(x=datetime(2024, 5, 10, 0, 18), linestyle='dotted', c='black') # M1.5
-    ax.axvline(x=datetime(2024, 5, 10, 6, 24), linestyle='dotted', c='black')  # M1.4
-    ax.axvline(x=datetime(2024, 5, 10, 10, 14), linestyle='dotted', c='black')  # M2.2
-    ax.axvline(x=datetime(2024, 5, 10, 14, 11), linestyle='dotted', c='black')  # M6.0
-    ax.axvline(x=datetime(2024, 5, 10, 18, 32), linestyle='dotted', c='black')  # M1.1
-    ax.axvline(x=datetime(2024, 5, 10, 14, 11), linestyle='dotted', c='black')  # M6.0
-    ax.axvline(x=datetime(2024, 5, 10, 18, 48), linestyle='dotted', c='black')  # M1.8
-    ax.axvline(x=datetime(2024, 5, 10, 19, 5), linestyle='dotted', c='black')  # M2.0
-    ax.axvline(x=datetime(2024, 5, 10, 19, 35), linestyle='dotted', c='black')  # M1.1
-    ax.axvline(x=datetime(2024, 5, 10, 20, 3), linestyle='dotted', c='black')  # M1.9
-    ax.axvline(x=datetime(2024, 5, 10, 21, 8), linestyle='dotted', c='black')  # M3.8
-    ax.axvline(x=datetime(2024, 5, 10, 6, 54), linestyle='dotted', c='red')  # X4.0
-    ax.axvline(x=datetime(2024, 5, 10, 23, 51), linestyle='dotted', c='black')  # M1.6
+    (datetime(2024, 5, 10, 0, 10), datetime(2024, 5, 10, 0, 22)),  # M1.5
+    (datetime(2024, 5, 10, 6, 14), datetime(2024, 5, 10, 6, 27)),  # M1.4
+    (datetime(2024, 5, 10, 10, 10), datetime(2024, 5, 10, 10, 19)),  # M2.2
+    (datetime(2024, 5, 10, 13, 58), datetime(2024, 5, 10, 14, 28)),  # M6.0
+    (datetime(2024, 5, 10, 18, 26), datetime(2024, 5, 10, 18, 38)),  # M1.1
+    (datetime(2024, 5, 10, 18, 38), datetime(2024, 5, 10, 19, 7)),  # M1.8
+    (datetime(2024, 5, 10, 18, 57), datetime(2024, 5, 10, 19, 10)),  # M2.0
+    (datetime(2024, 5, 10, 19, 35), datetime(2024, 5, 10, 19, 56)),  # M1.1
+    (datetime(2024, 5, 10, 19, 56), datetime(2024, 5, 10, 20, 19)),  # M1.9
+    (datetime(2024, 5, 10, 20, 59), datetime(2024, 5, 10, 21, 12)),  # M3.8
     #
-    nans = np.isnan(unsigned_flux)
-    # pairs of ranges
-    ranges = np.where(np.diff(nans) != 0)[0].reshape(-1, 2)
-    for start, end in ranges:
-        ax.axvspan(times[start], times[end], color='orange', alpha=0.3)
+    (datetime(2024, 5, 11, 4, 28), datetime(2024, 5, 11, 4, 51)),  # M1.4
+]
 
+x_flares = [
+    # (datetime(2024, 5, 8, 21, 8), datetime(2024, 5, 8, 21, 58)),  # X1.0
+    (datetime(2024, 5, 8, 4, 37), datetime(2024, 5, 8, 5, 28)),  # X1.0
+    (datetime(2024, 5, 9, 8, 45), datetime(2024, 5, 9, 9, 31)),  # X2.3
+    (datetime(2024, 5, 9, 17, 23), datetime(2024, 5, 9, 18, 1)),  # X1.1
+    (datetime(2024, 5, 10, 6, 27), datetime(2024, 5, 10, 7, 13)),  # X4.0
+    (datetime(2024, 5, 11, 1, 10), datetime(2024, 5, 11, 1, 39)),  # X5.8
+]
+
+for start, end in m_flare_times:
+    [ax.axvspan(start, end, color='blue', alpha=0.2) for ax in axs]
+
+for start, end in x_flares:
+    [ax.axvspan(start, end, color='orange', alpha=1) for ax in axs]
+
+nans = np.isnan(unsigned_flux)
+# pairs of ranges
+ranges = np.where(np.diff(nans) != 0)[0].reshape(-1, 2)
+for start, end in ranges:
+    [ax.axvspan(times[start], times[end], color='gray', alpha=0.3) for ax in axs]
 
 plt.tight_layout()
 plt.savefig(os.path.join(result_path, 'integrated_energy.jpg'), dpi=300)

@@ -75,7 +75,6 @@ fig.autofmt_xdate()
 ax = axs[0]
 ax.plot(times, free_energy)
 ax.set_ylabel('Free Energy\n[$10^{32}$ erg]')
-ax.set_xlim(times[0], times[-1])
 
 ax = axs[1]
 dt = np.diff(filled_times)[0] / 2
@@ -99,7 +98,6 @@ ax.legend( loc='upper left')
 ax.set_yscale("log")
 ax.set_ylim(1e-6, 1e-3)
 ax.set_ylabel('GOES\n' + r'[W m$^{-2}$]')
-ax.set_xlim(times[0], times[-1])
 
 for value in [1e-5, 1e-4]:
     ax.axhline(value, c='gray')
@@ -115,7 +113,8 @@ for ax in axs:
     ax.axvline(x=datetime(2024, 5, 8, 4, 37), linestyle='dotted', c='black')
     ax.axvline(x=datetime(2024, 5, 9, 17, 23), linestyle='dotted', c='black')
     ax.axvline(x=datetime(2024, 5, 10, 6, 27), linestyle='dotted', c='black')
-
+    # plot 60 degree line
+    ax.axvline(x=datetime(2024, 5, 10, 15, 34), linestyle='solid', c='magenta')
 
 # labels = ['A', 'B', 'C', 'M', 'X']
 # centers = np.logspace(-7.5, -3.5, len(labels))

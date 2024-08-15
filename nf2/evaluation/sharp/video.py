@@ -26,7 +26,7 @@ def _plot_map_videos(times, maps, wcs, euv_path, result_path, Mm_per_pixel):
     j_norm = LogNorm()
     free_energy_norm = LogNorm(1e9, 1e14)
 
-    for i, time in enumerate(times):
+    for i, time in tqdm(enumerate(times), total=len(times)):
         euv_file = euv_files[np.argmin(np.abs(euv_dates - time))]
         euv_map = Map(euv_file)
         exposure = euv_map.exposure_time.to_value(u.s)
@@ -65,6 +65,7 @@ def _plot_map_videos(times, maps, wcs, euv_path, result_path, Mm_per_pixel):
         ax.set_title('Current Density - |J|')
 
         ax = axs[1, 1]
+        free_energy_map[free_energy_map < 1e9] = 1e9
         im = ax.imshow(free_energy_map.T, origin='lower', cmap='jet', extent=extent, norm=free_energy_norm)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="3%", pad=0.05)

@@ -3,7 +3,6 @@ import os
 import shutil
 
 import torch
-import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
@@ -16,6 +15,7 @@ from nf2.loader.spherical import SphericalDataModule
 from nf2.loader.vsm import VSMDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
+from nf2.train.util import load_yaml_config
 
 
 def run(base_path, data, work_directory=None, logging={}, model={}, training={}, config=None):
@@ -39,7 +39,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
     if work_directory is None:
         work_directory = os.path.join(base_path, 'work')
     os.makedirs(work_directory, exist_ok=True)
-    data['work_directory'] = work_directory # set work directory for data loaders
+    data['work_directory'] = work_directory  # set work directory for data loaders
 
     save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
@@ -115,14 +115,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
-    args = parser.parse_args()
+    args, overwrite_args = parser.parse_known_args()
 
-    with open(args.config) as config:
-        info = yaml.safe_load(config)
-        for key, value in info.items():
-            args.__dict__[key] = value
+    yaml_config_file = args.config
+    config = load_yaml_config(yaml_config_file, overwrite_args)
 
-    run(**args.__dict__)
+    run(**config)
 
 
 if __name__ == '__main__':

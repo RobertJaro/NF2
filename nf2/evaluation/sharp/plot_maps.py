@@ -53,6 +53,7 @@ def main():
         b_0 = maps['b_0'][i].value
         current_density_map = maps['current_density_map'][i].to_value(u.G * u.cm * u.s ** -1)
         free_energy_map = maps['free_energy_map'][i].to_value(u.erg * u.cm ** -2)
+        free_energy_map[free_energy_map < 1e9] = 1e9
 
         fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
         extent = np.array([0, b_0.shape[0], 0, b_0.shape[1]]) * Mm_per_pixel

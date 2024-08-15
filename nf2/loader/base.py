@@ -99,6 +99,8 @@ class MapDataset(TensorsDataset):
 
         # binning
         b = block_reduce(b, (bin, bin, 1), np.mean)
+        self.bz = b[..., 0] if los_trv_azi else b[..., 2]
+
         # normalize
         if los_trv_azi:
             b[..., :2] /= G_per_dB

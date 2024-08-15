@@ -17,12 +17,12 @@ data:
       Bt_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Bt_err.fits'
     },
     {
-      Bp: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Bp.fits',
-      Br: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Br.fits',
-      Bt: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Bt.fits',
-      Bp_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Bp_err.fits',
-      Br_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Br_err.fits',
-      Bt_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240510*Bt_err.fits'
+      Bp: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bp.fits',
+      Br: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Br.fits',
+      Bt: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bt.fits',
+      Bp_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bp_err.fits',
+      Br_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Br_err.fits',
+      Bt_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bt_err.fits'
     }
   ]
   num_workers: 8

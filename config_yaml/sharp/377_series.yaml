@@ -11,9 +11,8 @@ data:
   num_workers: 8
   iterations: 2.0e+3
 model:
-  type: vector_potential
+  type: b
   dim: 256
-  activation: swish
 training:
   epochs: 1.0e+3
   check_val_every_n_epoch: 5 # validation plots in 1h steps
@@ -23,4 +22,6 @@ training:
       lambda: 1
       ds_id: [boundary, potential]
     - type: force_free
+      lambda: 1.0e-1
+    - type: divergence
       lambda: 1.0e-1

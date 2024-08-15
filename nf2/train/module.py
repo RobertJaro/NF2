@@ -71,7 +71,9 @@ class NF2Module(LightningModule):
             ]
 
         # mapping
-        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
+        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
+                               'boundary_azi': AziBoundaryLoss,
+                               'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                                'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
                                'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
@@ -123,7 +125,7 @@ class NF2Module(LightningModule):
         self.loss_modules = nn.ModuleDict(loss_modules)
 
     def configure_optimizers(self):
-        parameters = list(self.model.parameters())
+        parameters = list(self.model.parameters()) + list(self.loss_modules.parameters())
         if self.transform_module is not None:
             parameters += list(self.transform_module.parameters())
         if isinstance(self.lr_params, dict):

@@ -6,7 +6,7 @@ from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
 
-from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian
+from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian, los_trv_azi_to_img
 
 
 class Swish(nn.Module):
@@ -43,9 +43,9 @@ class HeightTransformModel(nn.Module):
     def __init__(self, in_coords, ds_id, validation_ds_id=[], dim=256, positional_encoding=True, ):
         super().__init__()
         if positional_encoding:
-            self.posenc = PositionalEncoding(20, in_coords)
-            d_in = nn.Linear(in_coords * 40, dim)
-            self.d_in = nn.Sequential(self.posenc, d_in)
+            posenc = GaussianPositionalEncoding(num_freqs=20, d_input=in_coords)
+            d_in = nn.Linear(posenc.d_output, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
         else:
             self.d_in = nn.Linear(in_coords, dim)
         lin = [nn.Linear(dim, dim) for _ in range(4)]
@@ -89,8 +89,9 @@ class RadialTransformModel(nn.Module):
     def __init__(self, in_coords, dim, positional_encoding=True, ds_ids=[]):
         super().__init__()
         if positional_encoding:
-            posenc = PositionalEncoding(20, in_coords)
-            d_in = nn.Linear(in_coords * 40, dim)
+            posenc = GaussianPositionalEncoding(num_freqs=20,
+                                                d_input=in_coords)
+            d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
             self.d_in = nn.Linear(in_coords, dim)
@@ -124,13 +125,17 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, dim=256, encoding=None, activation='swish'):
+    def __init__(self, in_coords, out_coords, dim=256, encoding=None, activation='sine'):
         super().__init__()
         if encoding is None or encoding == 'none':
             self.d_in = nn.Linear(in_coords, dim)
         elif encoding == 'positional':
             posenc = PositionalEncoding(20, in_coords)
             d_in = nn.Linear(in_coords * 40, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
+        elif encoding == 'gaussian':
+            posenc = GaussianPositionalEncoding(20, in_coords)
+            d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
             raise NotImplementedError(f'Unknown encoding {encoding}')
@@ -143,13 +148,11 @@ class GenericModel(nn.Module):
         self.activations = nn.ModuleList([activation_f() for _ in range(8)])
 
     def forward(self, x):
-        radius = torch.norm(x, dim=-1, keepdim=True)
         x = self.in_activation(self.d_in(x))
         for l, a in zip(self.linear_layers, self.activations):
             x = a(l(x))
         x = self.d_out(x)
         return x
-
 
 class BModel(GenericModel):
 
@@ -245,15 +248,30 @@ class MagnetoStaticModelV2(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, num_freqs, in_features):
+    def __init__(self, num_freqs, in_features, max_freq=8):
         super().__init__()
-        frequencies = torch.randn(num_freqs, in_features)
-        self.frequencies = nn.Parameter(frequencies[None], requires_grad=True)
+        frequencies = 2 ** torch.linspace(0, max_freq, num_freqs)
+        self.frequencies = nn.Parameter(frequencies[None], requires_grad=False)
+        self.d_output = in_features * (num_freqs * 2)
 
     def forward(self, x):
-        encoded = x[:, None, :] * torch.pi * 2 ** self.frequencies
+        encoded = x[:, None, :] * torch.pi * self.frequencies
         encoded = encoded.reshape(x.shape[0], -1)
         encoded = torch.cat([torch.sin(encoded), torch.cos(encoded)], -1)
+        return encoded
+
+class GaussianPositionalEncoding(nn.Module):
+
+    def __init__(self, num_freqs, d_input, scale=1.):
+        super().__init__()
+        frequencies = torch.randn(num_freqs, d_input) * scale
+        self.frequencies = nn.Parameter(frequencies[None], requires_grad=False)
+        self.d_output = d_input * (num_freqs * 2 + 1)
+
+    def forward(self, x):
+        encoded = x[:, None, :] * self.frequencies
+        encoded = encoded.reshape(x.shape[0], -1)
+        encoded = torch.cat([x, torch.sin(encoded), torch.cos(encoded)], -1)
         return encoded
 
 

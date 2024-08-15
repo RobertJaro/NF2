@@ -8,7 +8,7 @@ from astropy import units as u
 from tqdm import tqdm
 
 from nf2.evaluation.energy import get_free_mag_energy
-from nf2.evaluation.metric import energy, vector_norm, divergence, theta_J
+from nf2.evaluation.metric import energy, vector_norm, divergence, theta_J, sigma_J
 from nf2.evaluation.output import CartesianOutput
 
 
@@ -34,10 +34,10 @@ def main():
 
 def evaluate_nf2(nf2_file, **kwargs):
     out = CartesianOutput(nf2_file)
-    res = out.load_cube(**kwargs)
+    res = out.load_cube(metrics=['j'], **kwargs)
 
     b = res['b']
-    j = res['j']
+    j = res['metrics']['j']
     a = res['a']
     Mm_per_pixel = res['Mm_per_pixel'] * u.Mm
 
@@ -55,7 +55,7 @@ def evaluate_nf2(nf2_file, **kwargs):
         'metrics': {
             'divergence': (np.abs(divergence(b)) / vector_norm(b)).mean(),
             'jxb': vector_norm(jxb).mean(),
-            'theta': theta
+            'theta': theta,
         },
         'maps': {
             'b_0': b[:, :, 0, 2],  # bottom boundary
@@ -77,10 +77,10 @@ def evaluate_nf2(nf2_file, **kwargs):
     return result
 
 
-def convert_nf2_series(nf2_paths, result_path, **kwargs):
+def convert_nf2_series(nf2_paths, result_path, overwrite=True, **kwargs):
     for nf2_file in tqdm(nf2_paths):
         save_file = os.path.join(result_path, os.path.basename(nf2_file).replace('.nf2', '.pkl'))
-        if os.path.exists(save_file):
+        if os.path.exists(save_file) and overwrite is False:
             continue
         result = evaluate_nf2(nf2_file, **kwargs)
         with open(save_file, 'wb') as f:
@@ -97,7 +97,7 @@ def load_results(series_results):
     times = []
     wcs = []
     Mm_per_pixel = None
-    for f in series_results:
+    for f in tqdm(series_results, desc='Loading files'):
         with open(f, 'rb') as file:
             data = pickle.load(file)
             integrated_quantities['energy'].append(data['integrated_quantities']['energy'])

@@ -207,7 +207,23 @@ class NaNLoss(BaseLoss):
         return min_energy_NaNs_regularization
 
 
-class LosTrvAziBoundaryLoss(BaseLoss):
+class LosTrvBoundaryLoss(BaseLoss):
+
+    def forward(self, b, b_true, transform=None, *args, **kwargs):
+        # apply transforms
+        b_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
+        b_pred = img_to_los_trv_azi(b_pred, f=torch)
+
+        b_los_trv_pred = b_pred[..., :2]
+        b_los_trv_true = b_true[..., :2]
+
+        # compute diff
+        b_diff = b_los_trv_pred - b_los_trv_true
+        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+
+        return b_diff
+
+class AziBoundaryLoss(BaseLoss):
 
     def __init__(self, disambiguate=True, **kwargs):
         super().__init__(**kwargs)
@@ -218,8 +234,30 @@ class LosTrvAziBoundaryLoss(BaseLoss):
         b_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         b_pred = img_to_los_trv_azi(b_pred, f=torch)
 
-        bxyz_true = los_trv_azi_to_img(b_true, ambiguous=self.disambiguate, f=torch)
-        bxyz_pred = los_trv_azi_to_img(b_pred, ambiguous=self.disambiguate, f=torch)
+        b_azi_true = b_true[..., 2] % torch.pi
+        b_azi_pred = b_pred[..., 2] % torch.pi
+        b_diff = (b_azi_pred - b_azi_true).pow(2) * b_true[..., 1] # weight by transverse field
+        b_diff = b_diff.mean()
+
+        return b_diff
+
+class LosTrvAziBoundaryLoss(BaseLoss):
+
+    def __init__(self, disambiguate=True, **kwargs):
+        super().__init__(**kwargs)
+        self.disambiguate = disambiguate
+
+    def forward(self, b, b_true, transform=None, *args, **kwargs):
+        # apply transforms
+        bxyz_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
+        bxyz_true = los_trv_azi_to_img(b_true, f=torch)
+
+        if self.disambiguate:
+            bxy_true = torch.abs(bxyz_true[..., :2])
+            bxy_pred = torch.abs(bxyz_pred[..., :2])
+
+            bxyz_true = torch.cat([bxy_true, bxyz_true[..., 2:]], dim=-1)
+            bxyz_pred = torch.cat([bxy_pred, bxyz_pred[..., 2:]], dim=-1)
 
         # compute diff
         b_diff = bxyz_pred - bxyz_true

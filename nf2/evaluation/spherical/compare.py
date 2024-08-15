@@ -8,8 +8,8 @@ from sunpy.map import Map, all_coordinates_from_map
 
 from nf2.data.util import vector_cartesian_to_spherical
 from nf2.evaluation.metric import theta_J, divergence_jacobian, energy, b_diff_error
-from nf2.evaluation.output import CartesianOutput, SphericalOutput, current_density, spherical_energy_gradient, \
-    energy_gradient
+from nf2.evaluation.output import CartesianOutput, SphericalOutput
+from nf2.evaluation.output_metrics import current_density, spherical_energy_gradient, energy_gradient
 from nf2.potential.potential_field import get_potential_field
 
 Mm_per_pixel = 0.72

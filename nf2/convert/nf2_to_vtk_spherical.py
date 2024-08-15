@@ -7,7 +7,8 @@ import numpy as np
 from astropy import units as u
 
 from nf2.evaluation.metric import normalized_divergence
-from nf2.evaluation.output import SphericalOutput, current_density, twist
+from nf2.evaluation.output import SphericalOutput
+from nf2.evaluation.output_metrics import current_density, alpha
 from nf2.evaluation.vtk import save_vtk
 
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
@@ -56,7 +57,7 @@ for i, f in enumerate(files):
 
     output = SphericalOutput(f)
     result = output.load(radius_range, latitude_range, longitude_range, pixels_per_solRad, progress=True,
-                         metrics={'j': current_density, 'twist': twist})
+                         metrics={'j': current_density, 'twist': alpha})
 
     vectors = {'B': result['b'], 'B_rtp': result['b_rtp']}
     radius = result['spherical_coords'][..., 0]

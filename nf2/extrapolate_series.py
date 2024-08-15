@@ -4,7 +4,6 @@ import os
 import shutil
 
 import torch
-import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -14,6 +13,7 @@ from nf2.loader.fits import FITSSeriesDataModule
 from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
+from nf2.train.util import load_yaml_config
 
 
 def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, training={}, config=None):
@@ -161,14 +161,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
-    args = parser.parse_args()
+    args, overwrite_args = parser.parse_known_args()
 
-    with open(args.config) as config:
-        info = yaml.safe_load(config)
-        for key, value in info.items():
-            args.__dict__[key] = value
+    yaml_config_file = args.config
+    config = load_yaml_config(yaml_config_file, overwrite_args)
 
-    run(**args.__dict__)
+    run(**config)
 
 
 if __name__ == '__main__':

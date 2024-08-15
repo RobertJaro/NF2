@@ -16,12 +16,19 @@ class MURaMDataModule(BaseDataModule):
                  Mm_per_ds=.36 * 320, G_per_dB=2500, max_height=100, validation_batch_size=2 ** 15, log_shape=False,
                  **kwargs):
         # boundary dataset
-        slice_datasets = []
-        for slice_config in slices:
+        slice_datasets = {}
+        bottom_boundary_dataset = None
+        for i, slice_config in enumerate(slices):
+            ds_id = slice_config.pop('name', f'boundary_{i + 1:02d}')
+            bottom_boundary = slice_config.pop('bottom', False)
             muram_dataset = MURaMDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory)
-            slice_datasets.append(muram_dataset)
+            slice_datasets[ds_id] = muram_dataset
+            if bottom_boundary:
+                bottom_boundary_dataset = muram_dataset
 
-        bottom_boundary_dataset = slice_datasets[0]
+        #
+        if bottom_boundary_dataset is None:
+            bottom_boundary_dataset = list(slice_datasets.values())[0]
 
         # random sampling dataset
         coord_range = bottom_boundary_dataset.coord_range
@@ -48,15 +55,14 @@ class MURaMDataModule(BaseDataModule):
             print(f'z: {coord_range[2, 0]:.2f} - {coord_range[2, 1]:.2f} ds')
 
         training_datasets = {}
-        for i, dataset in enumerate(slice_datasets):
-            training_datasets[f'boundary_{i + 1:02d}'] = dataset
+        for ds_id, dataset in slice_datasets.items():
+            training_datasets[ds_id] = dataset
         training_datasets['random'] = random_dataset
 
         # top and side boundaries
-        boundary_config = boundary_config if boundary_config is not None else {'type': 'potential', 'strides': 8}
+        boundary_config = boundary_config if boundary_config is not None else {'type': 'potential', 'strides': 4}
         if boundary_config['type'] == 'potential':
-            sl, Nvar, shape, time = read_muram_slice(slices[0]['data_path'])
-            bz = sl[5, :, :] * np.sqrt(4 * np.pi)
+            bz = bottom_boundary_dataset.bz
             potential_dataset = PotentialBoundaryDataset(bz=bz, height_pixel=max_height / (ds_per_pixel * Mm_per_ds),
                                                          ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
                                                          work_directory=work_directory,
@@ -82,7 +88,7 @@ class MURaMDataModule(BaseDataModule):
         config = {'type': 'cartesian',
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'max_height': max_height,
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': []}
-        for ds in slice_datasets:
+        for ds in slice_datasets.values():
             config['coord_range'].append(ds.coord_range)
             config['ds_per_pixel'].append(ds.ds_per_pixel)
             config['height_mapping'].append(ds.height_mapping)
@@ -101,7 +107,7 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
 
 class MURaMDataset(MapDataset):
 
-    def __init__(self, data_path, los_trv_azi_transform=False, *args, **kwargs):
+    def __init__(self, data_path, los_trv_azi_transform=False, shuffle_azi=False, *args, **kwargs):
         sl, Nvar, shape, time = read_muram_slice(data_path)
 
         bz = sl[5, :, :] * np.sqrt(4 * np.pi)
@@ -112,6 +118,10 @@ class MURaMDataset(MapDataset):
 
         if los_trv_azi_transform:
             b = img_to_los_trv_azi(b, f=np)
+            if shuffle_azi:
+                flip_maks = np.random.rand(*b[..., 2].shape) > 0.5
+                b[flip_maks, 2] += np.pi
+                b[..., 2] = np.mod(b[..., 2], 2 * np.pi)
 
         super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=los_trv_azi_transform, *args, **kwargs)
 

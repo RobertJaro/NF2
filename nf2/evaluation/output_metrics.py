@@ -1,89 +1,168 @@
-import argparse
-import os.path
-
-import cupy
 import numpy as np
-from fastqslpy import FastQSL
-from fastqslpy.kernels import compileTraceBlineAdaptive
+from astropy import constants, units as u
+from astropy.nddata import block_reduce
 from tqdm import tqdm
 
-from nf2.evaluation.output import CartesianOutput
-from nf2.evaluation.vtk import save_vtk
+from nf2.data.util import cartesian_to_spherical
+from nf2.evaluation.energy import get_free_mag_energy
+from nf2.train.model import calculate_current_from_jacobian
 
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
-    parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
-    parser.add_argument('--result_path', type=str, help='path to the target VTK file', required=False, default=None)
-    parser.add_argument('--height_range', type=float, nargs=2, help='height range in Mm', required=False, default=None)
 
-    args = parser.parse_args()
-    nf2_path = args.nf2_path
+def current_density(jac_matrix, **kwargs):
+    j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
+    return {'j': j.to(u.G / u.s)}
 
-    result_path = args.result_path
-    height_range = args.height_range
-    os.makedirs(result_path, exist_ok=True)
 
-    nf2_out = CartesianOutput(nf2_path)
-    output = nf2_out.load_cube(Mm_per_pixel=0.72, height_range=height_range, progress=True)
+def b_nabla_bz(b, jac_matrix, **kwargs):
+    # compute B * nabla * Bz
+    bx = b[..., 0]
+    by = b[..., 1]
+    bz = b[..., 2]
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBz_dz = jac_matrix[..., 2, 2]
+    #
+    norm_B = np.linalg.norm(b, axis=-1) + 1e-10 * b.unit
+
+    dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
+    dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
+    dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
+
+    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
+                 (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    b_nabla_bz = b_nabla_bz.to_value(1 / u.Mm)
+    return {'b_nabla_bz': b_nabla_bz}
+
+
+def magnetic_helicity(b, a, **kwargs):
+    helicity = np.sum(a * b, axis=-1)
+    return {'magnetic_helicity': helicity}
+
+
+def alpha(b, jac_matrix, **kwargs):
+    j = calculate_current_from_jacobian(jac_matrix, f=np)
+    alpha = np.linalg.norm(j, axis=-1) / np.linalg.norm(b, axis=-1)
+    threshold = np.linalg.norm(b, axis=-1).to_value(u.G) < 10  # set alpha to 0 for weak fields (coronal holes)
+    alpha[threshold] = 0 * u.Mm ** -1
+    alpha = alpha.to(u.Mm ** -1)
+    return {'alpha': alpha}
+
+
+def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dz = jac_matrix[..., 2, 2]
+    # E = b^2 = b_x^2 + b_y^2 + b_z^2
+    # dE/dx = 2 * (b_x * dBx_dx + b_y * dBy_dx + b_z * dBz_dx)
+    # dE/dy = 2 * (b_x * dBx_dy + b_y * dBy_dy + b_z * dBz_dy)
+    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
+    dE_dx = 2 * (b[..., 0] * dBx_dx + b[..., 1] * dBy_dx + b[..., 2] * dBz_dx)
+    dE_dy = 2 * (b[..., 0] * dBx_dy + b[..., 1] * dBy_dy + b[..., 2] * dBz_dy)
+    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
+
+    coords_spherical = cartesian_to_spherical(coords, f=np)
+    t = coords_spherical[..., 1]
+    p = coords_spherical[..., 2]
+    dE_dr = (np.sin(t) * np.cos(p)) * dE_dx + \
+            (np.sin(t) * np.sin(p)) * dE_dy + \
+            np.cos(p) * dE_dz
+
+    return {'dE_dr': dE_dr}
+
+
+def energy_gradient(b, jac_matrix, **kwargs):
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dz = jac_matrix[..., 2, 2]
+    # E = b^2 = b_x^2 + b_y^2 + b_z^2
+    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
+    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
+
+    return {'dE_dz': dE_dz}
+
+
+def los_trv_azi(b, **kwargs):
+    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
+    b_los = bz.to_value(u.G)
+    b_trv = np.sqrt(bx ** 2 + by ** 2).to_value(u.G)
+    azimuth = np.arctan2(by, bx).to_value(u.deg)
+    b_los_trv_azi = np.stack([b_los, b_trv, azimuth], -1)
+    return {'b_los_trv_azi': b_los_trv_azi}
+
+
+def free_energy(b, **kwargs):
+    free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
+    return {'free_energy': free_energy}
+
+
+def squashing_factor(b, interp_ratio = 3, x_range=None, y_range=None, z_range=None, **kwargs):
+    # local imports for optional dependency
+    import cupy
+    from fastqslpy import FastQSL
+    from fastqslpy.kernels import compileTraceBlineAdaptive
 
     # convert B to cuda array
-    Bx = output["b"][..., 0].astype(np.float32)
-    By = output["b"][..., 1].astype(np.float32)
-    Bz = output["b"][..., 2].astype(np.float32)
-
+    Bx = b[..., 0].astype(np.float32)
+    By = b[..., 1].astype(np.float32)
+    Bz = b[..., 2].astype(np.float32)
     # convert to fortran order
     Bx_gpu = cupy.array(Bx)
     By_gpu = cupy.array(By)
     Bz_gpu = cupy.array(Bz)
-
     # convert to cuda array
     Bx_gpu = cupy.asfortranarray(Bx_gpu)
     By_gpu = cupy.asfortranarray(By_gpu)
     Bz_gpu = cupy.asfortranarray(Bz_gpu)
+    # calc curl(B)
+    curBx_gpu = cupy.zeros_like(Bx_gpu)
+    curBy_gpu = cupy.zeros_like(By_gpu)
+    curBz_gpu = cupy.zeros_like(Bz_gpu)
 
-    # convert J to cuda array
-    Jx = output["j"][..., 0].astype(np.float32)
-    Jy = output["j"][..., 1].astype(np.float32)
-    Jz = output["j"][..., 2].astype(np.float32)
+    curBx_gpu[:, 1:-1, 1:-1] = ((Bz_gpu[:, 2:, 1:-1] - Bz_gpu[:, 0:-2, 1:-1]) / 2.
+                                - (By_gpu[:, 1:-1, 2:] - By_gpu[:, 1:-1, 0:-2]) / 2)
+    curBy_gpu[1:-1, :, 1:-1] = ((Bx_gpu[1:-1, :, 2:] - Bx_gpu[1:-1, :, 0:-2]) / 2.
+                                - (Bz_gpu[2:, :, 1:-1] - Bz_gpu[0:-2, :, 1:-1]) / 2)
+    curBz_gpu[1:-1, 1:-1, :] = ((By_gpu[2:, 1:-1, :] - By_gpu[0:-2, 1:-1, :]) / 2.
+                                - (Bx_gpu[1:-1, 2:, :] - Bx_gpu[1:-1, 0:-2, :]) / 2)
 
-    # convert to fortran order
-    Jx_gpu = cupy.array(Jx)
-    Jy_gpu = cupy.array(Jy)
-    Jz_gpu = cupy.array(Jz)
-
-    # convert to cuda array
-    Jx_gpu = cupy.asfortranarray(Jx_gpu)
-    Jy_gpu = cupy.asfortranarray(Jy_gpu)
-    Jz_gpu = cupy.asfortranarray(Jz_gpu)
+    # take care of z=0
+    curBx_gpu[1:-1, 1:-1, 0] = ((Bz_gpu[1:-1, 2:, 0] - Bz_gpu[1:-1, 0:-2, 0]) / 2.
+                                - (-3. * By_gpu[1:-1, 1:-1, 0] + 4. * By_gpu[1:-1, 1:-1, 1] - By_gpu[1:-1, 1:-1,
+                                                                                              2]) / 2)
+    curBy_gpu[1:-1, 1:-1, 0] = ((-3. * Bx_gpu[1:-1, 1:-1, 0] + 4. * Bx_gpu[1:-1, 1:-1, 1] - Bx_gpu[1:-1, 1:-1, 2]) / 2.
+                                - (Bz_gpu[2:, 1:-1, 0] - Bz_gpu[0:-2, 1:-1, 0]) / 2)
 
     trace_all_b_line = compileTraceBlineAdaptive()
-
     # prepare variables
     BshapeN = np.zeros(3, dtype=np.int32)
     BshapeN[:] = Bx.shape
-    print(BshapeN)
     BshapeN = cupy.array(BshapeN)
-
-    interp_ratio = 3
     stride_step = 1 / interp_ratio
-    x_range = [0, Bx.shape[0]]
-    y_range = [0, Bx.shape[1]]
-    z_range = [0, Bx.shape[2]]
+    x_range = [0, Bx.shape[0]] if x_range is None else x_range
+    y_range = [0, Bx.shape[1]] if y_range is None else y_range
+    z_range = [0, Bx.shape[2]] if z_range is None else z_range
     # z_range = [0,1]
-
     x_i = cupy.linspace(*x_range, np.uint(interp_ratio * (x_range[1] - x_range[0])), dtype=cupy.float32)
     y_i = cupy.linspace(*y_range, np.uint(interp_ratio * (y_range[1] - y_range[0])), dtype=cupy.float32)
     z_i = cupy.linspace(*z_range, np.uint(interp_ratio * (z_range[1] - z_range[0])), dtype=cupy.float32)
-
     flag_twist = cupy.array([True], dtype=cupy.bool_)
     flag_twist_false = cupy.array([False], dtype=cupy.bool_)
     dummy = cupy.zeros([1, 1], dtype=cupy.float32)
     dummy64 = cupy.zeros([1, 1], dtype=cupy.float64)
-
     x_arr, y_arr = cupy.meshgrid(x_i, y_i)
-
     xy_shape = x_arr.shape
-
     x_inp = x_arr.flatten()
     y_inp = y_arr.flatten()
 
@@ -91,19 +170,14 @@ if __name__ == '__main__':
     N = cupy.array([x_inp.shape[0]], cupy.ulonglong)
     s_len = cupy.array([1. / 16.], cupy.float32)
     tol_coef = cupy.array([cupy.sqrt(0.1)], cupy.float32)
-
     inp_norm = cupy.array([0, 0, 1.], cupy.float32)
-
     twist_all = cupy.zeros(x_inp.shape, cupy.float64)
-
     blck = (128, 1, 1)
     grd = (28, 1)
     cupy.cuda.stream.get_current_stream().synchronize()
-
     Qube = np.zeros([xy_shape[1], xy_shape[0], z_i.shape[0]], dtype=np.float32)
     Twube = np.zeros([xy_shape[1], xy_shape[0], z_i.shape[0]], dtype=np.float32)
     Liube = np.zeros([xy_shape[1], xy_shape[0], z_i.shape[0]], dtype=np.float32)
-
     pinned_mempool = cupy.get_default_pinned_memory_pool()
     for idx_pos_z, z_pos in tqdm(enumerate(z_i), total=z_i.shape[0], desc='Compute Q and T'):
 
@@ -121,7 +195,7 @@ if __name__ == '__main__':
         # run the big calculation
         trace_all_b_line(blck, grd,
                          (Bx_gpu, By_gpu, Bz_gpu, BshapeN,
-                          Jx_gpu, Jy_gpu, Jz_gpu, twist_all, flag_twist,
+                          curBx_gpu, curBy_gpu, curBz_gpu, twist_all, flag_twist,
                           x_inp, y_inp, z_inp, inp_norm,
                           x_start, y_start, z_start, flag_start,
                           x_end, y_end, z_end, flag_end,
@@ -234,16 +308,21 @@ if __name__ == '__main__':
 
         cupy.cuda.stream.get_current_stream().synchronize()
 
-        (x_start, y_start, z_start, x_end, y_end, z_end, z_inp,
-         Bx_start, By_start, Bz_start, Bx_end, By_end, Bz_end, Bx_inp, By_inp, Bz_inp
-         ) = [None for _ in range(16)]
-        (B_flag, flag_start, flag_end) = [None for _ in range(3)]
         pinned_mempool.free_all_blocks()
+    Qube = block_reduce(Qube, (interp_ratio, interp_ratio, interp_ratio), func=np.mean)
+    Twube = block_reduce(Twube, (interp_ratio, interp_ratio, interp_ratio), func=np.mean)
 
-    Qube = Qube[::interp_ratio, ::interp_ratio, ::interp_ratio]
-    Twube = Twube[::interp_ratio, ::interp_ratio, ::interp_ratio]
+    return {"q": Qube, "twist": Twube}
 
-    base_name = os.path.basename(nf2_path).split('.')[0]
-    save_vtk(os.path.join(result_path, f"{base_name}.vtk"),
-             scalars={"Q": Qube, "Twist": Twube},
-             vectors={"B": output["b"]})
+
+metric_mapping = {
+    'j': current_density,
+    'b_nabla_bz': b_nabla_bz,
+    'alpha': alpha,
+    'spherical_energy_gradient': spherical_energy_gradient,
+    'energy_gradient': energy_gradient,
+    'magnetic_helicity': magnetic_helicity,
+    'los_trv_azi': los_trv_azi,
+    'free_energy': free_energy,
+    'squashing_factor': squashing_factor
+}
