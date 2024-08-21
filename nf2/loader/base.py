@@ -93,13 +93,13 @@ class MapDataset(TensorsDataset):
 
     def __init__(self, b, b_err=None, coords=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
-                 bin=1, height_mapping=None, plot=True, los_trv_azi=False,
+                 bin=1, height_mapping=None, plot=True, los_trv_azi=False, shuffle_azi=False,
                  wcs=None, **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
 
         # binning
         b = block_reduce(b, (bin, bin, 1), np.mean)
-        self.bz = b[..., 0] if los_trv_azi else b[..., 2]
+        self.bz = np.copy(b[..., 0]) if los_trv_azi else np.copy(b[..., 2])
 
         # normalize
         if los_trv_azi:
@@ -154,6 +154,14 @@ class MapDataset(TensorsDataset):
             if plot and not los_trv_azi:
                 _plot_B(b * G_per_dB, coords * Mm_per_ds)
 
+        # prepare azimuth data after plotting
+        if los_trv_azi:
+            if shuffle_azi:
+                flip_maks = np.random.rand(*b[..., 2].shape) > 0.5
+                b[flip_maks, 2] += np.pi
+                b[..., 2] = np.mod(b[..., 2], 2 * np.pi)
+            else:
+                b[..., 2] = np.mod(b[..., 2], np.pi)
 
         tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
 

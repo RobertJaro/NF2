@@ -18,7 +18,7 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, work_directory=None, logging={}, model={}, training={}, config=None):
+def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -73,7 +73,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
         raise NotImplementedError(f'Unknown data loader {data["type"]}')
 
     # initialize callbacks
-    callbacks = load_callbacks(data_module)
+    callback_modules = load_callbacks(data_module, additional_callbacks=callbacks)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
                     model_kwargs=model, **training)
@@ -92,7 +92,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
 
     torch.set_float32_matmul_precision('medium')  # for A100 GPUs
     n_gpus = torch.cuda.device_count()
-    callbacks += [checkpoint_callback, save_callback]
+    callback_modules += [checkpoint_callback, save_callback]
 
     trainer = Trainer(max_epochs=max_epochs,
                       logger=wandb_logger,
@@ -103,7 +103,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
                       val_check_interval=val_check_interval,
                       check_val_every_n_epoch=val_every_n_epochs,
                       gradient_clip_val=0.1,
-                      callbacks=callbacks)
+                      callbacks=callback_modules)
 
     trainer.fit(nf2, data_module, ckpt_path='last')
     save(save_path, nf2, data_module, config_dict)

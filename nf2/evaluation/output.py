@@ -13,6 +13,7 @@ from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping
 from nf2.train.model import VectorPotentialModel
+from nf2.train.transform import HeightTransformModel
 
 
 class BaseOutput:
@@ -90,6 +91,7 @@ class BaseOutput:
         model_out['metrics'] = metrics_out
         return model_out
 
+
 class CartesianOutput(BaseOutput):
 
     def __init__(self, *args, **kwargs):
@@ -119,7 +121,8 @@ class CartesianOutput(BaseOutput):
         coords = np.stack(
             np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)),
                         np.linspace(y_min, y_max, np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)),
-                        np.linspace(z_min, z_max, np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)), indexing='ij'), -1)
+                        np.linspace(z_min, z_max, np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)),
+                        indexing='ij'), -1)
         model_out = self.load_coords(coords, **kwargs)
 
         return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
@@ -232,8 +235,12 @@ class HeightTransformOutput(CartesianOutput):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert 'transform_module' in self.state, 'Requires transform module!'
-        self.transform_module = self.state['transform_module']
+
+        self.transforms = self.state['transforms']
+        height_transforms = [t for t in self.transforms if isinstance(t, HeightTransformModel)]
+
+        assert len(height_transforms) == 1, 'Requires transform module!'
+        self.transform_module = height_transforms[0]
 
         self.coord_range_list = self.state['data']['coord_range']
         self.height_mapping_list = self.state['data']['height_mapping']

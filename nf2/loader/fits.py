@@ -205,7 +205,7 @@ class LosTrvAziFITSDataset(MapDataset):
                 azi_data = block_reduce(azi_data, (bin, bin), func=np.mean)
             wcs = None
 
-        b = np.stack([los_data, trv_data, azi_data]).transpose()
+        b = np.stack([los_data, trv_data, np.pi - azi_data]).transpose()
 
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
 
@@ -217,6 +217,10 @@ class FldIncAziFITSDataset(MapDataset):
         file_azi = fits_path['B_azi']
 
         fld_map, inc_map, azi_map = Map(file_fld), Map(file_inc), Map(file_azi)
+        fld_map.data[:] = np.flip(fld_map.data, axis=(0, 1))
+        inc_map.data[:] = np.flip(inc_map.data, axis=(0, 1))
+        azi_map.data[:] = np.flip(azi_map.data, axis=(0, 1))
+
         fld_map = process_map(fld_map, slice, bin)
         inc_map = process_map(inc_map, slice, bin)
         azi_map = process_map(azi_map, slice, bin)
@@ -229,6 +233,7 @@ class FldIncAziFITSDataset(MapDataset):
         if 'B_amb' in fits_path:
             file_amb = fits_path['B_amb']
             amb_map = Map(file_amb)
+            amb_map.data[:] = np.flip(amb_map.data, axis=(0, 1))
             amb_map = process_map(amb_map, slice, bin)
             amb = amb_map.data
 
@@ -242,7 +247,6 @@ class FldIncAziFITSDataset(MapDataset):
         trv = fld * np.sin(inc)
 
         b = np.stack([los, trv, (np.pi - azi) % (2 * np.pi)]).transpose()
-        b = np.flip(b, axis=(0,1))
 
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
 

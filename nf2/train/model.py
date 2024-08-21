@@ -6,7 +6,7 @@ from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
 
-from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian, los_trv_azi_to_img
+from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian
 
 
 class Swish(nn.Module):
@@ -18,17 +18,6 @@ class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
 
-
-class Sinsh(nn.Module):
-
-    def __init__(self):
-        super().__init__()
-        self.beta = nn.Parameter(torch.randn((1,), dtype=torch.float32), requires_grad=True)
-
-    def forward(self, x):
-        return x * torch.sin(self.beta * x)
-
-
 class Sine(nn.Module):
     def __init__(self, w0=1.):
         super().__init__()
@@ -37,51 +26,6 @@ class Sine(nn.Module):
     def forward(self, x):
         return torch.sin(self.w0 * x)
 
-
-class HeightTransformModel(nn.Module):
-
-    def __init__(self, in_coords, ds_id, validation_ds_id=[], dim=256, positional_encoding=True, ):
-        super().__init__()
-        if positional_encoding:
-            posenc = GaussianPositionalEncoding(num_freqs=20, d_input=in_coords)
-            d_in = nn.Linear(posenc.d_output, dim)
-            self.d_in = nn.Sequential(posenc, d_in)
-        else:
-            self.d_in = nn.Linear(in_coords, dim)
-        lin = [nn.Linear(dim, dim) for _ in range(4)]
-        self.linear_layers = nn.ModuleList(lin)
-        self.d_out = nn.Linear(dim, 1)
-        self.activation = Sine()
-        self.ds_id = ds_id if isinstance(ds_id, list) else [ds_id]
-        self.validation_ds_id = validation_ds_id if isinstance(validation_ds_id, list) else [validation_ds_id]
-
-    def forward(self, batch):
-        coords = torch.cat([batch[ds_id]['coords'] for ds_id in self.ds_id], 0)
-        height_range = torch.cat([batch[ds_id]['height_range'] for ds_id in self.ds_id], 0)
-        transformed_coords = self.transform_coords(coords, height_range)
-
-        coord_idx = 0
-        for ds_id in self.ds_id:
-            n_coords = batch[ds_id]['coords'].shape[0]
-            batch[ds_id]['original_coords'] = batch[ds_id]['coords']
-            batch[ds_id]['coords'] = transformed_coords[coord_idx:coord_idx + n_coords]
-            coord_idx += n_coords
-        return batch
-
-    def transform_batch(self, batch):
-        coords = batch['coords']
-        transformed_coords = self.transform_coords(**batch)
-        batch['coords'] = transformed_coords
-        batch['original_coords'] = coords
-        return batch
-
-    def transform_coords(self, coords, height_range, **kwargs):
-        x = self.activation(self.d_in(coords))
-        for l in self.linear_layers:
-            x = self.activation(l(x))
-        z_coords = torch.sigmoid(self.d_out(x)) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
-        output_coords = torch.cat([coords[:, :2], z_coords], -1)
-        return output_coords
 
 
 class RadialTransformModel(nn.Module):
@@ -125,7 +69,7 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, dim=256, encoding=None, activation='sine'):
+    def __init__(self, in_coords, out_coords, dim=256, n_layers = 8, encoding=None, activation='sine'):
         super().__init__()
         if encoding is None or encoding == 'none':
             self.d_in = nn.Linear(in_coords, dim)
@@ -139,13 +83,13 @@ class GenericModel(nn.Module):
             self.d_in = nn.Sequential(posenc, d_in)
         else:
             raise NotImplementedError(f'Unknown encoding {encoding}')
-        lin = [nn.Linear(dim, dim) for _ in range(8)]
+        lin = [nn.Linear(dim, dim) for _ in range(n_layers)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, out_coords)
         activation_mapping = {'relu': nn.ReLU, 'swish': Swish, 'tanh': nn.Tanh, 'sine': Sine}
         activation_f = activation_mapping[activation]
         self.in_activation = activation_f()
-        self.activations = nn.ModuleList([activation_f() for _ in range(8)])
+        self.activations = nn.ModuleList([activation_f() for _ in range(n_layers)])
 
     def forward(self, x):
         x = self.in_activation(self.d_in(x))
@@ -251,7 +195,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, num_freqs, in_features, max_freq=8):
         super().__init__()
         frequencies = 2 ** torch.linspace(0, max_freq, num_freqs)
-        self.frequencies = nn.Parameter(frequencies[None], requires_grad=False)
+        self.frequencies = nn.Parameter(frequencies[None, :, None], requires_grad=False)
         self.d_output = in_features * (num_freqs * 2)
 
     def forward(self, x):
@@ -492,3 +436,6 @@ if __name__ == '__main__':
     plt.tight_layout()
     fig.savefig('/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/disamb.jpg', dpi=150)
     plt.close()
+
+
+

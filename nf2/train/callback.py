@@ -373,6 +373,77 @@ class BoundaryCallback(Callback):
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
+class DisambiguationCallback(Callback):
+
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, name=None):
+        self.validation_dataset_key = validation_dataset_key
+        self.cube_shape = cube_shape
+        self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
+        self.name = name
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if self.validation_dataset_key not in pl_module.validation_outputs:
+            return
+
+        outputs = pl_module.validation_outputs[self.validation_dataset_key]
+        b_true = outputs['b_true']
+        flip = outputs['flip']
+
+        flip = flip.cpu().numpy().reshape([*self.cube_shape])
+        azimuth_amb = b_true[..., 2].cpu().numpy().reshape([*self.cube_shape])
+
+        azimuth = azimuth_amb + np.round(flip) * np.pi
+
+        extent = None
+
+        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+        ax = axs[0, 0]
+        im = ax.imshow(azimuth.T, cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=2 * np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[0, 1]
+        im = ax.imshow(azimuth_amb.T, cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=2 * np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[1, 0]
+        im = ax.imshow(azimuth.T % (np.pi), cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[1, 1]
+        im = ax.imshow(azimuth_amb.T % (np.pi), cmap='twilight', origin='lower',
+                            extent=extent, vmin=0, vmax=np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[2, 0]
+        im = ax.imshow(flip.T, cmap='bwr', origin='lower', extent=extent, vmin=0, vmax=1)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Flip Probability')
+
+        axs[2, 1].set_axis_off()
+
+        axs[0, 0].set_title('Predicted Azimuth')
+        axs[0, 1].set_title('Ambiguous Azimuth')
+
+        fig.tight_layout()
+        name = f"{self.validation_dataset_key} - Disambiguation" if self.name is None else self.name
+        wandb.log({name: fig})
+        plt.close('all')
+
+
 class LosTrvAziBoundaryCallback(Callback):
 
     def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):

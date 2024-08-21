@@ -243,25 +243,34 @@ class AziBoundaryLoss(BaseLoss):
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
-    def __init__(self, disambiguate=True, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.disambiguate = disambiguate
 
-    def forward(self, b, b_true, transform=None, *args, **kwargs):
+    def forward(self, b, b_true, flip=None, transform=None, *args, **kwargs):
         # apply transforms
         bxyz_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         bxyz_true = los_trv_azi_to_img(b_true, f=torch)
 
-        if self.disambiguate:
-            bxy_true = torch.abs(bxyz_true[..., :2])
-            bxy_pred = torch.abs(bxyz_pred[..., :2])
+        if flip is not None:
 
-            bxyz_true = torch.cat([bxy_true, bxyz_true[..., 2:]], dim=-1)
-            bxyz_pred = torch.cat([bxy_pred, bxyz_pred[..., 2:]], dim=-1)
+            # compute flipped B_xyz
+            flipped_azi = (b_true[..., 2:3] + torch.pi)
+            blta_flipped_true = torch.cat([b_true[..., :2], flipped_azi], dim=-1)
+            bxyz_flipped_true = los_trv_azi_to_img(blta_flipped_true, f=torch)
+
+            # compute diff for both cases
+            b_diff = (bxyz_pred - bxyz_true).pow(2).sum(-1)
+            b_diff_flipped = (bxyz_pred - bxyz_flipped_true).pow(2).sum(-1)
+
+            # weighted loss
+            flip = flip[..., 0]
+            loss = b_diff * (1 - flip) + b_diff_flipped * flip
+
+            return loss.mean()
 
         # compute diff
         b_diff = bxyz_pred - bxyz_true
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+        b_diff = b_diff.pow(2).sum(-1).mean()
 
         return b_diff
 
@@ -289,10 +298,19 @@ class HeightLoss(BaseLoss):
 
         return height_regularization
 
+class AzimuthDisambiguationLoss(BaseLoss):
+
+    def __init__(self, power=4.0, **kwargs):
+        super().__init__(**kwargs)
+        self.power = power
+
+    def forward(self, flip, *args, **kwargs):
+        loss = (flip - 0.5).abs().pow(self.power) / 0.5 ** self.power
+        return loss.mean()
 
 class MinHeightLoss(BaseLoss):
 
-    def forward(self, b_true, coords, *args, **kwargs):
+    def forward(self, coords, *args, **kwargs):
         min_height_regularization = torch.abs(coords[:, 2])
         # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
         min_height_regularization = min_height_regularization.mean()
@@ -311,3 +329,15 @@ class SphericalTransform(nn.Module):
     def forward(self, b, b_true, transform=None):
         b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         return b, b_true
+
+
+
+# mapping
+loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
+                       'boundary_azi': AziBoundaryLoss,
+                       'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
+                       'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
+                       'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                       'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
+                       'flux_preservation': FluxPreservationLoss, 'magneto_static': MagnetoStaticLoss,
+                       'azimuth_disambiguation': AzimuthDisambiguationLoss}

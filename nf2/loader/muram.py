@@ -107,7 +107,7 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
 
 class MURaMDataset(MapDataset):
 
-    def __init__(self, data_path, los_trv_azi_transform=False, shuffle_azi=False, *args, **kwargs):
+    def __init__(self, data_path, los_trv_azi_transform=False, *args, **kwargs):
         sl, Nvar, shape, time = read_muram_slice(data_path)
 
         bz = sl[5, :, :] * np.sqrt(4 * np.pi)
@@ -118,10 +118,6 @@ class MURaMDataset(MapDataset):
 
         if los_trv_azi_transform:
             b = img_to_los_trv_azi(b, f=np)
-            if shuffle_azi:
-                flip_maks = np.random.rand(*b[..., 2].shape) > 0.5
-                b[flip_maks, 2] += np.pi
-                b[..., 2] = np.mod(b[..., 2], 2 * np.pi)
 
         super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=los_trv_azi_transform, *args, **kwargs)
 

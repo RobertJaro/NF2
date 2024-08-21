@@ -15,17 +15,25 @@ data:
         Br_err: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Bp_err.fits"
+      batch_size: 8192
+      slice: [430, 900, 0, 1000]
   num_workers: 8
   iterations: 10000
 model:
-  type: vector_potential
+  type: b
   dim: 256
 training:
   epochs: 100
   loss_config:
     - type: boundary
       name: boundary
-      lambda: 1.0 #{start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
+      lambda: 1.0
+      ds_id: boundary_01
+    - type: boundary
+      name: potential_boundary
+      lambda: 0.1
+      ds_id: potential
     - type: force_free
-      lambda: 1.0e-1
+      lambda: 1.0e-2
+    - type: divergence
+      lambda: 1.0e-2
