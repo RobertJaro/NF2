@@ -20,10 +20,10 @@ data:
   num_workers: 8
   iterations: 10000
 model:
-  type: b
+  type: vector_potential
   dim: 256
 training:
-  epochs: 100
+  epochs: 20
   loss_config:
     - type: boundary
       name: boundary
@@ -36,4 +36,4 @@ training:
     - type: force_free
       lambda: 1.0e-2
     - type: divergence
-      lambda: 1.0e-2
+      lambda: 0.0

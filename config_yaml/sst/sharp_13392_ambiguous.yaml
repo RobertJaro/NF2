@@ -18,10 +18,10 @@ data:
   num_workers: 8
   iterations: 10000
 model:
-  type: b
+  type: vector_potential
   dim: 256
 training:
-  epochs: 100
+  epochs: 20
   loss_config:
     - type: boundary_los_trv_azi
       lambda: 1.0
@@ -33,9 +33,9 @@ training:
     - type: force_free
       lambda: 1.0e-2
     - type: divergence
-      lambda:  1.0e-2
+      lambda:  0.0
     - type: azimuth_disambiguation
-      lambda: 1.0e-1
+      lambda: {start: 1.0, end: 1.0e-2, iterations: 5.0e+4}
       ds_id: [ boundary_01 ]
   check_val_every_n_epoch: 1
   transforms:
