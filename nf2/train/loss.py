@@ -274,6 +274,21 @@ class LosTrvAziBoundaryLoss(BaseLoss):
 
         return b_diff
 
+class LosBoundaryLoss(BaseLoss):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, b, b_true, transform=None, *args, **kwargs):
+        # apply transforms
+        bxyz_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
+
+        b_los_pred = bxyz_pred[..., 2]
+        b_los_true = b_true[..., 0]
+
+        # compute diff
+        b_diff = (b_los_pred - b_los_true).pow(2).mean()
+        return b_diff
 
 class BoundaryLoss(BaseLoss):
 
@@ -335,7 +350,7 @@ class SphericalTransform(nn.Module):
 # mapping
 loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
                        'boundary_azi': AziBoundaryLoss,
-                       'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
+                       'boundary_los_trv_azi': LosTrvAziBoundaryLoss, 'boundary_los': LosBoundaryLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                        'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,

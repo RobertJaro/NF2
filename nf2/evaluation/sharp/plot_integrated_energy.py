@@ -180,10 +180,10 @@ m_flare_times = [
 
 x_flares = [
     # (datetime(2024, 5, 8, 21, 8), datetime(2024, 5, 8, 21, 58)),  # X1.0
-    (datetime(2024, 5, 8, 4, 37), datetime(2024, 5, 8, 5, 28)),  # X1.0
-    (datetime(2024, 5, 9, 8, 45), datetime(2024, 5, 9, 9, 31)),  # X2.3
-    (datetime(2024, 5, 9, 17, 23), datetime(2024, 5, 9, 18, 1)),  # X1.1
-    (datetime(2024, 5, 10, 6, 27), datetime(2024, 5, 10, 7, 13)),  # X4.0
+    (datetime(2024, 5, 8, 4, 37), datetime(2024, 5, 8, 5, 32)),  # X1.0
+    (datetime(2024, 5, 9, 8, 45), datetime(2024, 5, 9, 9, 36)),  # X2.2
+    (datetime(2024, 5, 9, 17, 23), datetime(2024, 5, 9, 18, 0)),  # X1.1
+    (datetime(2024, 5, 10, 6, 27), datetime(2024, 5, 10, 7, 6)),  # X4.0
     (datetime(2024, 5, 11, 1, 10), datetime(2024, 5, 11, 1, 39)),  # X5.8
 ]
 
