@@ -1,5 +1,5 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/analytical_0_8_16_32",
+  "base_path": "/glade/work/rjarolim/nf2/analytical/analytical_0_8_16_32",
   "logging": {
     "wandb_entity": "robert_jarolim",
     "wandb_project": "multi-height",
@@ -16,7 +16,7 @@
     "spatial_norm": 64,
     "batch_size": {"boundary":  1e4, "random":  2e4},
     "iterations": 1e5,
-    "work_directory": "/tmp/nf2/analytical_0_8_16_32",
+    "work_directory": "/glade/work/rjarolim/nf2/analytical/analytical_0_8_16_32",
     "num_workers": 8,
     "Mm_per_pixel": 1
   },

@@ -35,6 +35,7 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
     # r = (x * y, 3); coords = (x*y*z, 3), c = (1, 3)
     # --> (x * y, x * y * z, 3) --> (x * y, x * y * z) --> (x * y * z)
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
     with torch.no_grad():
         b_n = torch.tensor(b_n, dtype=torch.float32, )
         r_p = torch.tensor(r_p, dtype=torch.float32, )
@@ -47,9 +48,9 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
         for coord, in it:
             coord = coord.to(device)
             p_batch = model(coord)
-            potential += [p_batch]
+            potential += [p_batch.detach().cpu()]
 
-    potential = torch.cat(potential).view(cube_shape).cpu().numpy()
+    potential = torch.cat(potential).view(cube_shape).numpy()
     if strides != (1, 1, 1):
         potential = block_replicate(potential, strides, conserve_sum=False)
     return potential

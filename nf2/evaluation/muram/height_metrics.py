@@ -35,39 +35,39 @@ avg_heights = np.array([0.960, 1.579, 3.882,  11.622, 19.378, 59.592]) * Mm_per_
 axs[-1].axvline(1, linestyle='--', color='black')
 
 ckpt_paths = [
-    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation/extrapolation_result.nf2',
-    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
-    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed/extrapolation_result.nf2',
-    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bxyz_split/extrapolation_result.nf2',
-    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bz_2epochs/extrapolation_result.nf2',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation/extrapolation_result.nf2',
     '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_fixed/extrapolation_result.nf2',
+    '/gpfs/gpfs0/robert.jarolim/multi_height/muram_ideal/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bxyz_split/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_2tau_Bz_2epochs/extrapolation_result.nf2',
+    # '/gpfs/gpfs0/robert.jarolim/multi_height/muram_extrapolation_pf/extrapolation_result.nf2',
 ]
 labels = [
-    # 'Extrapolation',
-    # 'Extrapolation - PB',
-    # 'Fixed Heights',
-    # 'Mapped Heights',
-    r'Realistic vector',
-    r'Realistic split',
-    r'Realistic LOS',
+    'Extrapolation',
     'Extrapolation - PB',
+    'Fixed Heights',
+    'Mapped Heights',
+    # r'Realistic vector',
+    # r'Realistic split',
+    # r'Realistic LOS',
+    # 'Extrapolation - PB',
 ]
 
 linestyle = [
-            # ':', ':',
-             # '--', '--',
-             'dashdot', 'dashdot',
-             'dashdot',
-             ':',
+            ':', ':',
+             '--', '--',
+             # 'dashdot', 'dashdot',
+             # 'dashdot',
+             # ':',
              ]
 
 # assert same length
 assert len(ckpt_paths) == len(labels) == len(linestyle)
 
-# colors = [f'C{i + 1}' for i in range(len(ckpt_paths))]
-colors = ['C5', 'C6', 'C7', 'C2']
+colors = ['C1', 'C2', 'C3', 'C4']
+# colors = ['C5', 'C6', 'C7', 'C2']
 
 def _plot(b, label, c, ls):
     c_vec = np.sum((B * b).sum(-1), (0, 1)) / np.sqrt((B ** 2).sum(-1).sum((0, 1)) * (b ** 2).sum(-1).sum((0, 1)))
@@ -112,7 +112,7 @@ axs[4].set_xlabel('$\epsilon$')
 axs[0].set_xlim(0.7, 1)
 axs[1].set_xlim(0.25, .85)
 axs[2].set_xlim(0., .8)
-axs[3].set_xlim(-0.5, .5)
+axs[3].set_xlim(-0.5, .6)
 axs[4].set_xlim(0.5, 1.5)
 
 [ax.set_ylim(0, heights.max()) for ax in axs]
@@ -120,5 +120,5 @@ axs[4].set_xlim(0.5, 1.5)
 
 # fig.tight_layout()
 fig.subplots_adjust(bottom=.27)
-fig.savefig(f'{base_path}/comparison_metrics.jpg', dpi=300)
+fig.savefig(f'{base_path}/comparison_metrics_full_v2.jpg', dpi=300)
 plt.close(fig)

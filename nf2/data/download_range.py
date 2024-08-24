@@ -1,26 +1,44 @@
 import argparse
-import os
 
-import drms
 from dateutil.parser import parse
 
-from nf2.data.download import donwload_ds, download_HARP_series
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--download_dir', type=str, required=True)
-parser.add_argument('--email', type=str, required=True)
-parser.add_argument('--harpnum', type=int, required=True)
-parser.add_argument('--t_start', type=str, required=True)
-parser.add_argument('--duration', type=str, required=False, default='1d')
-parser.add_argument('--series', type=str, required=False, default='sharp_cea_720s')
-parser.add_argument('--no_error', action='store_false')
-args = parser.parse_args()
+from nf2.data.download import download_SHARP_series
 
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--download_dir', type=str, required=True)
+    parser.add_argument('--email', type=str, required=True)
+    parser.add_argument('--sharp_num', type=int, required=False, default=None)
+    parser.add_argument('--noaa_num', type=int, required=False, default=None)
+    parser.add_argument('--t_start', type=str, required=True)
+    parser.add_argument('--t_end', type=str, required=False, default=None)
+    parser.add_argument('--cadence', type=str, required=False, default='720s')
+    parser.add_argument('--series', type=str, required=False, default='sharp_cea_720s')
+    parser.add_argument('--segments', type=str, required=False, default='Br, Bp, Bt, Br_err, Bp_err, Bt_err')
+    args = parser.parse_args()
 
-os.makedirs(args.download_dir, exist_ok=True)
-client = drms.Client(email=(args.email), verbose=True)
-download_HARP_series(args.harpnum, parse(args.t_start), args.duration, args.download_dir, client, args.series, download_error=args.no_error)
+    sharp_num = args.harp_num
+    noaa_num = args.noaa_num
+    t_start = args.t_start
+    t_end = args.t_end
 
-def main(): # workaround for entry_points
+    segments = args.segments
+    series = args.series
+    cadence = args.cadence
+
+    download_dir = args.download_dir
+    email = args.email
+
+    t_start = parse(t_start)
+    t_end = parse(t_end) if t_end is not None else None
+
+    download_SHARP_series(download_dir, email, t_start, t_end, noaa_num, sharp_num, cadence, segments, series)
+
+
+if __name__ == '__main__':
+    main()
+
+
+def main():  # workaround for entry_points
     pass

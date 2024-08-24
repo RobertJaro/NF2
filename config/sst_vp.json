@@ -1,0 +1,75 @@
+{
+  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/sst_vp_v2",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "multi-height",
+    "wandb_name": "sst"
+  },
+  "data": {
+    "type": "fits",
+    "data": [
+      {
+        "B": {
+          "x": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_6173_2018-09-30_Bp_cea.fits",
+          "y": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_6173_2018-09-30_Bt_cea.fits",
+          "z": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_6173_2018-09-30_Br_cea.fits"
+        },
+        "flip_sign": 1
+      },
+      {
+        "B": {
+          "x": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_hmi_2018-09-30_Bp_cea.fits",
+          "y": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_hmi_2018-09-30_Bt_cea.fits",
+          "z": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_hmi_2018-09-30_Br_cea.fits"
+        },
+        "flip_sign": 1
+      },
+      {
+        "B": {
+          "x": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_8542_2018-09-30_Bp_cea.fits",
+          "y": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_8542_2018-09-30_Bt_cea.fits",
+          "z": "/gpfs/gpfs0/robert.jarolim/data/nf2/sst/corrected_8542_2018-09-30_Br_cea.fits"
+        },
+        "height_mapping": {
+          "z": 80.0,
+          "z_min": 0.0,
+          "z_max": 2500.0
+        },
+        "flip_sign": 1
+      }
+    ],
+    "boundary": {
+      "type": "potential",
+      "index": 2,
+      "strides": 20
+    },
+    "b_norm": 2500,
+    "bin": 1,
+    "Mm_per_pixel": 0.036,
+    "spatial_norm": 3200,
+    "height": 3200,
+    "batch_size": {
+      "boundary": 1e4,
+      "random": 2e4
+    },
+    "iterations": 1e5,
+    "work_directory": "/tmp/nf2/sst_vp_v2",
+    "num_workers": 8,
+    "validation_strides": 10
+  },
+  "model": {
+    "dim": 256,
+    "use_height_mapping": true,
+    "use_vector_potential": true
+  },
+  "training": {
+    "epochs": 10,
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_div": 0,
+    "lambda_ff": 1e-3,
+    "lambda_min_energy": 0,
+    "lambda_height_reg": 0,
+    "validation_interval": 1e4,
+    "lr_params": {"start": 5e-4, "end": 5e-5, "decay_iterations": 1e5}
+  }
+}

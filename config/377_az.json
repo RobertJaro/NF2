@@ -1,0 +1,58 @@
+{
+  "base_path": "/glade/work/rjarolim/nf2/disambig/377_az_v4",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "disambiguation",
+    "wandb_name": "377_az",
+    "wandb_id": null
+  },
+  "data": {
+    "type": "azimuth",
+    "B_data": {
+        "B_field": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.field.fits",
+        "B_inclination": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.inclination.fits",
+        "B_azimuth": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.azimuth.fits",
+        "B_disambig": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.disambig.fits"
+      },
+    "slice": {
+        "longitude": [0.3, 0.9],
+        "latitude": [1.0, 1.4],
+        "frame": "heliographic_carrington"
+    },
+    "boundary": {
+      "type": "open"
+    },
+    "height": 1.2,
+    "b_norm": 2000,
+    "batch_size": {
+      "boundary": 8192,
+      "random": 16384
+    },
+    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/377_az_v4",
+    "num_workers": 8
+  },
+  "model": {
+    "dim": 512,
+    "use_vector_potential": true
+  },
+  "training": {
+    "epochs": 1e4,
+    "lambda_b": {"start": 1e3, "end": 1, "iterations" : 5e4},
+    "lambda_force_free": 1e-2,
+    "lambda_energy_gradient": 1e-2,
+    "lambda_potential": 1e-3,
+    "check_val_every_n_epoch": 10,
+    "boundary_loss": "azimuth"
+  },
+  "plot": [
+    {
+      "type": "slices",
+      "name": "frame",
+      "longitude_range": [0.39223768, 0.808977],
+      "latitude_range": [1.11188089, 1.30852593],
+      "radius_range": [1.0, 1.2],
+      "n_slices": 5,
+      "plot_currents": true
+    }
+  ]
+}

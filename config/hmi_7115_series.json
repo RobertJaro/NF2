@@ -1,18 +1,17 @@
 {
-  "base_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_series_7115",
-  "meta_path": "/gpfs/gpfs0/robert.jarolim/multi_height/hmi_7115/extrapolation_result.nf2",
+  "base_path": "<<YOUR PATH>>",
+  "meta_path": "<<Initial RUN>>/extrapolation_result.nf2",
   "logging": {
-    "wandb_entity": "robert_jarolim",
-    "wandb_project": "multi-height",
+    "wandb_entity": "<<YOUR Entity>>",
+    "wandb_project": "nf2",
     "wandb_name": "hmi_series_7115",
     "wandb_id": null
   },
   
   "data": {
     "type": "sharp",
-    "paths": "/gpfs/gpfs0/robert.jarolim/data/nf2/7115",
+    "paths": "<<DIR>>",
     "bin": 2,
-    "height_mapping": {"z":  [0.000]},
     "Mm_per_pixel": 0.72,
     "boundary": {"type":  "potential", "strides":  4},
     "height": 160,
@@ -25,8 +24,7 @@
   },
 
   "model": {
-    "dim": 256,
-    "use_height_mapping": false
+    "dim": 256
   },
 
   "training": {

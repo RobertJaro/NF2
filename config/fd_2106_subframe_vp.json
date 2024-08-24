@@ -1,0 +1,71 @@
+{
+  "base_path": "/glade/work/rjarolim/global/subframe/2106_subframe_vp_v1",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "global_subframe",
+    "wandb_name": "2106_subframe_vp",
+    "wandb_id": null
+  },
+
+  "data": {
+    "type": "spherical",
+    "synoptic_files": {
+      "Bp":  "/glade/work/rjarolim/data/global/fd_2106/hmi.b_synoptic.2106.Bp.fits",
+      "Br":  "/glade/work/rjarolim/data/global/fd_2106/hmi.synoptic_mr_polfil_720s.2106.Mr_polfil.fits",
+      "Bt":  "/glade/work/rjarolim/data/global/fd_2106/hmi.b_synoptic.2106.Bt.fits"
+    },
+    "full_disk_files": {
+      "Bp":  "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bp.fits",
+      "Br":  "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Br.fits",
+      "Bt":  "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bt.fits",
+      "Bp_err": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bp_err.fits",
+      "Br_err": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Br_err.fits",
+      "Bt_err": "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bt_err.fits"
+    },
+    "boundary": {
+      "type": "open"
+    },
+    "height": 1.2,
+    "slice": {
+      "longitude": [0.3, 0.9],
+      "latitude": [1.0, 1.4],
+      "frame":  "heliographic_carrington"
+    },
+    "b_norm": 2000,
+    "batch_size": {"boundary":  8192, "random":  16384},
+    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2106_subframe_vp_v1",
+    "num_workers": 8
+  },
+
+  "model": {
+    "dim": 512,
+    "use_height_mapping": false,
+    "spherical": true,
+    "use_vector_potential": true,
+    "use_positional_encoding": false
+  },
+
+  "training": {
+    "epochs": 1e6,
+    "lambda_b": {"start": 1e2, "end": 10, "iterations" : 1e5},
+    "lambda_divergence": 0,
+    "lambda_force_free": 1e-1,
+    "lambda_min_energy": 0,
+    "lambda_radial_reg": 0,
+    "lambda_energy_gradient": 1e-2,
+    "check_val_every_n_epoch": 20,
+    "lr_params": {"start": 5e-4, "end": 5e-5, "iterations": 1e5}
+  },
+
+  "plot": [
+    {
+      "type": "slices",
+      "name": "subframe",
+      "longitude_range": [0.39223768, 0.808977],
+      "latitude_range": [1.11188089, 1.30852593],
+      "radius_range": [1.0, 1.2],
+      "n_slices": 5,
+      "plot_currents": true
+    }
+  ]
+}

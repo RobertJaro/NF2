@@ -1,0 +1,54 @@
+---
+base_path: "/glade/work/rjarolim/nf2/muram_mfr/muram_sma_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_v01"
+logging:
+  project: muram_mfr
+  name: muram SMA
+data:
+  type: muram
+  slices:
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_1.000.399000"
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.010.399000"
+      height_mapping: {z: 1.0, z_min: 0, z_max: 2}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.000100.399000"
+      height_mapping: {z: 2.0, z_min: 0, z_max: 4}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/2D/tau_slice_0.000001.399000"
+      height_mapping: {z: 6.0, z_min: 0, z_max: 12}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+  activation: sine
+training:
+  epochs: 100
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1.0
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-1
+    - type: divergence
+      lambda: 1.0e-1
+    - type: height
+      name: height
+      lambda: 1.0e-3
+      ds_id: [boundary_02, boundary_03, boundary_04]
+  coordinate_transform:
+      type: height
+      ds_id: [boundary_02, boundary_03, boundary_04]
+      validation_ds_id: [validation_boundary_02, validation_boundary_03, validation_boundary_04]
+  check_val_every_n_epoch: 1

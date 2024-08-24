@@ -1,0 +1,101 @@
+{
+  "base_path": "/glade/work/rjarolim/nf2/spherical/2173_v04",
+  "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2173_v04",
+  "logging": {
+    "project": "subframe_v2",
+    "name": "2173"
+},
+  "data":
+    {
+      "type": "spherical",
+      "train_configs": [
+        {
+          "type": "map", "name": "AR", "batch_size": 24576,
+          "files" : {
+            "Bp":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp.fits",
+            "Br":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br.fits",
+            "Bt":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits",
+            "Bp_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits",
+            "Br_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits",
+            "Bt_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
+          }
+        },
+        {
+          "type": "map", "name": "synoptic", "batch_size": 8192,
+          "files" : {
+            "Br": "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits",
+            "Bt": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bt.fits",
+            "Bp": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bp.fits"
+          },
+          "mask_configs" : {
+            "type":  "reference",
+            "file": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits"
+          }
+        },
+        {
+          "type": "pfss_boundary", "name": "pfss_boundary", "batch_size": 8192,
+          "Br": "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits"
+        },
+        {
+          "type": "random_spherical", "batch_size": 65536, "name": "random"
+        }
+      ],
+      "validation_configs": [
+        {
+          "type": "map", "name": "synoptic_valid", "filter_nans": false, "shuffle": false, "strides": 4, "plot_overview": false,
+          "files" : {
+            "Br": "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits",
+            "Bt": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bt.fits",
+            "Bp": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bp.fits"
+          }
+        },
+        {
+          "type": "map", "name": "AR_valid", "filter_nans": false, "shuffle": false, "plot_overview": false,
+          "files" : {
+            "Bp":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp.fits",
+            "Br":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br.fits",
+            "Bt":  "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits",
+            "Bp_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits",
+            "Br_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits",
+            "Bt_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
+          },
+          "mask_configs" : {"type":  "heliographic_carrington",
+            "longitude_range": [2.35619449, 3.14159265], "latitude_range": [1.25663706, 1.88495559], "invert": true}
+        },
+        {
+          "type": "sphere", "name": "sphere"
+        },
+        {
+          "type": "spherical_slices", "name": "full-disk",
+          "n_slices": 10, "plot_currents": true
+        },
+        {
+          "type": "spherical_slices", "name": "subframe_slices",
+          "n_slices": 10, "plot_currents": true,
+          "longitude_range": [2.35619449, 3.14159265], "latitude_range": [1.25663706, 1.88495559]
+        }
+      ],
+      "max_radius": 1.5,
+      "G_per_dB": 2000,
+      "num_workers": 8,
+      "batch_size": 65536
+  },
+  "model": {
+    "type": "b",
+    "dim": 512,
+    "activation": "swish"
+  },
+  "training": {
+    "epochs": 1e3,
+    "loss_config": [
+      {
+        "type": "boundary", "name":  "boundary",
+        "lambda":  {"start":  1e3, "end":  1e1, "iterations": 1e5},
+        "ds_id": ["synoptic", "AR", "pfss_boundary"]
+      },
+      {"type": "force_free", "lambda": 1e-1},
+      {"type":  "divergence", "lambda":  1e-1}
+    ],
+    "check_val_every_n_epoch": 25
+  }
+}

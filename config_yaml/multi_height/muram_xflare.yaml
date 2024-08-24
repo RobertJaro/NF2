@@ -1,0 +1,53 @@
+---
+base_path: "/glade/work/rjarolim/nf2/multi_height/muram_xflare_v08"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_xflare_v08"
+logging:
+  project: multi-height
+  name: muram X-flare
+data:
+  type: muram
+  slices:
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_1.000.1300000"
+      height_mapping: {z: 0.5, z_min: 0, z_max: 1}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.001.1300000"
+      height_mapping: {z: 1.0, z_min: 0, z_max: 2}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.000100.1300000"
+      height_mapping: {z: 2.0, z_min: 0, z_max: 4}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/ASD_2023/Run_Corona_1728x1024x1024_ASD_open/2D/tau_slice_0.000001.1300000"
+      height_mapping: {z: 6.0, z_min: 0, z_max: 12}
+      los_trv_azi_transform: False
+#      batch_size: 2048
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+  activation: sine
+training:
+  epochs: 10
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+2, end: 1.0, iterations: 1.0e+5}
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0e-1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2
+    - type: min_height
+      name: height
+      lambda: {start: 1.0e-2, end: 1.0e-6, iterations: 1.0e+5}
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+  coordinate_transform:
+      type: height
+      ds_id: [boundary_01, boundary_02, boundary_03, boundary_04]
+      validation_ds_id: [validation_boundary_01, validation_boundary_02, validation_boundary_03, validation_boundary_04]
+  check_val_every_n_epoch: 1

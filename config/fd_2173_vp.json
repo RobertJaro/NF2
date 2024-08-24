@@ -1,0 +1,67 @@
+{
+  "base_path": "/glade/work/rjarolim/nf2/global/2173_vp_v3",
+  "logging": {
+    "wandb_entity": "robert_jarolim",
+    "wandb_project": "global_HAO",
+    "wandb_name": "2173_vp",
+    "wandb_id": null
+  },
+  "data": {
+    "type": "spherical",
+    "synoptic_files": {
+      "Bp": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bp.fits",
+      "Br": "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits",
+      "Bt": "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bt.fits"
+    },
+    "full_disk_files": {
+      "Bp": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp.fits",
+      "Br": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br.fits",
+      "Bt": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt.fits",
+      "Bp_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp_err.fits",
+      "Br_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br_err.fits",
+      "Bt_err": "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt_err.fits"
+    },
+    "boundary": {
+      "type": "open"
+    },
+    "height": 1.3,
+    "b_norm": 2000,
+    "batch_size": {"boundary":  8192, "random":  16384},
+    "work_directory": "/glade/derecho/scratch/rjarolim/nf2/2173_vp_v3",
+    "num_workers": 8
+  },
+  "model": {
+    "dim": 512,
+    "use_vector_potential": true
+  },
+  "training": {
+    "epochs": 1e6,
+    "lambda_b": {
+      "start": 1e2,
+      "end": 10,
+      "iterations": 2e5
+    },
+    "lambda_force_free": 1e-1,
+    "lambda_energy_gradient": 1e-2,
+    "check_val_every_n_epoch": 5,
+    "lr_params": 5e-4
+  },
+  "plot": [
+    {
+      "type": "slices",
+      "name": "subframe",
+      "longitude_range": [2.356194490192345, 3.141592653589793],
+      "latitude_range": [1.2566370614359172, 1.8849555921538759],
+      "radius_range": [1.0, 1.2],
+      "n_slices": 10,
+      "plot_currents": true
+    },
+    {
+      "type": "slices",
+      "name": "full-disk",
+      "radius_range": [1.0, 1.3],
+      "n_slices": 5,
+      "plot_currents": true
+    }
+  ]
+}
