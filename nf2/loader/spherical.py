@@ -105,13 +105,13 @@ class SphericalMapDataset(SphericalSliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
+            np.pi / 2 + spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
         # load data and transform matrix
-        b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
+        b_spherical = np.stack([r_map.data, -t_map.data, p_map.data]).transpose()
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 

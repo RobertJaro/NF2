@@ -50,7 +50,7 @@ class SphericalSlicesCallback(Callback):
                 extent = None
                 height = coords[j, :, :, 0].mean()
                 im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='upper', extent=extent)
+                                      origin='lower', extent=extent)
                 axs[i, j].set_xlabel('Longitude [deg]')
                 axs[i, j].set_ylabel('Latitude [deg]')
                 # add locatable colorbar
@@ -72,7 +72,7 @@ class SphericalSlicesCallback(Callback):
             # extent = np.rad2deg(extent)
             extent = None
             height = coords[i, :, :, 0].mean()
-            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
+            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             axs[i].set_xlabel('Longitude [deg]')
             axs[i].set_ylabel('Latitude [deg]')
             # add locatable colorbar
@@ -86,7 +86,7 @@ class SphericalSlicesCallback(Callback):
         # plot integrated current density
         j = np.sum(j, axis=0)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j, cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
+        im = ax.imshow(j, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
