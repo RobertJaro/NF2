@@ -375,7 +375,15 @@ class SphericalOutput(BaseOutput):
         cube_shape = coords.shape[:-1]
         model_out = self.load_coords(sub_coords, **kwargs)
 
-        spherical_out = {'spherical_coords': spherical_coords, 'coords': coords}
+        spherical_out = {'spherical_coords': spherical_coords, 'coords': coords, 'metrics': {}}
+        metrics = model_out.pop('metrics')
+        for k, sub_v in metrics.items():
+            volume = np.ones(cube_shape + sub_v.shape[1:]) * nan_value
+            if hasattr(sub_v, 'unit'):  # preserve units
+                volume = volume * sub_v.unit
+            volume[condition] = sub_v
+            spherical_out['metrics'][k] = volume
+
         for k, sub_v in model_out.items():
             volume = np.ones(cube_shape + sub_v.shape[1:]) * nan_value
             if hasattr(sub_v, 'unit'):  # preserve units

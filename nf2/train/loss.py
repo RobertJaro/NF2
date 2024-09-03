@@ -90,12 +90,11 @@ class RadialLoss(BaseLoss):
 
     def forward(self, b, coords, *args, **kwargs):
         # radial regularization --> vanishing phi and theta components
-        radial_regularization = torch.norm(torch.cross(b, coords, dim=-1), dim=-1)
-
-        radius_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7)
+        radius_weight = torch.norm(coords, dim=-1)
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
 
         normalization = torch.norm(b, dim=-1) * torch.norm(coords, dim=-1) + 1e-7
+        radial_regularization = torch.norm(torch.cross(b, coords, dim=-1), dim=-1)
         radial_regularization = radial_regularization / normalization
 
         radial_regularization = (radial_regularization * radius_weight).mean()
@@ -171,11 +170,10 @@ class EnergyGradientLoss(BaseLoss):
                 (torch.sin(t) * torch.sin(p)) * dE_dy + \
                 torch.cos(p) * dE_dz
 
-        radius_weight = coords.pow(2).sum(-1).pow(0.5)
+        radius_weight = torch.norm(coords, dim=-1)
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
 
-        sampled_dE_dr = dE_dr
-        energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight ** 2
+        energy_gradient_regularization = torch.relu(dE_dr) * radius_weight ** 2
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
@@ -332,20 +330,6 @@ class MinHeightLoss(BaseLoss):
         return min_height_regularization
 
 
-class FluxPreservationLoss(BaseLoss):
-
-    def forward(self, dflux_dr, *args, **kwargs):
-        flux_preservation_loss = dflux_dr.pow(2).mean()
-        return flux_preservation_loss
-
-
-class SphericalTransform(nn.Module):
-
-    def forward(self, b, b_true, transform=None):
-        b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
-        return b, b_true
-
-
 
 # mapping
 loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
@@ -354,5 +338,5 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                        'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
-                       'flux_preservation': FluxPreservationLoss, 'magneto_static': MagnetoStaticLoss,
+                       'magneto_static': MagnetoStaticLoss,
                        'azimuth_disambiguation': AzimuthDisambiguationLoss}

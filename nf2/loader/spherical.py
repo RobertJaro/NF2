@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-from copy import copy
+from copy import copy, deepcopy
 
 import numpy as np
 import pfsspy
@@ -93,7 +93,7 @@ class SphericalSliceDataset(TensorsDataset):
 
 class SphericalMapDataset(SphericalSliceDataset):
 
-    def __init__(self, files, mask_configs=[], **kwargs):
+    def __init__(self, files, mask_configs=None, insert=None, **kwargs):
         # load maps
         r_map = Map(files['Br'])
         t_map = Map(files['Bt'])
@@ -126,7 +126,32 @@ class SphericalMapDataset(SphericalSliceDataset):
         else:
             b_error_spherical = None
 
+        # insert additional data (e.g., HMI full disk maps)
+        insert = insert if insert is not None else []
+        insert = insert if isinstance(insert, list) else [insert]
+        for insert_config in insert:
+            insert_br = Map(insert_config['Br'])
+            insert_bt = Map(insert_config['Bt'])
+            insert_bp = Map(insert_config['Bp'])
+
+            # reproject to reference map
+            ref_map = Map(r_map.data, r_map.meta)
+            # use reference time to avoid temporal shift
+            ref_map.meta['date-obs'] = insert_br.date.to_datetime().isoformat()
+            ref_wcs = ref_map.wcs
+            insert_br = insert_br.reproject_to(ref_wcs)
+            insert_bt = insert_bt.reproject_to(ref_wcs)
+            insert_bp = insert_bp.reproject_to(ref_wcs)
+
+            insert_b_spherical = np.stack([insert_br.data, insert_bt.data, insert_bp.data]).transpose()
+            insert_b_cartesian = vector_spherical_to_cartesian(insert_b_spherical, spherical_coords)
+
+            nan_mask = ~np.isnan(insert_b_spherical)
+            b_spherical[nan_mask] = insert_b_spherical[nan_mask]
+            b_cartesian[nan_mask] = insert_b_cartesian[nan_mask]
+
         # apply masking
+        mask_configs = mask_configs if mask_configs is not None else []
         mask_configs = mask_configs if isinstance(mask_configs, list) else [mask_configs]
         for mask_config in mask_configs:
             self._mask(b_cartesian, b_error_spherical, b_spherical, cartesian_coords, mask_config, r_map,
@@ -221,6 +246,8 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
         insert = insert if isinstance(insert, list) else [insert]
         for file_in in insert:
             map_in = Map(file_in)
+            # prevent temporal rotation
+            potential_r_map.meta['date-obs'] = map_in.date.to_datetime().isoformat()
             map_in = map_in.reproject_to(potential_r_map.wcs)
             condition = ~np.isnan(map_in.data)
             potential_r_map.data[condition] = map_in.data[condition]
@@ -297,6 +324,7 @@ class SphericalDataModule(BaseDataModule):
     def load_config(self, configs, general_config, prefix='train'):
         datasets = OrderedDict()
         for i, config in enumerate(configs):
+            config = deepcopy(config)
             c_type = config.pop('type')
             c_name = config.pop('ds_id') if 'ds_id' in config else f'{prefix}_{c_type}_{i}'
             config['ds_name'] = c_name
@@ -311,20 +339,55 @@ class SphericalDataModule(BaseDataModule):
 
 
 class SphericalSeriesDataModule(SphericalDataModule):
-    def __init__(self, full_disk_files, *args, **kwargs):
+
+    def __init__(self, fits_paths, synoptic_fits_path, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-        self.full_disk_files = copy(full_disk_files)
-        self.current_id = os.path.basename(self.full_disk_files[0]['Br']).split('.')[-3]
+        self.fits_paths = copy(fits_paths)
+        self.synoptic_fits_path = synoptic_fits_path
 
-        super().__init__(full_disk_files=self.full_disk_files[0], *self.args, **self.kwargs)
+        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
+
+        self.initialized = True  # only required for first iteration
+        train_configs = self._build_config(fits_paths[0])
+        super().__init__(train_configs, *self.args, **self.kwargs)
+
+    def _build_config(self, fits):
+        full_disk_config = {
+            'type': 'map',
+            'ds_id': 'full_disk',
+            'batch_size': 4096,
+            'files': {'Br': fits['Br'], 'Bt': fits['Bt'], 'Bp': fits['Bp'], }
+        }
+        synoptic_config = {
+            'type': 'map',
+            'ds_id': 'synoptic',
+            'batch_size': 4096,
+            'files': {'Br': self.synoptic_fits_path['Br'],
+                      'Bt': self.synoptic_fits_path['Bt'],
+                      'Bp': self.synoptic_fits_path['Bp']},
+            'mask_configs': [{'type': 'reference', 'file': fits['Br']}]
+        }
+        random_config = {
+            'type': 'random_spherical',
+            'ds_id': 'random',
+            'batch_size': 16384
+        }
+        train_configs = [full_disk_config, synoptic_config, random_config]
+        return train_configs
 
     def train_dataloader(self):
-        if len(self.full_disk_files) == 0:
-            return None
+        # skip reload if already initialized - for initial epoch
+        if self.initialized:
+            self.initialized = False
+            print('Currently loaded:', self.current_id)
+            return super().train_dataloader()
+        # update ID
+        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
         # re-initialize
-        print(f"Load next file: {os.path.basename(self.full_disk_files[0]['Br'])}")
-        self.current_files = self.full_disk_files[0]
-        super().__init__(full_disk_files=self.full_disk_files[0], *self.args, **self.kwargs)
-        del self.full_disk_files[0]
+        train_configs = self._build_config(self.fits_paths[0])
+        super().__init__(train_configs, *self.args, **self.kwargs)
+        # continue with next file in list
+        del self.fits_paths[0]
+        print('Currently loaded:', self.current_id)
         return super().train_dataloader()

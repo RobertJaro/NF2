@@ -57,11 +57,12 @@ for i, f in enumerate(files):
 
     output = SphericalOutput(f)
     result = output.load(radius_range, latitude_range, longitude_range, pixels_per_solRad, progress=True,
-                         metrics={'j': current_density, 'twist': alpha})
+                         metrics={'j': current_density, 'alpha': alpha})
 
     vectors = {'B': result['b'], 'B_rtp': result['b_rtp']}
     radius = result['spherical_coords'][..., 0]
-    scalars = {'radius': radius, 'current_density': np.sum(result['j'] ** 2, -1) ** 0.5, 'twist': result['twist']}
+    metrics = result['metrics']
+    scalars = {'radius': radius, 'current_density': np.sum(metrics['j'] ** 2, -1) ** 0.5, 'alpha': metrics['alpha']}
     coords = result['coords']
 
     args = (vtk_path, coords, vectors, scalars)

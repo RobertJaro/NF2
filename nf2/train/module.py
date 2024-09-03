@@ -184,15 +184,19 @@ class NF2Module(LightningModule):
 
         loss_dict = {}
         for name, loss_module in self.loss_modules.items():
-            ds_id = loss_module.ds_id
-            if isinstance(ds_id, list):
-                states = [state_dict[i] for i in ds_id]
-                state_keys = states[0].keys()
-                state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
-            else:
-                state = state_dict[ds_id]
-            loss = {name: loss_module(**state)}
-            loss_dict.update(loss)
+            try:
+                ds_id = loss_module.ds_id
+                if isinstance(ds_id, list):
+                    states = [state_dict[i] for i in ds_id]
+                    state_keys = states[0].keys()
+                    state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
+                else:
+                    state = state_dict[ds_id]
+                loss = {name: loss_module(**state)}
+                loss_dict.update(loss)
+            except Exception as e:
+                logging.error(f"Error in loss module: {name}")
+                raise e
         total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
 
         loss_dict['loss'] = total_loss

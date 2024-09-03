@@ -48,8 +48,8 @@ def magnetic_helicity(b, a, **kwargs):
 def alpha(b, jac_matrix, **kwargs):
     j = calculate_current_from_jacobian(jac_matrix, f=np)
     alpha = np.linalg.norm(j, axis=-1) / np.linalg.norm(b, axis=-1)
-    threshold = np.linalg.norm(b, axis=-1).to_value(u.G) < 10  # set alpha to 0 for weak fields (coronal holes)
-    alpha[threshold] = 0 * u.Mm ** -1
+    # threshold = np.linalg.norm(b, axis=-1).to_value(u.G) < 1  # set alpha to 0 for weak fields (coronal holes)
+    # alpha[threshold] = 0 * u.Mm ** -1
     alpha = alpha.to(u.Mm ** -1)
     return {'alpha': alpha}
 
