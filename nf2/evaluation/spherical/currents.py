@@ -9,14 +9,14 @@ from astropy.coordinates import SkyCoord
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from sunpy.map import Map, all_coordinates_from_map
+from sunpy.map import Map, all_coordinates_from_map, make_heliographic_header
 
 from nf2.data.util import vector_cartesian_to_spherical
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output import SphericalOutput
 
-files = f'/glade/work/rjarolim/nf2/spherical/2173_full_v07/*.nf2'
-results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_v07/results'
+files = f'/glade/work/rjarolim/nf2/spherical/2173_full_v11/*.nf2'
+results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/results'
 
 synoptic_files = {
     'Br': "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits",
@@ -28,6 +28,8 @@ full_disc_files = {
     'Bt': sorted(glob.glob("/glade/work/rjarolim/data/global/fd_2173/full_disk/*Bt.fits")),
     'Bp': sorted(glob.glob("/glade/work/rjarolim/data/global/fd_2173/full_disk/*Bp.fits"))
 }
+euv_files = sorted(glob.glob("/glade/work/rjarolim/data/global/fd_2173/euv/*.193.image_lev1.fits"))
+
 os.makedirs(results_path, exist_ok=True)
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -48,15 +50,15 @@ def _build_synoptic_map(br_file):
     return br_map
 
 
-sampling = [256, 256, 256]
+sampling = [64, 512, 512]
 longitude_range = [140, 220]
 latitude_range = [50, 130]
 radius_range = [1.0, 1.3]
 dr = ((radius_range[1] - radius_range[0]) * u.solRad).to_value(u.cm) / sampling[0]
 
-alpha_norm = Normalize()
+alpha_norm = Normalize(vmin=0, vmax=10)
 j_norm = LogNorm()
-energy_norm = LogNorm()
+energy_norm = LogNorm(vmin=1e10, vmax=5e13)
 
 files = sorted(glob.glob(files))
 
@@ -73,8 +75,26 @@ for i, file in enumerate(files):
                                         model_out['spherical_coords'])[..., 0]
     br_map.data[:] = b_r
 
+    # build PFSS model
     pfss_in = pfsspy.Input(br_map, 100, 2.5)
     pfss_out = pfsspy.pfss(pfss_in)
+
+    # EUV
+    euv_map = Map(euv_files[i])
+    exposure_time = euv_map.exposure_time.to_value(u.s)
+    carr_header = make_heliographic_header(euv_map.date, euv_map.observer_coordinate, (180 * 8, 360 * 8),
+                                           frame='carrington')
+    carr_header['crval1'] = 180
+    euv_map = euv_map.reproject_to(carr_header)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.imshow(euv_map.data / exposure_time, origin='lower', cmap=euv_map.cmap, extent=[0, 360, -90, 90],
+              norm=LogNorm(vmin=10, vmax=5e3))
+    ax.set_xlim(*longitude_range)
+    ax.set_ylim(*[l - 90 for l in latitude_range])
+    plt.savefig(os.path.join(results_path, f'euv_{os.path.basename(file).replace("nf2", "jpg")}'),
+                dpi=300)
+    plt.close(fig)
 
     model_out = model.load_spherical(radius_range * u.solRad,
                                      longitude_range=longitude_range * u.deg, latitude_range=latitude_range * u.deg,
@@ -127,6 +147,7 @@ for i, file in enumerate(files):
                 dpi=300)
     plt.close(fig)
 
+    alpha[np.linalg.norm(b, axis=-1) < 5] = 0
     # alpha
     fig, ax = plt.subplots(figsize=(10, 5))
     im = ax.imshow(alpha.sum(0) * dr, origin='upper', cmap='viridis', extent=extent, norm=alpha_norm)
@@ -153,17 +174,29 @@ for i, file in enumerate(files):
         fig.colorbar(im, cax=cax, orientation='vertical')
 
 
-    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+
     integrated_free_energy = free_energy.sum(0) * dr
     integrated_free_energy[integrated_free_energy < 1e8] = 1e8
     integrated_potential_energy = potential_energy.sum(0) * dr
     integrated_ff_energy = ff_energy.sum(0) * dr
 
-    _plot_energy(axs[0], integrated_free_energy, 'Free Energy')
-    _plot_energy(axs[1], integrated_potential_energy, 'Potential Energy')
-    _plot_energy(axs[2], integrated_ff_energy, 'Force-Free Energy')
-    fig.tight_layout()
-    plt.savefig(os.path.join(results_path,
+    fig, ax = plt.subplots(figsize=(10, 5))
+    _plot_energy(ax, integrated_free_energy, 'Free Energy')
+    fig.savefig(os.path.join(results_path,
                              f'free_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
                 dpi=300)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    _plot_energy(ax, integrated_potential_energy, 'Potential Energy')
+    fig.savefig(os.path.join(results_path,
+                                f'potential_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
+                    dpi=300)
+    plt.close(fig)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    _plot_energy(ax, integrated_ff_energy, 'Force-Free Energy')
+    fig.savefig(os.path.join(results_path,
+                                f'ff_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
+                    dpi=300)
     plt.close(fig)

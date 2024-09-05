@@ -31,12 +31,12 @@ class SphericalSliceDataset(TensorsDataset):
             transform = transform[::strides, ::strides] if transform is not None else None
         self.cube_shape = b.shape[:-1]
         # flatten data
-        b = np.concatenate([f.reshape((-1, 3)) for f in b]).astype(np.float32)
-        coords = np.concatenate([c.reshape((-1, 3)) for c in coords]).astype(np.float32)
+        b = b.reshape((-1, 3))
+        coords = coords.reshape((-1, 3))
         if b_err is not None:
-            b_err = np.concatenate([e.reshape((-1, 3)) for e in b_err]).astype(np.float32)
+            b_err = b_err.reshape((-1, 3))
         if transform is not None:
-            transform = np.concatenate([t.reshape((-1, 3, 3)) for t in transform]).astype(np.float32)
+            transform = transform.reshape((-1, 3, 3))
 
         # normalize data
         b /= G_per_dB
@@ -105,13 +105,13 @@ class SphericalMapDataset(SphericalSliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            np.pi / 2 + spherical_coords.lat.to_value(u.rad),
+            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
         # load data and transform matrix
-        b_spherical = np.stack([r_map.data, -t_map.data, p_map.data]).transpose()
+        b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
@@ -168,6 +168,7 @@ class SphericalMapDataset(SphericalSliceDataset):
             cartesian_coords = cartesian_coords[min_x:max_x, min_y:max_y]
             spherical_coords = spherical_coords[min_x:max_x, min_y:max_y]
             b_spherical = b_spherical[min_x:max_x, min_y:max_y]
+            b_cartesian = b_cartesian[min_x:max_x, min_y:max_y]
             if b_error_spherical is not None:
                 b_error_spherical = b_error_spherical[min_x:max_x, min_y:max_y]
             if transform is not None:
@@ -285,13 +286,16 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
         coords = spherical_to_cartesian(spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
+
         super().__init__(b=spherical_b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
 
 
 class SphericalDataModule(BaseDataModule):
 
     def __init__(self, train_configs, validation_configs,
-                 max_radius=None, Mm_per_ds=.36 * 320, G_per_dB=None, work_directory=None,
+                 max_radius=1.3,
+                 Mm_per_ds= (1 * u.solRad).to_value(u.Mm),
+                 G_per_dB=None, work_directory=None,
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
@@ -301,7 +305,6 @@ class SphericalDataModule(BaseDataModule):
                            'spherical_slices': SphereSlicesDataset}
 
         # data parameters
-        self.max_radius = max_radius
         self.G_per_dB = G_per_dB
         self.Mm_per_ds = Mm_per_ds
         self.cube_shape = [1, max_radius]

@@ -31,8 +31,7 @@ class ForceFreeLoss(BaseLoss):
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         jxb = torch.cross(j, b, -1)
-        # assure that the normalization does not influence the loss
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7).detach()
+        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
         force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
         #
         return force_free_loss.mean()
@@ -64,7 +63,7 @@ class MagnetoStaticLoss(BaseLoss):
         #
         equation = jxb - grad_P
         # assure that the normalization does not influence the loss
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7).detach()
+        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
         loss = torch.sum(equation ** 2, dim=-1) / normalization
         #
         return loss.mean()

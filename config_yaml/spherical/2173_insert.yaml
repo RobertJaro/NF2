@@ -8,7 +8,7 @@ data:
   type: spherical
   train_configs:
     - type: map
-      ds_id: full_disk
+      ds_id: synoptic
       batch_size: 4096
       files:
         Br: "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits"
@@ -23,7 +23,7 @@ data:
       batch_size: 8192
   validation_configs:
     - type: map
-      ds_id: full_disk_valid
+      ds_id: synoptic_valid
       filter_nans: false
       shuffle: false
       plot_overview: false
@@ -59,9 +59,9 @@ training:
     - type: boundary
       name: boundary
       lambda: 1
-      ds_id: full_disk
+      ds_id: synoptic
     - type: energy_gradient
-      lambda: 1.0
+      lambda: 10.0
       ds_id: random
       base_radius: 1.04
     - type: potential

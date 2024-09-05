@@ -10,14 +10,14 @@ from sunpy.map import Map, all_coordinates_from_map
 from nf2.data.util import spherical_to_cartesian, vector_cartesian_to_spherical
 from nf2.evaluation.output import SphericalOutput
 
-nf2_file = '/glade/work/rjarolim/nf2/spherical/2173_free_v06/extrapolation_result.nf2'
-results_path = '/glade/work/rjarolim/nf2/spherical/2173_free_v06/results'
-ref_r_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br.fits'
-ref_t_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits'
-ref_p_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp.fits'
-ref_r_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits'
-ref_t_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits'
-ref_p_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits'
+nf2_file = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/extrapolation_result.nf2'
+results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/results'
+ref_r_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br.fits'
+ref_t_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt.fits'
+ref_p_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp.fits'
+ref_r_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br_err.fits'
+ref_t_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt_err.fits'
+ref_p_err_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp_err.fits'
 os.makedirs(results_path, exist_ok=True)
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')

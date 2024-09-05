@@ -26,7 +26,6 @@ class BaseOutput:
         model = self.state['model']
         self._requires_grad = isinstance(model, VectorPotentialModel)
         self.model = nn.DataParallel(model) if torch.cuda.device_count() > 1 else model
-        self.spatial_norm = 1
         self.device = device
         self.c = constants.c
 
@@ -44,7 +43,7 @@ class BaseOutput:
 
         def _load(coords):
             # normalize and to tensor
-            coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
+            coords = torch.tensor(coords, dtype=torch.float32)
             coords_shape = coords.shape
             coords = coords.reshape((-1, 3))
 
@@ -308,7 +307,6 @@ class SphericalOutput(BaseOutput):
         assert self.state['data']['type'] == 'spherical', 'Requires spherical NF2 data!'
 
         self.radius_range = self.state['data']['radius_range']
-        self.spatial_norm = (self.m_per_ds / (1 * u.solRad)).to_value(u.dimensionless_unscaled)
 
     def load_spherical(self, radius_range: u.Quantity = None,
                        latitude_range: u.Quantity = (0, np.pi) * u.rad,
@@ -322,7 +320,7 @@ class SphericalOutput(BaseOutput):
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
-
+        cartesian_coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         model_out = self.load_coords(cartesian_coords, **kwargs)
         return {**model_out, 'coords': cartesian_coords, 'spherical_coords': spherical_coords}
 
@@ -370,6 +368,8 @@ class SphericalOutput(BaseOutput):
                 lon_cond = lon_cond | ((lon_coord < max_lon - 2 * np.pi) & (lon_coord >= 0))
         rad_cond = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad))
         condition = rad_cond & lat_cond & lon_cond
+
+        coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         sub_coords = coords[condition]
 
         cube_shape = coords.shape[:-1]
@@ -412,4 +412,5 @@ class SphericalOutput(BaseOutput):
             spherical_coords.lon.to(u.rad).value,
         ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
+        cartesian_coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         return cartesian_coords, spherical_coords
