@@ -320,8 +320,8 @@ class SphericalOutput(BaseOutput):
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
-        cartesian_coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
-        model_out = self.load_coords(cartesian_coords, **kwargs)
+        scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        model_out = self.load_coords(scaled_coords, **kwargs)
         return {**model_out, 'coords': cartesian_coords, 'spherical_coords': spherical_coords}
 
     def load(self,
@@ -369,10 +369,10 @@ class SphericalOutput(BaseOutput):
         rad_cond = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad))
         condition = rad_cond & lat_cond & lon_cond
 
-        coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
-        sub_coords = coords[condition]
+        scaled_coords = coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        sub_coords = scaled_coords[condition]
 
-        cube_shape = coords.shape[:-1]
+        cube_shape = scaled_coords.shape[:-1]
         model_out = self.load_coords(sub_coords, **kwargs)
 
         spherical_out = {'spherical_coords': spherical_coords, 'coords': coords, 'metrics': {}}
@@ -397,7 +397,8 @@ class SphericalOutput(BaseOutput):
 
     def load_spherical_coords(self, spherical_coords: SkyCoord, **kwargs):
         cartesian_coords, spherical_coords = self._skycoords_to_cartesian(spherical_coords)
-        model_out = self.load_coords(cartesian_coords, **kwargs)
+        scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        model_out = self.load_coords(scaled_coords, **kwargs)
         model_out['spherical_coords'] = spherical_coords
         model_out['coords'] = cartesian_coords
         return model_out
@@ -412,5 +413,4 @@ class SphericalOutput(BaseOutput):
             spherical_coords.lon.to(u.rad).value,
         ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
-        cartesian_coords *= (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         return cartesian_coords, spherical_coords

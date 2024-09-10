@@ -46,7 +46,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
     # init logging
     wandb_logger = WandbLogger(**logging, save_dir=work_directory)
     config_dict = {'base_path': base_path, 'work_directory': work_directory, 'logging': logging,
-                   'model': model, 'training': training, 'config': config}
+                   'model': model, 'training': training, 'config': config, 'data': data}
     wandb_logger.experiment.config.update(config_dict, allow_val_change=True)
 
     # restore model checkpoint from wandb

@@ -6,6 +6,7 @@ import pfsspy
 import torch
 from astropy import units as u
 from astropy.coordinates import SkyCoord
+from dateutil.parser import parse
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -15,8 +16,8 @@ from nf2.data.util import vector_cartesian_to_spherical
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output import SphericalOutput
 
-files = f'/glade/work/rjarolim/nf2/spherical/2173_full_v11/*.nf2'
-results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/results'
+files = f'/glade/work/rjarolim/nf2/spherical/2173/**_v02/*.nf2'
+results_path = '/glade/work/rjarolim/nf2/spherical/2173/results'
 
 synoptic_files = {
     'Br': "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits",
@@ -30,6 +31,8 @@ full_disc_files = {
 }
 euv_files = sorted(glob.glob("/glade/work/rjarolim/data/global/fd_2173/euv/*.193.image_lev1.fits"))
 
+euv_dates = np.array([parse(os.path.basename(f).split('.')[2]) for f in euv_files])
+
 os.makedirs(results_path, exist_ok=True)
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -40,7 +43,7 @@ synoptic_map_bp = Map(synoptic_files['Bp'])
 
 def _build_synoptic_map(br_file):
     br = Map(br_file)
-    synoptic_map_br.meta['date-obs'] = br.date.to_datetime().isoformat()
+    synoptic_map_br.meta['date-obs'] = br.date.to_datetime().date_str()
     br = br.reproject_to(synoptic_map_br.wcs)
 
     br_data = synoptic_map_br.data
@@ -50,19 +53,25 @@ def _build_synoptic_map(br_file):
     return br_map
 
 
-sampling = [64, 512, 512]
-longitude_range = [140, 220]
-latitude_range = [50, 130]
+sampling = [128, 128, 128]
+longitude_range = [150, 210]
+latitude_range = [60, 120]
 radius_range = [1.0, 1.3]
 dr = ((radius_range[1] - radius_range[0]) * u.solRad).to_value(u.cm) / sampling[0]
 
 alpha_norm = Normalize(vmin=0, vmax=10)
-j_norm = LogNorm()
+j_norm = Normalize()#LogNorm(vmin=1e10, vmax=3e12)
 energy_norm = LogNorm(vmin=1e10, vmax=5e13)
+euv_norm = LogNorm(vmin=50, vmax=5e3)
 
-files = sorted(glob.glob(files))
+files = sorted(glob.glob(files, recursive=True))
 
-for i, file in enumerate(files):
+for file in files[5:]:
+    print(file)
+    # date = parse(os.path.basename(file).split('.')[0].replace('_TAI', 'Z').replace('_', 'T'))
+    ds = file.split(os.sep)[-2].split('_')
+    date = parse(f'{ds[0]}T{ds[1]}Z')
+    date_str = date.isoformat("T", timespec="minutes").replace('+00:00', '')
     model = SphericalOutput(file)
     # prepare synoptic data
     # br_map = _build_synoptic_map(full_disc_files['Br'][i])
@@ -80,20 +89,21 @@ for i, file in enumerate(files):
     pfss_out = pfsspy.pfss(pfss_in)
 
     # EUV
-    euv_map = Map(euv_files[i])
+    euv_file = euv_files[np.argmin(np.abs(euv_dates - date))]
+    euv_map = Map(euv_file)
     exposure_time = euv_map.exposure_time.to_value(u.s)
     carr_header = make_heliographic_header(euv_map.date, euv_map.observer_coordinate, (180 * 8, 360 * 8),
                                            frame='carrington')
     carr_header['crval1'] = 180
     euv_map = euv_map.reproject_to(carr_header)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.imshow(euv_map.data / exposure_time, origin='lower', cmap=euv_map.cmap, extent=[0, 360, -90, 90],
-              norm=LogNorm(vmin=10, vmax=5e3))
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    ax.imshow(euv_map.data / exposure_time, origin='lower', cmap=euv_map.cmap, extent=[0, 360, 180, 0],
+              norm=euv_norm)
     ax.set_xlim(*longitude_range)
-    ax.set_ylim(*[l - 90 for l in latitude_range])
-    plt.savefig(os.path.join(results_path, f'euv_{os.path.basename(file).replace("nf2", "jpg")}'),
-                dpi=300)
+    ax.set_ylim(*reversed(latitude_range))
+    fig.savefig(os.path.join(results_path, f'euv_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
     model_out = model.load_spherical(radius_range * u.solRad,
@@ -116,10 +126,10 @@ for i, file in enumerate(files):
     ff_energy = energy(b)
     free_energy = ff_energy - potential_energy
 
-    extent = [*longitude_range, *latitude_range]
+    extent = [*longitude_range, *reversed(latitude_range)]
 
     # B field
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 5))
     b_r = b[0, ..., 0]
     im = ax.imshow(b_r, origin='upper', vmin=-500, vmax=500,
                    cmap='gray', extent=extent)
@@ -129,12 +139,11 @@ for i, file in enumerate(files):
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='2%', pad=0.05)
     fig.colorbar(im, cax=cax, orientation='vertical')
-    plt.savefig(os.path.join(results_path, f'b_field_{os.path.basename(file).replace("nf2", "jpg")}'),
-                dpi=300)
+    fig.savefig(os.path.join(results_path, f'b_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
     # currents
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 5))
     current_density = np.linalg.norm(j, axis=-1)
     im = ax.imshow(current_density.sum(0) * dr, origin='upper', norm=j_norm, cmap='inferno', extent=extent)
     ax.set_title('Currents')
@@ -143,13 +152,12 @@ for i, file in enumerate(files):
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='2%', pad=0.05)
     fig.colorbar(im, cax=cax, orientation='vertical')
-    plt.savefig(os.path.join(results_path, f'currents_{os.path.basename(file).replace("nf2", "jpg")}'),
-                dpi=300)
+    fig.savefig(os.path.join(results_path, f'currents_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
     alpha[np.linalg.norm(b, axis=-1) < 5] = 0
     # alpha
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 5))
     im = ax.imshow(alpha.sum(0) * dr, origin='upper', cmap='viridis', extent=extent, norm=alpha_norm)
     ax.set_title(r'$\alpha$')
     ax.set_xlabel('Longitude [deg]')
@@ -157,9 +165,7 @@ for i, file in enumerate(files):
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='2%', pad=0.05)
     fig.colorbar(im, cax=cax, orientation='vertical')
-    plt.savefig(os.path.join(results_path,
-                             f'alpha_{os.path.basename(file).replace("nf2", "jpg")}'),
-                dpi=300)
+    fig.savefig(os.path.join(results_path, f'alpha_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
 
@@ -171,8 +177,7 @@ for i, file in enumerate(files):
         ax.set_ylabel('Latitude [deg]')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='2%', pad=0.05)
-        fig.colorbar(im, cax=cax, orientation='vertical')
-
+        fig.colorbar(im, cax=cax, orientation='vertical', label='[erg/cm^2]')
 
 
     integrated_free_energy = free_energy.sum(0) * dr
@@ -182,21 +187,64 @@ for i, file in enumerate(files):
 
     fig, ax = plt.subplots(figsize=(10, 5))
     _plot_energy(ax, integrated_free_energy, 'Free Energy')
-    fig.savefig(os.path.join(results_path,
-                             f'free_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
-                dpi=300)
+    fig.savefig(os.path.join(results_path, f'free_energy_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 5))
     _plot_energy(ax, integrated_potential_energy, 'Potential Energy')
-    fig.savefig(os.path.join(results_path,
-                                f'potential_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
-                    dpi=300)
+    fig.savefig(os.path.join(results_path, f'potential_energy_{date_str}.jpg'), dpi=300)
     plt.close(fig)
 
-    fig, ax = plt.subplots(figsize=(10, 5))
+    fig, ax = plt.subplots(figsize=(5, 5))
     _plot_energy(ax, integrated_ff_energy, 'Force-Free Energy')
-    fig.savefig(os.path.join(results_path,
-                                f'ff_energy_{os.path.basename(file).replace("nf2", "jpg")}'),
-                    dpi=300)
+    fig.savefig(os.path.join(results_path, f'ff_energy_{date_str}.jpg'), dpi=300)
+    plt.close(fig)
+
+    # plot overview video
+    fig, axs = plt.subplots(1, 4, figsize=(20, 5))
+
+    ax = axs[0]
+    im = ax.imshow(euv_map.data / exposure_time, origin='lower', cmap=euv_map.cmap, extent=[0, 360, 0, 180],
+                   norm=euv_norm)
+    ax.set_title('SDO/AIA 193 $\AA$')
+    ax.set_xlim(*longitude_range)
+    ax.set_ylim(*latitude_range)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='2%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='[DN/s]')
+
+    # ax = axs[1]
+    # im = ax.imshow(b_r, origin='upper', vmin=-500, vmax=500, cmap='gray', extent=extent)
+    # ax.set_title('$B_{z}$')
+    # divider = make_axes_locatable(ax)
+    # cax = divider.append_axes('right', size='2%', pad=0.05)
+    # fig.colorbar(im, cax=cax, orientation='vertical', label='[G]')
+
+    ax = axs[1]
+    im = ax.imshow(current_density.sum(0) * dr, origin='upper', norm=j_norm, cmap='inferno', extent=extent)
+    ax.set_title('Current density')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='2%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='[G cm / s]')
+
+    ax = axs[2]
+    im = ax.imshow(alpha.sum(0) * dr, origin='upper', cmap='viridis', extent=extent, norm=alpha_norm)
+    ax.set_title(r'$\alpha$')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='2%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='[cm$^{-1}$]')
+
+    ax = axs[3]
+    im = ax.imshow(integrated_free_energy, origin='upper', cmap='jet', extent=extent, norm=energy_norm)
+    ax.set_title('Free Energy')
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes('right', size='2%', pad=0.05)
+    fig.colorbar(im, cax=cax, orientation='vertical', label='[erg/cm$^2$]')
+
+    axs[0].set_ylabel('Latitude [deg]')
+    [ax.set_xlabel('Longitude [deg]') for ax in axs]
+
+    fig.tight_layout()
+
+    fig.savefig(os.path.join(results_path, f'video_{date_str}.jpg'), dpi=300)
     plt.close(fig)

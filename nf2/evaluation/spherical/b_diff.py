@@ -4,14 +4,15 @@ import numpy as np
 import torch
 from astropy import units as u
 from matplotlib import pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
 from nf2.data.util import spherical_to_cartesian, vector_cartesian_to_spherical
 from nf2.evaluation.output import SphericalOutput
 
-nf2_file = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/extrapolation_result.nf2'
-results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_v11/results'
+nf2_file = '/glade/work/rjarolim/nf2/spherical/2173_full_15_v02/extrapolation_result.nf2'
+results_path = '/glade/work/rjarolim/nf2/spherical/2173_full_15_v02/results'
 ref_r_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br.fits'
 ref_t_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt.fits'
 ref_p_file = '/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp.fits'
@@ -49,21 +50,37 @@ model_out = model.load_coords(cartesian_coords)
 b_xyz = model_out['b']
 b = vector_cartesian_to_spherical(b_xyz, spherical_coords).to_value(u.G)
 
+b_diff = np.clip(np.abs(b - ref_b) - err_b, a_min=0, a_max=None)
+
 # create difference plot
-fig, axs = plt.subplots(3, 3, figsize=(15, 15))
+fig, axs = plt.subplots(3, 3, figsize=(15, 10))
 for i in range(3):
-    im = axs[i, 0].imshow(ref_b[..., i].T, cmap='grey', vmin=-500, vmax=500)
-    plt.colorbar(im, ax=axs[i, 0], pad=0.1, shrink=0.8, label='B [G]')
-    axs[i, 0].set_title('Reference')
-    im = axs[i, 1].imshow(b[..., i].T, cmap='grey', vmin=-500, vmax=500)
-    plt.colorbar(im, ax=axs[i, 1], pad=0.1, shrink=0.8, label='B [G]')
-    axs[i, 1].set_title('NF2')
-    im = axs[i, 2].imshow(np.clip(np.abs(b[..., i] - ref_b[..., i]) - err_b[..., i], a_min=0, a_max=None).T, cmap='viridis', vmin=0, vmax=100)
-    plt.colorbar(im, ax=axs[i, 2], pad=0.1, shrink=0.8, label='Difference [G]')
-    axs[i, 2].set_title('Difference')
+    ax = axs[i, 0]
+    im = ax.imshow(ref_b[..., i].T, cmap='grey', vmin=-500, vmax=500)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax, label='[G]')
+
+    ax = axs[i, 1]
+    im = ax.imshow(b[..., i].T, cmap='grey', vmin=-500, vmax=500)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax, label='[G]')
+
+    ax = axs[i, 2]
+    im = ax.imshow(b_diff[..., i].T, cmap='viridis', vmin=0, vmax=100)
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(im, cax=cax, label='[G]')
+
+axs[0, 0].set_title('Reference')
+axs[0, 1].set_title('Model')
+axs[0, 2].set_title('Difference')
+[ax.set_axis_off() for ax in axs.ravel()]
+
 plt.tight_layout()
 plt.savefig(os.path.join(results_path, f'difference.jpg'), dpi=300)
 plt.close()
 
-b_diff = np.clip(np.abs(b - ref_b) - err_b, a_min=0, a_max=None)
+
 print('Mean absolute difference:', np.nanmean(np.linalg.norm(b_diff, axis=-1)))

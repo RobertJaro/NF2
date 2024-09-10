@@ -1,8 +1,9 @@
 import torch
+from astropy import units as u
 from torch import nn
 
 from nf2.data.util import cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
-from astropy import units as u
+
 
 class BaseLoss(nn.Module):
 
@@ -100,6 +101,7 @@ class RadialLoss(BaseLoss):
 
         return radial_regularization
 
+
 class PotentialLoss(BaseLoss):
 
     def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
@@ -130,7 +132,8 @@ class PotentialLoss(BaseLoss):
 
         if self.base_radius is not None:
             radius = coords.pow(2).sum(-1).pow(0.5) + 1e-7
-            radius_weight = torch.clip(radius - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
+            radius_weight = torch.clip(radius - self.base_radius,
+                                       min=0) / self.solar_radius  # normalize to solar radius
             potential_loss *= radius_weight ** 2
 
         return potential_loss.mean()
@@ -170,12 +173,14 @@ class EnergyGradientLoss(BaseLoss):
                 torch.cos(p) * dE_dz
 
         radius_weight = torch.norm(coords, dim=-1)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
+        radius_weight = torch.clip(radius_weight - self.base_radius,
+                                   min=0) / self.solar_radius  # normalize to solar radius
 
         energy_gradient_regularization = torch.relu(dE_dr) * radius_weight ** 2
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
+
 
 class EnergyLoss(BaseLoss):
 
@@ -193,6 +198,7 @@ class EnergyLoss(BaseLoss):
         energy_regularization = energy_regularization.mean()
 
         return energy_regularization
+
 
 class NaNLoss(BaseLoss):
 
@@ -220,6 +226,7 @@ class LosTrvBoundaryLoss(BaseLoss):
 
         return b_diff
 
+
 class AziBoundaryLoss(BaseLoss):
 
     def __init__(self, disambiguate=True, **kwargs):
@@ -233,10 +240,11 @@ class AziBoundaryLoss(BaseLoss):
 
         b_azi_true = b_true[..., 2] % torch.pi
         b_azi_pred = b_pred[..., 2] % torch.pi
-        b_diff = (b_azi_pred - b_azi_true).pow(2) * b_true[..., 1] # weight by transverse field
+        b_diff = (b_azi_pred - b_azi_true).pow(2) * b_true[..., 1]  # weight by transverse field
         b_diff = b_diff.mean()
 
         return b_diff
+
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
@@ -249,7 +257,6 @@ class LosTrvAziBoundaryLoss(BaseLoss):
         bxyz_true = los_trv_azi_to_img(b_true, f=torch)
 
         if flip is not None:
-
             # compute flipped B_xyz
             flipped_azi = (b_true[..., 2:3] + torch.pi)
             blta_flipped_true = torch.cat([b_true[..., :2], flipped_azi], dim=-1)
@@ -271,6 +278,7 @@ class LosTrvAziBoundaryLoss(BaseLoss):
 
         return b_diff
 
+
 class LosBoundaryLoss(BaseLoss):
 
     def __init__(self, **kwargs):
@@ -286,6 +294,7 @@ class LosBoundaryLoss(BaseLoss):
         # compute diff
         b_diff = (b_los_pred - b_los_true).pow(2).mean()
         return b_diff
+
 
 class BoundaryLoss(BaseLoss):
 
@@ -310,6 +319,7 @@ class HeightLoss(BaseLoss):
 
         return height_regularization
 
+
 class AzimuthDisambiguationLoss(BaseLoss):
 
     def __init__(self, power=4.0, **kwargs):
@@ -320,6 +330,7 @@ class AzimuthDisambiguationLoss(BaseLoss):
         loss = (flip - 0.5).abs().pow(self.power) / 0.5 ** self.power
         return loss.mean()
 
+
 class MinHeightLoss(BaseLoss):
 
     def forward(self, coords, *args, **kwargs):
@@ -327,7 +338,6 @@ class MinHeightLoss(BaseLoss):
         # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
         min_height_regularization = min_height_regularization.mean()
         return min_height_regularization
-
 
 
 # mapping
