@@ -198,16 +198,20 @@ class LosTrvAziFITSDataset(MapDataset):
 
 class FITSSeriesDataModule(FITSDataModule):
 
-    def __init__(self, fits_paths, error_paths=None, *args, **kwargs):
+    def __init__(self, fits_paths, error_paths=None, coords_paths=None, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
         self.fits_paths = copy(fits_paths)
         self.error_paths = copy(error_paths) if error_paths is not None else [None] * len(fits_paths)
+        self.coords_paths = copy(coords_paths) if coords_paths is not None else [None] * len(fits_paths)
 
         self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
 
         self.initialized = True  # only required for first iteration
-        super().__init__({'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]}, *args, **kwargs)
+        super().__init__({
+            'fits_path': self.fits_paths[0],
+            'error_path': self.error_paths[0],
+            'coords_path': self.coords_paths[0]}, *args, **kwargs)
 
     def train_dataloader(self):
         if not self.initialized:

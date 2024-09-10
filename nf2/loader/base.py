@@ -94,6 +94,7 @@ class MapDataset(TensorsDataset):
     def __init__(self, b, b_err=None, coords=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
                  bin=1, height_mapping=None, plot=True, los_trv_azi=False,
+                 coord_b_mapping=False,
                  wcs=None, **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
 
@@ -132,6 +133,10 @@ class MapDataset(TensorsDataset):
             ranges[..., 1] = z_max / Mm_per_ds
             tensors['height_range'] = ranges
 
+        if coord_b_mapping:
+            # CODE HERE
+            raise NotImplementedError('coord_b_mapping not implemented')
+
         tensors['coords'] = coords
 
         if b_err is not None:
@@ -151,7 +156,6 @@ class MapDataset(TensorsDataset):
                 _plot_los_trv_azi(b_plot, coords * Mm_per_ds)
             if plot and not los_trv_azi:
                 _plot_B(b * G_per_dB, coords * Mm_per_ds)
-
 
         tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
 

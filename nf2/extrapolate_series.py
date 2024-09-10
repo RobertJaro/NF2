@@ -55,17 +55,19 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
         shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
         data['plot_overview'] = False  # skip overview plot for restored model
 
-    fits_paths, error_paths = _load_paths(data)
+    fits_paths, error_paths, coords_paths = _load_paths(data)
 
     # reload model training
     ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
     ckpt_path = 'last' if len(ckpts) > 0 else meta_path  # reload last savepoint
     fits_paths = fits_paths[len(ckpts):]  # select remaining extrapolations
     error_paths = error_paths[len(ckpts):] if error_paths is not None else None
+    coords_paths = coords_paths[len(ckpts):] if coords_paths is not None else None
 
     # initialize data module
     if data["type"] == 'sharp':
-        data_module = FITSSeriesDataModule(fits_paths, error_paths=error_paths, **data)
+        data_module = FITSSeriesDataModule(fits_paths, error_paths=error_paths,
+                                           coords_paths=coords_paths, **data)
     elif data["type"] == 'spherical':
         data_module = SphericalSeriesDataModule(fits_paths, **data)
     else:
@@ -114,19 +116,9 @@ def _load_paths(data):
         err_p_files = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))  # x
         err_t_files = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))  # y
         err_r_files = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))  # z
-
-        assert len(p_files) == len(t_files) == len(r_files), f'Number of files in data path {data_path} does not match'
-        fits_paths = list(zip(p_files, t_files, r_files))
-        fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
-
-        if len(err_p_files) > 0 or len(err_t_files) > 0 or len(err_r_files) > 0:
-            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
-                err_r_files), \
-                f'Number of files in data path {data_path} does not match'
-            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
-            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2]} for d in error_paths]
-        else:
-            error_paths = None
+        coord_x_files = sorted(glob.glob(os.path.join(data_path, '*x.fits')))  # x
+        coord_y_files = sorted(glob.glob(os.path.join(data_path, '*y.fits'))) # y
+        coord_z_files = sorted(glob.glob(os.path.join(data_path, '*z.fits'))) # z
     elif isinstance(data_path, dict):
         p_files = sorted(glob.glob(data_path['Bp']))  # x
         t_files = sorted(glob.glob(data_path['Bt']))  # y
@@ -134,24 +126,34 @@ def _load_paths(data):
         err_p_files = sorted(glob.glob(data_path['Bp_err'])) if 'Bp_err' in data_path else None  # x
         err_t_files = sorted(glob.glob(data_path['Bt_err'])) if 'Bt_err' in data_path else None  # y
         err_r_files = sorted(glob.glob(data_path['Br_err'])) if 'Br_err' in data_path else None  # z
-
-        if err_p_files is not None and err_t_files is not None and err_r_files is not None:
-            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
-                err_r_files), \
-                f'Number of files in data path {data_path} does not match'
-            fits_paths = list(zip(p_files, t_files, r_files))
-            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2], } for d in fits_paths]
-            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
-            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2], } for d in error_paths]
-        else:
-            assert len(p_files) == len(t_files) == len(r_files), \
-                f'Number of files in data path {data_path} does not match'
-            fits_paths = list(zip(p_files, t_files, r_files))
-            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
-            error_paths = None
+        coord_x_files = sorted(glob.glob(data_path['x'])) if 'x' in data_path else None  # x
+        coord_y_files = sorted(glob.glob(data_path['y'])) if 'y' in data_path else None  # y
+        coord_z_files = sorted(glob.glob(data_path['z'])) if 'z' in data_path else None  # z
     else:
         raise NotImplementedError(f'Unknown data path type {type(data_path)}')
-    return fits_paths, error_paths
+
+    assert len(p_files) == len(t_files) == len(r_files), f'Number of files in data path {data_path} does not match'
+    fits_paths = list(zip(p_files, t_files, r_files))
+    fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
+
+    if len(err_p_files) > 0 or len(err_t_files) > 0 or len(err_r_files) > 0:
+        assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
+            err_r_files), \
+            f'Number of files in data path {data_path} does not match'
+        error_paths = list(zip(err_p_files, err_t_files, err_r_files))
+        error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2]} for d in error_paths]
+    else:
+        error_paths = None
+    if len(coord_x_files) > 0 or len(coord_y_files) > 0 or len(coord_z_files) > 0:
+        assert len(p_files) == len(coord_x_files) == len(t_files) == len(coord_y_files) == len(r_files) == len(
+            coord_z_files), \
+            f'Number of files in data path {data_path} does not match'
+        coord_paths = list(zip(coord_x_files, coord_y_files, coord_z_files))
+        coord_paths = [{'x': d[0], 'y': d[1], 'z': d[2]} for d in coord_paths]
+    else:
+        coord_paths = None
+
+    return fits_paths, error_paths, coord_paths
 
 
 def main():
