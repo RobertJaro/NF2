@@ -3,7 +3,7 @@ base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_v01"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v01"
 logging:
   project: nf2-sst
-  name: "13392 SHARP"
+  name: "13392 SHARP 09:12"
 data:
   type: fits
   slices:

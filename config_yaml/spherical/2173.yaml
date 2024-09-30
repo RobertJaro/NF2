@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/2173/{time}_v03"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/{time}_v03"
+base_path: "/glade/work/rjarolim/nf2/spherical/2173/{time}_v05"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/{time}_v05"
 logging:
   project: spherical
   name: "2173 {time}"
@@ -81,7 +81,7 @@ training:
   loss_config:
     - type: boundary
       name: boundary
-      lambda: 100 #{start: 1.0e+3, end: 10.0, iterations: 5.0e+4}
+      lambda: {start: 1.0e+3, end: 20.0, iterations: 5.0e+4}
       ds_id: [full_disk, synoptic]
     - type: energy_gradient
       lambda: 10.0

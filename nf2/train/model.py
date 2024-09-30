@@ -18,6 +18,7 @@ class Swish(nn.Module):
     def forward(self, x):
         return x * torch.sigmoid(self.beta * x)
 
+
 class Sine(nn.Module):
     def __init__(self, w0=1.):
         super().__init__()
@@ -25,7 +26,6 @@ class Sine(nn.Module):
 
     def forward(self, x):
         return torch.sin(self.w0 * x)
-
 
 
 class RadialTransformModel(nn.Module):
@@ -69,7 +69,7 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, dim=256, n_layers = 8, encoding=None, activation='sine'):
+    def __init__(self, in_coords, out_coords, dim=256, n_layers=8, encoding=None, activation='sine'):
         super().__init__()
         if encoding is None or encoding == 'none':
             self.d_in = nn.Linear(in_coords, dim)
@@ -97,6 +97,7 @@ class GenericModel(nn.Module):
             x = a(l(x))
         x = self.d_out(x)
         return x
+
 
 class BModel(GenericModel):
 
@@ -265,6 +266,7 @@ def calculate_current(b, coords, jac_matrix=None):
     jac_matrix = jacobian(b, coords) if jac_matrix is None else jac_matrix
     j = calculate_current_from_jacobian(jac_matrix)
     return j
+
 
 def calculate_current_from_jacobian(jac_matrix, f=torch):
     dBx_dx = jac_matrix[..., 0, 0]
@@ -436,6 +438,3 @@ if __name__ == '__main__':
     plt.tight_layout()
     fig.savefig('/gpfs/gpfs0/robert.jarolim/data/nf2/fd_2154/full_disk/disamb.jpg', dpi=150)
     plt.close()
-
-
-

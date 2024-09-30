@@ -135,7 +135,7 @@ if __name__ == '__main__':
 
     ax = axs[2]
     im = ax.imshow(energy_diff_map.T, origin='lower', cmap='seismic', extent=extent,
-                   norm=Normalize(vmin=-5e12, vmax=5e12))
+                   norm=Normalize(vmin=-1e13, vmax=1e13))
     # norm=SymLogNorm(1e12, vmin=-1e14, vmax=1e14))
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad=0.05)

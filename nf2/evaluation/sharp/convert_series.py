@@ -4,6 +4,7 @@ import os
 import pickle
 
 import numpy as np
+import torch.cuda
 from astropy import units as u
 from tqdm import tqdm
 
@@ -19,6 +20,7 @@ def main():
     parser.add_argument('--result_path', type=str, help='path to the output directory', required=False, default=None)
     parser.add_argument('--height_range', type=float, help='height range', required=False, nargs=2, default=None)
     parser.add_argument('--Mm_per_pixel', type=float, help='Mm per pixel', required=False, default=0.72)
+    parser.add_argument('--batch_size', type=int, help='batch size', required=False, default=int(2 ** 13))
     args = parser.parse_args()
 
     nf2_files = [sorted(glob.glob(f)) for f in args.nf2_dir]
@@ -27,9 +29,10 @@ def main():
     os.makedirs(result_path, exist_ok=True)
 
     # evaluate series
+    batch_size = args.batch_size * torch.cuda.device_count() if torch.cuda.is_available() else args.batch_size
     convert_nf2_series(nf2_files, result_path,
                        height_range=args.height_range,
-                       Mm_per_pixel=args.Mm_per_pixel, batch_size=int(2 ** 14))
+                       Mm_per_pixel=args.Mm_per_pixel, batch_size=batch_size)
 
 
 def evaluate_nf2(nf2_file, **kwargs):

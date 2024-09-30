@@ -1,7 +1,7 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/sharp/13664_v3/series"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/13664_series_v02"
-meta_path: "/glade/work/rjarolim/nf2/sharp/13664_v2/init/last.ckpt"
+base_path: "/glade/work/rjarolim/nf2/sharp/13664_v4/series"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13664_series"
+meta_path: "/glade/work/rjarolim/nf2/sharp/13664_v4/init_1/last.ckpt"
 logging:
   project: AR 13664
   name: series

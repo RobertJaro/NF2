@@ -1,7 +1,7 @@
 import argparse
 import glob
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -130,11 +130,12 @@ ax.tick_params(axis='y', colors=color)
 
 twin_ax = ax.twinx()
 color = 'tab:red'
-twin_ax.plot(times, np.gradient(energy_ratio) / dt, color=color)
-twin_ax.set_ylabel('$\Delta$ E$_{free}$ / E [1 / s]', color=color)
+twin_ax.plot(times, np.gradient(energy_ratio) / dt * 1e6, color=color)
+twin_ax.set_ylabel('$\Delta$ E$_{free}$ / E\n [$10^{-6}$ / s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
+twin_ax.axhline(-.5, color='gray', linestyle='--')
 
 m_flare_times = [
     (datetime(2024, 5, 7, 8, 18), datetime(2024, 5, 7, 8, 40)),  # M1.3
@@ -202,3 +203,10 @@ for start, end in ranges:
 plt.tight_layout()
 plt.savefig(os.path.join(result_path, 'integrated_energy.jpg'), dpi=300)
 plt.close()
+
+energy_change = np.gradient(energy_ratio) / dt
+for x_flare in x_flares:
+    start, end = x_flare
+    cond = (times > start) & (times < end)
+    e = energy_change[cond]
+    print(f"MEAN ({start.isoformat(' ', timespec='minutes')}): {e.mean() * 1e6:.2f}")

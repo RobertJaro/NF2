@@ -109,7 +109,7 @@ def _load_paths(data_path):
     if isinstance(data_path, list):
         results = [_load_paths(d) for d in data_path]
         fits_paths = [f for r in results for f in r[0]]
-        error_paths = [f for r in results for f in r[1]]
+        error_paths = [f for r in results for f in r[1]] if all([r[1] is not None for r in results]) else None
     elif isinstance(data_path, str):
         p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
         t_files = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))  # y
