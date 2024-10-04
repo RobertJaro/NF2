@@ -218,7 +218,9 @@ class FITSSeriesDataModule(FITSDataModule):
             # update ID
             self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
             # re-initialize
-            super().__init__(slices={'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]},
+            super().__init__(slices={'fits_path': self.fits_paths[0],
+                                     'error_path': self.error_paths[0],
+                                     'coords_path': self.coords_paths[0]},
                              *self.args, **self.kwargs)
         # continue with next file in list
         del self.fits_paths[0]
