@@ -3,6 +3,7 @@ from astropy import units as u
 from torch import nn
 
 from nf2.data.util import cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
+from nf2.train.model import jacobian
 
 
 class BaseLoss(nn.Module):
@@ -69,6 +70,57 @@ class MagnetoStaticLoss(BaseLoss):
         #
         return loss.mean()
 
+class ImplicitMagnetoStaticLoss(BaseLoss):
+
+    def __init__(self, divergence_regularization=True, **kwargs):
+        super().__init__(**kwargs)
+        self.divergence_regularization = divergence_regularization
+
+    def forward(self, b, jac_matrix, coords, *args, **kwargs):
+        dBx_dx = jac_matrix[:, 0, 0]
+        dBy_dx = jac_matrix[:, 1, 0]
+        dBz_dx = jac_matrix[:, 2, 0]
+        dBx_dy = jac_matrix[:, 0, 1]
+        dBy_dy = jac_matrix[:, 1, 1]
+        dBz_dy = jac_matrix[:, 2, 1]
+        dBx_dz = jac_matrix[:, 0, 2]
+        dBy_dz = jac_matrix[:, 1, 2]
+        dBz_dz = jac_matrix[:, 2, 2]
+        #
+        rot_x = dBz_dy - dBy_dz
+        rot_y = dBx_dz - dBz_dx
+        rot_z = dBy_dx - dBx_dy
+        #
+        j = torch.stack([rot_x, rot_y, rot_z], -1)
+        jxb = torch.cross(j, b, -1)
+        jac_matrix = jacobian(jxb, coords)
+        dJxBx_dx = jac_matrix[:, 0, 0]
+        dJxBy_dx = jac_matrix[:, 1, 0]
+        dJxBz_dx = jac_matrix[:, 2, 0]
+        dJxBx_dy = jac_matrix[:, 0, 1]
+        dJxBy_dy = jac_matrix[:, 1, 1]
+        dJxBz_dy = jac_matrix[:, 2, 1]
+        dJxBx_dz = jac_matrix[:, 0, 2]
+        dJxBy_dz = jac_matrix[:, 1, 2]
+        dJxBz_dz = jac_matrix[:, 2, 2]
+        #
+        rot_x = dJxBz_dy - dJxBy_dz
+        rot_y = dJxBx_dz - dJxBz_dx
+        rot_z = dJxBy_dx - dJxBx_dy
+        #
+        curl_JxB = torch.stack([rot_x, rot_y, rot_z], -1)
+        div_JxB = dJxBx_dx + dJxBy_dy + dJxBz_dz
+        # assure that the normalization does not influence the loss
+        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
+        curl_JxB_loss = torch.sum(curl_JxB ** 2, dim=-1)
+        div_JxB_loss = div_JxB.pow(2)
+        if self.divergence_regularization:
+            loss = curl_JxB_loss + div_JxB_loss * (torch.exp(coords[:, 2] * 5) - 1)
+        else:
+            loss = curl_JxB_loss
+        loss =  loss / normalization
+        #
+        return loss.mean()
 
 class DivergenceLoss(BaseLoss):
 
@@ -347,5 +399,5 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                        'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
-                       'magneto_static': MagnetoStaticLoss,
+                       'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
                        'azimuth_disambiguation': AzimuthDisambiguationLoss}
