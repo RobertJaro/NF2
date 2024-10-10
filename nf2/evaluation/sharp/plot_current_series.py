@@ -49,7 +49,7 @@ selected_times = [
 cm = copy(plt.get_cmap('sdoaia131'))
 cm.set_bad('black')
 
-fig, axs = plt.subplots(len(selected_times), 2, figsize=(5.6, 2 * len(selected_times)), sharex=True)
+fig, axs = plt.subplots(len(selected_times) + 1, 2, figsize=(5.6, 2 * (len(selected_times) + 1)), sharex=True)
 
 for i, time in tqdm(enumerate(selected_times), total=len(selected_times)):
     nf2_cond = np.argmin(np.abs(times - time))
@@ -78,6 +78,25 @@ for i, time in tqdm(enumerate(selected_times), total=len(selected_times)):
     ax.set_ylabel(time.isoformat(' ', timespec='minutes'), fontweight='bold')
     ax.yaxis.set_label_position("right")
 
+# plot difference map
+first_cond = np.argmin(np.abs(times - selected_times[0]))
+current_density_map = maps['current_density_map'][first_cond]
+first_density_map = current_density_map.to_value(u.G * u.cm * u.s ** -1)
+
+last_cond = np.argmin(np.abs(times - selected_times[-1]))
+current_density_map = maps['current_density_map'][last_cond]
+last_density_map = current_density_map.to_value(u.G * u.cm * u.s ** -1)
+
+diff_density_map = last_density_map - first_density_map
+
+extent = np.array([0, current_density_map.shape[0],
+                   0, current_density_map.shape[1]]) * Mm_per_pixel
+ax = axs[-1, 0]
+im = ax.imshow(diff_density_map.T, origin='lower', extent=extent, vmin=-5e12, vmax=5e12, cmap='RdBu_r')
+
+axs[-1, 1].set_axis_off()
+axs[-2, 1].set_xlabel('X [Mm]')
+
 divider = make_axes_locatable(axs[0, 0])
 cax = divider.append_axes("top", size="5%", pad=0.05)
 fig.colorbar(cd_im, cax=cax, label='Current Density [G cm / s]', orientation='horizontal')
@@ -101,4 +120,15 @@ cax.xaxis.set_label_position('top')
 
 fig.tight_layout(pad=0.1)
 fig.savefig(result_path, dpi=300)
+plt.close()
+
+fig, ax = plt.subplots(1, 1, figsize=(5.6 / 2, 2))
+
+ax.set_axis_off()
+divider = make_axes_locatable(ax)
+cax = divider.append_axes("right", size="5%", pad=0.05)
+fig.colorbar(im, cax=cax, label='$\Delta$ Current Density\n[G cm / s]', orientation='vertical')
+
+fig.tight_layout()
+fig.savefig(result_path.replace('.jpg', '_colorbar.png'), dpi=300, transparent=True)
 plt.close()

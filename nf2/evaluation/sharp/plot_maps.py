@@ -96,7 +96,7 @@ def main():
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    cbar = fig.colorbar(b0_im, ax=ax, label='[G]')
+    cbar = fig.colorbar(b0_im, ax=ax, label='$B_z$ [G]')
     # set ticks
     cbar.set_ticks([-2000, -1000, 0, 1000, 2000])
     plt.tight_layout(pad=0)
@@ -105,14 +105,14 @@ def main():
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    fig.colorbar(euv_im, ax=ax, label='[DN / s]')
+    fig.colorbar(euv_im, ax=ax, label='AIA 131 $\AA$ [DN / s]')
     plt.tight_layout(pad=0)
     plt.savefig(os.path.join(result_path, f'euv_colorbar.jpg'), dpi=300)
     plt.close()
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    fig.colorbar(cd_im, ax=ax, label='[G cm / s]')
+    fig.colorbar(cd_im, ax=ax, label='$J$ [G cm / s]')
     plt.tight_layout(pad=0)
     plt.savefig(os.path.join(result_path, f'j_colorbar.jpg'), dpi=300)
     plt.close()

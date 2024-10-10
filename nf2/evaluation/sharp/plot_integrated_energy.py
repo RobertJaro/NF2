@@ -9,9 +9,12 @@ from astropy import units as u
 from matplotlib import pyplot as plt
 from matplotlib.dates import DateFormatter
 from sunpy.map import Map
+from sunpy.net import Fido
+from sunpy.timeseries import TimeSeries
 from tqdm import tqdm
 
 from nf2.evaluation.sharp.convert_series import load_results
+from sunpy.net import attrs as a
 
 # if __name__ == '__main__':
 parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
@@ -28,9 +31,11 @@ o_unsigned_flux = []
 for Br_file, Bt_file, Bp_file in tqdm(zip(Br, Bt, Bp), total=len(Br)):
     # vector_B = np.stack([Map(Br_file).data, Map(Bt_file).data, Map(Bp_file).data], axis=-1)
     # flux = np.linalg.norm(vector_B, axis=-1).sum()
-    flux = np.abs(Map(Br_file).data).sum()
+    flux = np.abs(Map(Br_file).data).sum() * (0.36 * u.Mm).to_value(u.cm) ** 2
     o_unsigned_flux.append(flux)
 
+o_unsigned_flux = np.array(o_unsigned_flux)
+print(f'MIN/MAX unsigned flux: {o_unsigned_flux.min():.2e}/{o_unsigned_flux.max():.2e}')
 output = load_results(args.pkl_path)
 
 o_times = output['times']
@@ -53,6 +58,12 @@ df = df.set_index('time')
 df = df.resample('12min').mean()
 df = df.rolling('1H').mean()
 
+# load GOES data
+result_goes = Fido.search(a.Time(o_times[0], o_times[-1]),
+                          a.Instrument.xrs & a.goes.SatelliteNumber(16) & a.Resolution("avg1m"))
+file_goes = Fido.fetch(result_goes)
+goes = TimeSeries(file_goes, source='XRS', concatenate=True)
+
 dt = 12 * 60  # 12 minutes in seconds
 
 times = df.index
@@ -61,7 +72,7 @@ free_energy = df['free_energy'].values
 energy = df['energy'].values
 current = df['current'].values
 
-fig, axs = plt.subplots(4, 1, figsize=(12, 6))
+fig, axs = plt.subplots(5, 1, figsize=(12, 8))
 
 # make date axis
 for ax in axs:
@@ -73,24 +84,25 @@ fig.autofmt_xdate()
 
 ax = axs[0]
 color = 'tab:blue'
-ax.plot(times, unsigned_flux, color=color)
-ax.set_ylabel('Unsigned Flux\n[G]', color=color)
+ax.plot(times, unsigned_flux * 1e-23, color=color)
+ax.set_ylabel('$|B_z|$\n[$10^{23}$ Mx]', color=color)
 ax.spines['left'].set_color(color)
 ax.yaxis.label.set_color(color)
 ax.tick_params(axis='y', colors=color)
 
 twin_ax = ax.twinx()
 color = 'tab:red'
-twin_ax.plot(times, np.gradient(unsigned_flux) / dt, color=color)
-twin_ax.set_ylabel('$\Delta$ Unsigned Flux\n [G/s]', color=color)
+twin_ax.plot(times, np.gradient(unsigned_flux) / dt * 1e-18, color=color)
+twin_ax.set_ylabel('$\mathrm{d} |B_z| / \mathrm{dt}$\n[$10^{18}$ Mx/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
+twin_ax.axhline(0, color='black', linestyle='dotted')
 
 ax = axs[1]
 color = 'tab:blue'
 ax.plot(times, energy)
-ax.set_ylabel('Energy\n[$10^{32}$ erg]', color=color)
+ax.set_ylabel('$E$\n[$10^{32}$ erg]', color=color)
 ax.spines['left'].set_color(color)
 ax.yaxis.label.set_color(color)
 ax.tick_params(axis='y', colors=color)
@@ -98,15 +110,16 @@ ax.tick_params(axis='y', colors=color)
 twin_ax = ax.twinx()
 color = 'tab:red'
 twin_ax.plot(times, np.gradient(energy) / dt * 1e3, color=color)
-twin_ax.set_ylabel('$\Delta$ Energy\n [$10^{29}$ erg/s]', color=color)
+twin_ax.set_ylabel('$\mathrm{d}E / \mathrm{dt}$\n [$10^{29}$ erg/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
+twin_ax.axhline(0, color='black', linestyle='dotted')
 
 ax = axs[2]
 color = 'tab:blue'
 ax.plot(times, free_energy, color=color)
-ax.set_ylabel('Free Energy\n[$10^{32}$ erg]', color=color)
+ax.set_ylabel(r'$E_\text{free}$'+'\n[$10^{32}$ erg]', color=color)
 ax.spines['left'].set_color(color)
 ax.yaxis.label.set_color(color)
 ax.tick_params(axis='y', colors=color)
@@ -114,16 +127,17 @@ ax.tick_params(axis='y', colors=color)
 twin_ax = ax.twinx()
 color = 'tab:red'
 twin_ax.plot(times, np.gradient(free_energy) / dt * 1e3, color=color)
-twin_ax.set_ylabel('$\Delta$ Free Energy\n [$10^{29}$ erg/s]', color=color)
+twin_ax.set_ylabel(r'$\mathrm{d} E_\text{free} / \mathrm{dt}$' + '\n [$10^{29}$ erg/s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
+twin_ax.axhline(0, color='black', linestyle='dotted')
 
 energy_ratio = free_energy / energy
 ax = axs[3]
 color = 'tab:blue'
 ax.plot(times, energy_ratio, color=color)
-ax.set_ylabel('E$_{free}$ / E', color=color)
+ax.set_ylabel(r'$E_\text{free} / E$', color=color)
 ax.spines['left'].set_color(color)
 ax.yaxis.label.set_color(color)
 ax.tick_params(axis='y', colors=color)
@@ -131,11 +145,26 @@ ax.tick_params(axis='y', colors=color)
 twin_ax = ax.twinx()
 color = 'tab:red'
 twin_ax.plot(times, np.gradient(energy_ratio) / dt * 1e6, color=color)
-twin_ax.set_ylabel('$\Delta$ E$_{free}$ / E\n [$10^{-6}$ / s]', color=color)
+twin_ax.set_ylabel(r'$\mathrm{d} (E_\text{free} / E) / \mathrm{dt}$' + '\n [$10^{-6}$ / s]', color=color)
 twin_ax.spines['right'].set_color(color)
 twin_ax.yaxis.label.set_color(color)
 twin_ax.tick_params(axis='y', colors=color)
 twin_ax.axhline(-.5, color='gray', linestyle='--')
+twin_ax.axhline(0, color='black', linestyle='dotted')
+
+# plot GOES
+ax = axs[4]
+ax.plot(goes.data.index, goes.data['xrsb'], color='black')
+ax.set_yscale("log")
+ax.set_ylim(1e-6, 1e-3)
+ax.set_ylabel('GOES 1-8 $\AA$\n' + r'[W m$^{-2}$]')
+
+for value in [1e-5, 1e-4]:
+    ax.axhline(value, c='gray')
+
+for value, label in zip([1e-6, 1e-5, 1e-4], ['C', 'M', 'X']):
+    ax.text(1.02, value, label, transform=ax.get_yaxis_transform(), horizontalalignment='center')
+
 
 m_flare_times = [
     (datetime(2024, 5, 7, 8, 18), datetime(2024, 5, 7, 8, 40)),  # M1.3
@@ -144,9 +173,8 @@ m_flare_times = [
     (datetime(2024, 5, 7, 21, 42), datetime(2024, 5, 7, 22, 21)),  # M3.3
     #
     (datetime(2024, 5, 8, 2, 16), datetime(2024, 5, 8, 2, 36)),  # M3.4
-    (datetime(2024, 5, 8, 3, 38), datetime(2024, 5, 8, 3, 46)),  # M2.0
-    (datetime(2024, 5, 8, 3, 19), datetime(2024, 5, 8, 3, 46)),  # M1.9
-    (datetime(2024, 5, 8, 4, 20), datetime(2024, 5, 8, 4, 49)),  # M3.6
+    (datetime(2024, 5, 8, 3, 19), datetime(2024, 5, 8, 3, 38)),  # M1.9
+    (datetime(2024, 5, 8, 4, 37), datetime(2024, 5, 8, 5, 32)),  # M3.6
     (datetime(2024, 5, 8, 6, 44), datetime(2024, 5, 8, 7, 10)),  # M7.2
     (datetime(2024, 5, 8, 11, 26), datetime(2024, 5, 8, 12, 22)),  # M8.7
     # (datetime(2024, 5, 8, 17, 32), datetime(2024, 5, 8, 18, 0)),  # M7.9
@@ -165,8 +193,8 @@ m_flare_times = [
     (datetime(2024, 5, 9, 22, 24), datetime(2024, 5, 9, 22, 47)),  # M2.6
     (datetime(2024, 5, 9, 23, 44), datetime(2024, 5, 9, 23, 55)),  # M1.6
     #
-    (datetime(2024, 5, 10, 0, 10), datetime(2024, 5, 10, 0, 22)),  # M1.5
-    (datetime(2024, 5, 10, 6, 14), datetime(2024, 5, 10, 6, 27)),  # M1.4
+    (datetime(2024, 5, 10, 0, 10), datetime(2024, 5, 10, 0, 22)),  # M1.3
+    (datetime(2024, 5, 10, 3, 15), datetime(2024, 5, 10, 3, 40)),  # M1.4
     (datetime(2024, 5, 10, 10, 10), datetime(2024, 5, 10, 10, 19)),  # M2.2
     (datetime(2024, 5, 10, 13, 58), datetime(2024, 5, 10, 14, 28)),  # M6.0
     (datetime(2024, 5, 10, 18, 26), datetime(2024, 5, 10, 18, 38)),  # M1.1
@@ -210,3 +238,5 @@ for x_flare in x_flares:
     cond = (times > start) & (times < end)
     e = energy_change[cond]
     print(f"MEAN ({start.isoformat(' ', timespec='minutes')}): {e.mean() * 1e6:.2f}")
+
+print(f'MEAN: {np.nanmean(energy_change) * 1e6:.2f}')

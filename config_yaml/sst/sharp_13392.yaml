@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v01"
+base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v02"
 logging:
   project: nf2-sst
   name: "13392 SHARP 09:12"
@@ -35,5 +35,7 @@ training:
       ds_id: potential
     - type: force_free
       lambda: 1.0e-2
+    - type: potential
+      lambda: 1.0e-3
     - type: divergence
       lambda: 0.0

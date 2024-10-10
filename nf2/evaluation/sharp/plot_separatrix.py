@@ -72,6 +72,7 @@ ax.plot([100, 300, 300, 100, 100], [140, 140, 40, 40, 140], 'w--')
 ax = axs[1]
 euv_im = ax.imshow(euv_map.data / exposure, origin='lower',
                    cmap=cm, extent=extent, norm=LogNorm(vmin=5, vmax=1e3))
+ax.contour(sharp_map.data, levels=[-1000, 1000], colors=['black', 'white'], extent=extent, alpha=0.9, linewidths=.7)
 divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
 fig.colorbar(euv_im, cax=cax, label='SDO/AIA 131 $\AA$ [DN / s]')
@@ -80,6 +81,7 @@ fig.colorbar(euv_im, cax=cax, label='SDO/AIA 131 $\AA$ [DN / s]')
 ax = axs[2]
 cd_im = ax.imshow(current_density_map.T, origin='lower',
                   cmap='inferno', extent=extent, norm=j_norm)
+ax.contour(sharp_map.data, levels=[-1000, 1000], colors=['black', 'white'], extent=extent, alpha=0.9, linewidths=.7)
 divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
 fig.colorbar(cd_im, cax=cax, label='J [G cm / s]')
@@ -95,8 +97,8 @@ divider = make_axes_locatable(ax)
 cax = divider.append_axes("right", size="5%", pad=0.05)
 fig.colorbar(q_im, cax=cax, label='Q')
 
-axs[-1].set_xlabel('X [Mm]')
-[ax.set_ylabel('Y [Mm]') for ax in np.ravel(axs)]
+# axs[-1].set_xlabel('X [Mm]')
+# [ax.set_ylabel('Y [Mm]') for ax in np.ravel(axs)]
 [ax.set_xlim(100, 300) for ax in axs[1:]]
 [ax.set_ylim(40, 140) for ax in axs[1:]]
 
