@@ -33,6 +33,8 @@ class SphericalSlicesCallback(Callback):
         c_cube = cartesian_to_spherical(c_cube)
         b_cube = vector_cartesian_to_spherical(b_cube, c_cube)
 
+        c_cube[..., 0] *= self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
+
         self.plot_b(b_cube, c_cube)
         self.plot_current(j_cube, c_cube)
 
@@ -42,9 +44,10 @@ class SphericalSlicesCallback(Callback):
         for i in range(3):
             for j in range(n_samples):
                 v_min_max = np.max(np.abs(b[j, :, :]))
-                extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
-                          coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
-                extent = np.rad2deg(extent)
+                # extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
+                #           coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
+                # extent = np.rad2deg(extent)
+                extent = None
                 height = coords[j, :, :, 0].mean()
                 im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
                                       origin='upper', extent=extent)
@@ -64,9 +67,10 @@ class SphericalSlicesCallback(Callback):
         n_samples = j.shape[0]
         fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
         for i in range(n_samples):
-            extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
-                      coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
-            extent = np.rad2deg(extent)
+            # extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
+            #           coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
+            # extent = np.rad2deg(extent)
+            extent = None
             height = coords[i, :, :, 0].mean()
             im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
             axs[i].set_xlabel('Longitude [deg]')
@@ -269,8 +273,7 @@ class BoundaryCallback(Callback):
             self.plot_b(b, b_true, original_coords)
 
     def plot_b(self, b, b_true, original_coords):
-        extent = [original_coords[..., 0].min() * self.Mm_per_ds, original_coords[..., 0].max(),
-                  original_coords[..., 1].min() * self.Mm_per_ds, original_coords[..., 1].max()]
+        extent = None
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
 

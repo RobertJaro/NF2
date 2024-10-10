@@ -1,3 +1,4 @@
+import copy
 import logging
 
 from pytorch_lightning import LightningModule
@@ -9,7 +10,7 @@ from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, 
 
 class NF2Module(LightningModule):
 
-    def __init__(self, validation_mapping, model_kwargs, loss_config=None,
+    def __init__(self, validation_mapping, data_config, model_kwargs=None, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
                  coordinate_transform={"type": None},
                  meta_path=None, **kwargs):
@@ -27,7 +28,9 @@ class NF2Module(LightningModule):
             **kwargs: Additional keyword arguments.
         """
         super().__init__()
+        model_kwargs = model_kwargs if model_kwargs is not None else {'type': 'b', 'dim': 256}
         # init model
+        model_kwargs = copy.deepcopy(model_kwargs)
         model_type = model_kwargs.pop('type')
         if model_type == 'b':
             model = BModel(**model_kwargs)
@@ -41,6 +44,7 @@ class NF2Module(LightningModule):
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
         # init coordinate mapping model
+        coordinate_transform = copy.deepcopy(coordinate_transform)
         transform_type = coordinate_transform.pop('type')
         if transform_type is None or transform_type == 'none':
             transform_module = None
@@ -60,19 +64,24 @@ class NF2Module(LightningModule):
         if loss_config is None:
             logging.info('Using default loss configuration')
             loss_config = [
-                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5}},
-                {"type": "force_free", "lambda": 1e-1}, ]
+                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5},
+                 'ds_id': ['boundary_01', 'potential']},
+                {"type": "force_free", "lambda": 1e-1},
+                {"type": "divergence", "lambda": 1e-1},
+            ]
 
         # mapping
         loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
-                               'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss,
-                               'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,}
+                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                               'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
+                               'flux_preservation': FluxPreservationLoss, 'magneto_static': MagnetoStaticLoss,
+                               'implicit_magnetostatic': ImplicitMagnetoStaticLoss}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}
         loss_modules = {}
+        loss_config = copy.deepcopy(loss_config)
         for config in loss_config:
             k = config.pop('type')
             l = config.pop('lambda')
@@ -87,15 +96,21 @@ class NF2Module(LightningModule):
             config['name'] = name
             if isinstance(l, dict):
                 value = torch.tensor(l['start'], dtype=torch.float32)
-                gamma = torch.tensor((l['end'] / l['start']) ** (1 / l['iterations']), dtype=torch.float32)
+                lt = 'exponential' if 'type' not in l else l['type']
+                if lt == 'exponential':
+                    gamma = torch.tensor((l['end'] / l['start']) ** (1 / l['iterations']), dtype=torch.float32)
+                elif lt == 'linear':
+                    gamma = torch.tensor((l['end'] - l['start']) / l['iterations'], dtype=torch.float32)
+                else:
+                    raise ValueError(f"Invalid lambda type: {lt}, must be in ['exponential', 'linear']")
                 end = torch.tensor(l['end'], dtype=torch.float32)
-                scheduled_lambdas[name] = {'gamma': gamma, 'end': end}
+                scheduled_lambdas[name] = {'gamma': gamma, 'end': end, 'type': lt}
             else:
                 value = torch.tensor(l, dtype=torch.float32)
             assert name not in lambdas, f"Duplicate name for loss: {name}"
             lambdas[name] = value
             # additional kwargs
-            loss_module = {name: loss_module_mapping[k](**config)}
+            loss_module = {name: loss_module_mapping[k](**config, **data_config)}
             loss_modules.update(loss_module)
 
         self.model = model
@@ -181,10 +196,16 @@ class NF2Module(LightningModule):
         for k in self.scheduled_lambdas.keys():
             param = self.lambdas[k]
             gamma = self.scheduled_lambdas[k]['gamma']
-            if (gamma < 1 and param > self.scheduled_lambdas[k]['end']) or \
-                    (gamma > 1 and param < self.scheduled_lambdas[k]['end']):
-                new_lambda = param * gamma
-                param.copy_(new_lambda)
+            if self.scheduled_lambdas[k]['type'] == 'exponential':
+                if (gamma < 1 and param > self.scheduled_lambdas[k]['end']) or \
+                        (gamma > 1 and param < self.scheduled_lambdas[k]['end']):
+                    new_lambda = param * gamma
+                    param.copy_(new_lambda)
+            if self.scheduled_lambdas[k]['type'] == 'linear':
+                if (gamma > 0 and param < self.scheduled_lambdas[k]['end']) or \
+                        (gamma < 0 and param > self.scheduled_lambdas[k]['end']):
+                    new_lambda = param + gamma
+                    param.copy_(new_lambda)
             self.log('lambda_' + k, self.lambdas[k])
         # update learning rate
         scheduler = self.lr_schedulers()
@@ -237,7 +258,7 @@ class NF2Module(LightningModule):
 
         for i, outputs in enumerate(outputs_list):
             out_keys = outputs[0].keys()
-            outputs = {k: torch.cat([o[k] for o in outputs]).cpu() for k in out_keys}
+            outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
             self.validation_outputs[self.validation_mapping[i]] = outputs
 
     def on_load_checkpoint(self, checkpoint):
@@ -255,19 +276,18 @@ class NF2Module(LightningModule):
             state_dict[f'lambdas.{k}'] = v
         # remove old lambdas
         remove_keys = []
-        for k,v in state_dict.items():
+        for k, v in state_dict.items():
             if 'lambdas' in k and k.split('.')[1] not in self.lambdas.keys():
                 print(f'Remove lambda: {k}')
                 remove_keys.append(k)
         [state_dict.pop(k) for k in remove_keys]
         # remove old scheduled lambdas
         remove_keys = []
-        for k,v in state_dict.items():
+        for k, v in state_dict.items():
             if 'scheduled_lambdas' in k and k.split('.')[1] not in self.scheduled_lambdas.keys():
                 print(f'Remove scheduled lambda: {k}')
                 remove_keys.append(k)
         [state_dict.pop(k) for k in remove_keys]
-
 
         self.load_state_dict(state_dict, strict=False)
         self.validation_outputs = {}  # reset validation outputs

@@ -43,7 +43,7 @@ class HeightTransformModel(nn.Module):
     def __init__(self, in_coords, ds_id, validation_ds_id=[], dim=256, positional_encoding=True, ):
         super().__init__()
         if positional_encoding:
-            self.posenc = PositionalEncoding(8, 20)
+            self.posenc = PositionalEncoding(20, in_coords)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(self.posenc, d_in)
         else:
@@ -89,7 +89,7 @@ class RadialTransformModel(nn.Module):
     def __init__(self, in_coords, dim, positional_encoding=True, ds_ids=[]):
         super().__init__()
         if positional_encoding:
-            posenc = PositionalEncoding(8, 20)
+            posenc = PositionalEncoding(20, in_coords)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
@@ -129,7 +129,7 @@ class GenericModel(nn.Module):
         if encoding is None or encoding == 'none':
             self.d_in = nn.Linear(in_coords, dim)
         elif encoding == 'positional':
-            posenc = PositionalEncoding(8, 20)
+            posenc = PositionalEncoding(20, in_coords)
             d_in = nn.Linear(in_coords * 40, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
@@ -244,39 +244,17 @@ class MagnetoStaticModelV2(nn.Module):
 
 
 class PositionalEncoding(nn.Module):
-    """
-    Positional Encoding of the input coordinates.
 
-    encodes x to (..., sin(2^k x), cos(2^k x), ...)
-    k takes "num_freqs" number of values equally spaced between [0, max_freq]
-    """
-
-    def __init__(self, max_freq, num_freqs):
-        """
-        Args:
-            max_freq (int): maximum frequency in the positional encoding.
-            num_freqs (int): number of frequencies between [0, max_freq]
-        """
+    def __init__(self, num_freqs, in_features):
         super().__init__()
-        freqs = 2 ** torch.linspace(0, max_freq, num_freqs)
-        freqs = freqs[None, :, None]  # (1, num_freqs, 1)
-        self.register_buffer("freqs", freqs)  # (num_freqs)
+        frequencies = torch.randn(num_freqs, in_features)
+        self.frequencies = nn.Parameter(frequencies[None], requires_grad=True)
 
     def forward(self, x):
-        """
-        Inputs:
-            x: (batch, in_features)
-        Outputs:
-            out: (batch, 2*num_freqs*in_features)
-        """
-        x_proj = x[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
-        x_proj = x_proj.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
-        #
-        normalization = torch.ones_like(x)[:, None, :] * self.freqs  # (batch, num_freqs, in_features)
-        normalization = normalization.reshape(x.shape[0], -1)  # (batch, num_freqs*in_features)
-        #
-        out = torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)  # (batch, 2*num_freqs*in_features)
-        return out
+        encoded = x[:, None, :] * torch.pi * 2 ** self.frequencies
+        encoded = encoded.reshape(x.shape[0], -1)
+        encoded = torch.cat([torch.sin(encoded), torch.cos(encoded)], -1)
+        return encoded
 
 
 class ObserverTransformer(nn.Module):
@@ -321,23 +299,27 @@ def image_to_spherical_matrix(lon, lat, latc, lonc, pAng, sin=np.sin, cos=np.cos
     return a_matrix
 
 
-def calculate_current(b, coords):
-    jac_matrix = jacobian(b, coords)
-    dBx_dx = jac_matrix[:, 0, 0]
-    dBy_dx = jac_matrix[:, 1, 0]
-    dBz_dx = jac_matrix[:, 2, 0]
-    dBx_dy = jac_matrix[:, 0, 1]
-    dBy_dy = jac_matrix[:, 1, 1]
-    dBz_dy = jac_matrix[:, 2, 1]
-    dBx_dz = jac_matrix[:, 0, 2]
-    dBy_dz = jac_matrix[:, 1, 2]
-    dBz_dz = jac_matrix[:, 2, 2]
+def calculate_current(b, coords, jac_matrix=None):
+    jac_matrix = jacobian(b, coords) if jac_matrix is None else jac_matrix
+    j = calculate_current_from_jacobian(jac_matrix)
+    return j
+
+def calculate_current_from_jacobian(jac_matrix, f=torch):
+    dBx_dx = jac_matrix[..., 0, 0]
+    dBy_dx = jac_matrix[..., 1, 0]
+    dBz_dx = jac_matrix[..., 2, 0]
+    dBx_dy = jac_matrix[..., 0, 1]
+    dBy_dy = jac_matrix[..., 1, 1]
+    dBz_dy = jac_matrix[..., 2, 1]
+    dBx_dz = jac_matrix[..., 0, 2]
+    dBy_dz = jac_matrix[..., 1, 2]
+    dBz_dz = jac_matrix[..., 2, 2]
     #
     rot_x = dBz_dy - dBy_dz
     rot_y = dBx_dz - dBz_dx
     rot_z = dBy_dx - dBx_dy
     #
-    j = torch.stack([rot_x, rot_y, rot_z], -1)
+    j = f.stack([rot_x, rot_y, rot_z], -1)
     return j
 
 

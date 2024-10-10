@@ -1,15 +1,15 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/377_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v01"
+base_path: "/glade/work/rjarolim/nf2/spherical/377_v05"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v05"
 logging:
-  project: subframe_v2
-  name: '377'
+  project: spherical
+  name: '377 spherical'
 data:
   type: spherical
   train_configs:
     - type: map
-      ds_id: AR
-      batch_size: 8192
+      ds_id: full_disk
+      batch_size: 4096
       files:
         Br: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Br.fits"
         Bt: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bt.fits"
@@ -19,21 +19,14 @@ data:
         Bp_err: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bp_err.fits"
       mask_configs:
         type: heliographic_carrington
-        longitude_range: [ 0.3, 0.9 ]
-        latitude_range: [ 1.74, 2.14 ]
+        longitude_range: [ 5.263, 8.090 ]
+        latitude_range: [ 0.434, 2.947 ]
         invert: true
-    - type: pfss_boundary
-      ds_id: pfss_boundary
-      batch_size: 1024
-      Br: "/glade/work/rjarolim/data/global/fd_2106/hmi.synoptic_mr_polfil_720s.2106.Mr_polfil.fits"
-      mask:
-        longitude_range: [ 0.3, 0.9 ]
-        latitude_range: [ 1.74, 2.14 ]
     - type: random_spherical
-      batch_size: 16384
       ds_id: random
-      longitude_range: [ 0.3, 0.9 ]
-      latitude_range: [ 1.74, 2.14 ]
+      batch_size: 8192
+      longitude_range: [ 5.263, 8.090 ]
+      latitude_range: [ 0.434, 2.947 ]
   validation_configs:
     - type: map
       ds_id: AR_valid
@@ -52,37 +45,55 @@ data:
         longitude_range: [ 0.3, 0.9 ]
         latitude_range: [ 1.74, 2.14 ]
         invert: true
+    - type: map
+      ds_id: full_disk_valid
+      filter_nans: false
+      shuffle: false
+      plot_overview: false
+      files:
+        Br: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Br.fits"
+        Bt: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bp.fits"
+        Br_err: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/global/fd_2106/full_disk/hmi.b_720s.20110215_000000_TAI.Bp_err.fits"
+      mask_configs:
+        type: heliographic_carrington
+        longitude_range: [ 5.263, 8.090 ]
+        latitude_range: [ 0.434, 2.947 ]
+        invert: true
     - type: spherical_slices
-      ds_id: subframe_slices
+      ds_id: slices
       n_slices: 10
       plot_currents: true
-      longitude_range: [ 0.3, 0.9 ]
-      latitude_range: [ 1.74, 2.14 ]
+      longitude_range: [ 5.263, 8.090 ]
+      latitude_range: [ 0.434, 2.947 ]
     - type: sphere
       ds_id: sphere
-      longitude_range: [ 0.3, 0.9 ]
-      latitude_range: [ 1.74, 2.14 ]
-  max_radius: 1.14
+      longitude_range: [ 5.263, 8.090 ]
+      latitude_range: [ 0.434, 2.947 ]
+  max_radius: 1.3
   G_per_dB: 2000
   num_workers: 8
-  batch_size: 65536
+  batch_size: 16384
+  iterations: 1000
 model:
-  type: b
+  type: vector_potential
   dim: 512
-  activation: swish
 training:
-  epochs: 1.0e+3
+  epochs: 1000
   loss_config:
     - type: boundary
       name: boundary
-      lambda: 10.0
-      ds_id: AR
-    - type: boundary
-      name: potential_boundary
-      lambda: 0.1
-      ds_id: pfss_boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4} #1
+      ds_id: full_disk
+    - type: energy_gradient
+      lambda: 1.0
+      ds_id: random
+      base_radius: 1.04
+    - type: potential
+      lambda: 1.0e-2
+      ds_id: random
+      base_radius: 1.04
     - type: force_free
-      lambda: 0.01
-    - type: divergence
-      lambda: 0.01
-  check_val_every_n_epoch: 20
+      lambda: 0.1

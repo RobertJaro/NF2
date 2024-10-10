@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 
 def spherical_to_cartesian_matrix(c):
@@ -28,6 +27,13 @@ def cartesian_to_spherical_matrix(c):
     ], -2)
     #
     return matrix
+
+
+def cartesian_rotation_matrix(theta, phi):
+    m = np.array([[np.cos(theta) * np.cos(phi), -np.sin(phi), -np.sin(theta) * np.cos(phi)],
+                  [np.cos(theta) * np.sin(phi), np.cos(phi), -np.sin(theta) * np.sin(phi)],
+                  [np.sin(theta), 0, np.cos(theta)]])
+    return m
 
 
 def vector_spherical_to_cartesian(v, c, f=np):
@@ -71,9 +77,9 @@ def cartesian_to_spherical(v, f=np):
     xy = x ** 2 + y ** 2
 
     r = f.sqrt(xy + z ** 2)
-    nudge = (f.abs(z) < 1e-6) * 1e-6 # assure numerical stability
+    nudge = (f.abs(z) < 1e-6) * 1e-6  # assure numerical stability
     t = f.arctan2(f.sqrt(xy), z + nudge)
-    nudge = (f.abs(x) < 1e-6) * 1e-6 # assure numerical stability
+    nudge = (f.abs(x) < 1e-6) * 1e-6  # assure numerical stability
     p = f.arctan2(y, x + nudge)
 
     return f.stack([r, t, p], -1)
@@ -82,9 +88,10 @@ def cartesian_to_spherical(v, f=np):
 def img_to_los_trv_azi(b, f=np):
     B_los = b[..., 2]
     B_trv = (b[..., 0] ** 2 + b[..., 1] ** 2) ** 0.5
-    azi = f.arctan2(b[..., 1], b[..., 0])
+    azi = f.arctan2(b[..., 0], b[..., 1])
     b = f.stack([B_los, B_trv, azi], -1)
     return b
+
 
 def los_trv_azi_to_img(b, ambiguous=False, f=np):
     B_los, B_trv, azi = b[..., 0], b[..., 1], b[..., 2]

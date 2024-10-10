@@ -10,8 +10,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset
 from nf2.data.loader import load_potential_field_data
-from nf2.data.util import img_to_los_trv_azi
-from nf2.loader.util import _plot_B, _plot_B_error
+from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 
 class TensorsDataset(BatchesDataset):
@@ -92,22 +91,33 @@ class BaseDataModule(LightningDataModule):
 
 class MapDataset(TensorsDataset):
 
-    def __init__(self, b, b_err=None,
+    def __init__(self, b, b_err=None, coords=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
-                 bin=1, height_mapping=None, plot=True, los_trv_azi_transform=False,
-                 **kwargs):
+                 bin=1, height_mapping=None, plot=True, los_trv_azi=False,
+                 wcs=None, **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
 
-        b = block_reduce(b, (bin, bin, 1), np.mean) / G_per_dB
-        coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
-        coords = coords[:, :, 0, :]
+        # binning
+        b = block_reduce(b, (bin, bin, 1), np.mean)
+        # normalize
+        if los_trv_azi:
+            b[..., :2] /= G_per_dB
+        else:
+            b /= G_per_dB
+
+        if coords is None:
+            coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
+            coords = coords[:, :, 0, :]
+        else:
+            coords = coords / Mm_per_ds
 
         self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
                                      [coords[..., 1].min(), coords[..., 1].max()]])
 
         self.cube_shape = coords.shape[:-1]
-        self.los_trv_azi_transform = los_trv_azi_transform
+        self.los_trv_azi = los_trv_azi
         self.height_mapping = height_mapping
+        self.wcs = wcs
 
         tensors = {'b_true': b}
 
@@ -125,17 +135,22 @@ class MapDataset(TensorsDataset):
         tensors['coords'] = coords
 
         if b_err is not None:
-            b_err = block_reduce(b_err, (bin, bin, 1), np.mean) / G_per_dB
+            b_err = block_reduce(b_err, (bin, bin, 1), np.mean)
+            if los_trv_azi:
+                b_err[..., :2] /= G_per_dB
+            else:
+                b_err /= G_per_dB
             tensors['b_err'] = b_err
 
-            if plot:
+            if plot and not los_trv_azi:
                 _plot_B_error(b * G_per_dB, b_err * G_per_dB, coords * Mm_per_ds)
         else:
-            if plot:
+            if plot and los_trv_azi:
+                b_plot = np.copy(b)
+                b_plot[..., :2] *= G_per_dB
+                _plot_los_trv_azi(b_plot, coords * Mm_per_ds)
+            if plot and not los_trv_azi:
                 _plot_B(b * G_per_dB, coords * Mm_per_ds)
-
-        if los_trv_azi_transform:
-            tensors['b_true'] = img_to_los_trv_azi(tensors['b_true'], f=np)
 
 
         tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}

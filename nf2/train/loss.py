@@ -4,19 +4,17 @@ from torch import nn
 from nf2.data.util import cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
 from nf2.train.model import jacobian
 
+from astropy import units as u
 
 class BaseLoss(nn.Module):
 
-    def __init__(self, name, ds_id):
+    def __init__(self, name, ds_id, **kwargs):
         super().__init__()
         self.name = name
         self.ds_id = ds_id
 
 
 class ForceFreeLoss(BaseLoss):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
     def forward(self, b, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -43,9 +41,6 @@ class ForceFreeLoss(BaseLoss):
 
 
 class MagnetoStaticLoss(BaseLoss):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
 
     def forward(self, b, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -143,9 +138,9 @@ class DivergenceLoss(BaseLoss):
 
 class RadialLoss(BaseLoss):
 
-    def __init__(self, base_radius=2.0, **kwargs):
+    def __init__(self, base_radius, Mm_per_ds, **kwargs):
         super().__init__(**kwargs)
-        self.base_radius = base_radius
+        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
 
     def forward(self, b, coords, *args, **kwargs):
         # radial regularization --> vanishing phi and theta components
@@ -161,12 +156,15 @@ class RadialLoss(BaseLoss):
 
         return radial_regularization
 
-
 class PotentialLoss(BaseLoss):
 
-    def __init__(self, base_radius=1.3, **kwargs):
+    def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
         super().__init__(**kwargs)
-        self.base_radius = base_radius
+        if base_radius is not None:
+            self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+            self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
+        else:
+            self.base_radius = None
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -186,22 +184,23 @@ class PotentialLoss(BaseLoss):
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         potential_loss = torch.sum(j ** 2, dim=-1)
 
-        if self.base_radius:
-            radius_weight = torch.sqrt(torch.sum(coords ** 2, dim=-1) + 1e-7)
-            radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
-            potential_loss *= radius_weight
+        if self.base_radius is not None:
+            radius = coords.pow(2).sum(-1).pow(0.5) + 1e-7
+            radius_weight = torch.clip(radius - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
+            potential_loss *= radius_weight ** 2
 
         return potential_loss.mean()
 
 
 class EnergyGradientLoss(BaseLoss):
 
-    def __init__(self, base_radius=1.3, **kwargs):
+    def __init__(self, base_radius, Mm_per_ds, **kwargs):
         super().__init__(**kwargs)
-        self.base_radius = base_radius
+        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
         # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
-    def forward(self, b, jac_matrix, coords, n_boundary_coords=None, *args, **kwargs):
+    def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
@@ -226,16 +225,31 @@ class EnergyGradientLoss(BaseLoss):
                 (torch.sin(t) * torch.sin(p)) * dE_dy + \
                 torch.cos(p) * dE_dz
 
-        radius_weight = coords[n_boundary_coords:].pow(2).sum(-1).pow(0.5)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+        radius_weight = coords.pow(2).sum(-1).pow(0.5)
+        radius_weight = torch.clip(radius_weight - self.base_radius, min=0) / self.solar_radius # normalize to solar radius
 
-        sampled_dE_dr = dE_dr[n_boundary_coords:]
+        sampled_dE_dr = dE_dr
         energy_gradient_regularization = torch.relu(sampled_dE_dr) * radius_weight ** 2
-        # energy_gradient_regularization = torch.asinh(energy_gradient_regularization * 1e3) / self.asinh_stretch
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
 
+class EnergyLoss(BaseLoss):
+
+    def __init__(self, base_radius, Mm_per_ds, **kwargs):
+        super().__init__(**kwargs)
+        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+
+    def forward(self, b, coords, *args, **kwargs):
+        energy_loss = torch.norm(b, dim=-1).pow(2).mean()
+
+        radius_weight = coords.pow(2).sum(-1).pow(0.5)
+        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+
+        energy_regularization = energy_loss * radius_weight ** 2
+        energy_regularization = energy_regularization.mean()
+
+        return energy_regularization
 
 class NaNLoss(BaseLoss):
 
@@ -258,8 +272,8 @@ class LosTrvAziBoundaryLoss(BaseLoss):
         b_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         b_pred = img_to_los_trv_azi(b_pred, f=torch)
 
-        bxyz_true = los_trv_azi_to_img(b_true, ambiguous=True, f=torch)
-        bxyz_pred = los_trv_azi_to_img(b_pred, ambiguous=True, f=torch)
+        bxyz_true = los_trv_azi_to_img(b_true, ambiguous=self.disambiguate, f=torch)
+        bxyz_pred = los_trv_azi_to_img(b_pred, ambiguous=self.disambiguate, f=torch)
 
         # compute diff
         b_diff = bxyz_pred - bxyz_true
@@ -284,9 +298,9 @@ class BoundaryLoss(BaseLoss):
 
 class HeightLoss(BaseLoss):
 
-    def forward(self, coords, original_coords, height_ranges, *args, **kwargs):
+    def forward(self, coords, original_coords, height_range, *args, **kwargs):
         height_diff = torch.abs(coords[:, 2] - original_coords[:, 2])
-        normalization = (height_ranges[:, 1] - height_ranges[:, 0]) + 1e-6
+        normalization = (height_range[:, 1] - height_range[:, 0]) + 1e-6
         height_regularization = torch.true_divide(height_diff, normalization).mean()
 
         return height_regularization
