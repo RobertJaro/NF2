@@ -68,7 +68,7 @@ class NF2Module(LightningModule):
                                'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                                'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss, 'min_height': MinHeightLoss,
                                'energy_gradient': EnergyGradientLoss, 'flux_preservation': FluxPreservationLoss,
-                               'magneto_static': MagnetoStaticLoss}
+                               'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,}
         # init lambdas and loss modules
         scheduled_lambdas = {}
         lambdas = {}
