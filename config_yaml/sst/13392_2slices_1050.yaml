@@ -15,6 +15,7 @@ data:
         B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BAZI_panorama1050_6173_StkIQUV_rebin.fits"
       mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits"
       load_map: False
+      ambiguous_azimuth: True
       batch_size: 4096
     - type: los_trv_azi
       Mm_per_pixel: 0.09
@@ -25,6 +26,7 @@ data:
       mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits"
       height_mapping: { z: 2.0, z_min: 0, z_max: 23 }
       load_map: False
+      ambiguous_azimuth: True
       batch_size: 4096
   num_workers: 8
   iterations: 10000
@@ -32,7 +34,7 @@ model:
   type: vector_potential
   dim: 256
 training:
-  epochs: 20
+  epochs: 15
   loss_config:
     - type: boundary_los_trv_azi
       lambda: 1.0
@@ -48,7 +50,7 @@ training:
     - type: divergence
       lambda:  0.0
     - type: azimuth_disambiguation
-      lambda: {start: 1.0, end: 1.0e-1, iterations: 5.0e+4}
+      lambda: {start: 1.0, end: 1.0e-2, iterations: 1.0e+5}
       ds_id: [ boundary_01, boundary_02]
     - type: height
       lambda: 1.0e-3
