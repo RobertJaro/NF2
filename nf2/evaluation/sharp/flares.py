@@ -59,7 +59,7 @@ start_time = parse(args.date_range[0])
 end_time = parse(args.date_range[1])
 peak_time = parse(args.date_range[2])
 
-client = drms.Client(email=args.email, verbose=True)
+client = drms.Client(email=args.email)
 euv_files = download_euv(start_time=start_time, end_time=end_time,
                          dir=result_path, client=client, channel=94)
 
