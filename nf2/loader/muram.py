@@ -153,7 +153,7 @@ class MURaMSnapshot():
     def v(self):
         return np.stack([self.vx, self.vy, self.vz], axis=-1)
 
-    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm):
+    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1):
 
         b = self.B
         tau = self.tau
@@ -169,7 +169,7 @@ class MURaMSnapshot():
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
 
-        pix_height = np.argmin(np.abs(tau - 1), axis=2) * u.pix
+        pix_height = np.argmin(np.abs(tau - target_tau), axis=2) * u.pix
         base_height_pix = pix_height.mean()
 
         min_height = int(base_height_pix.to_value(u.pix))

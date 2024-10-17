@@ -1,13 +1,13 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_ambiguous_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_1slices_ambiguous_v01"
+base_path: "/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_ambiguous_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_1slices_ambiguous_v02"
 logging:
   project: auto-disambiguation
-  name: MURAM MFR - tau1 - ambiguous
+  name: MURAM MFR - tau1 - ambiguous v2
 data:
   type: muram
   slices:
-    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
+    - data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_0.100.474000"
       los_trv_azi_transform: True
   num_workers: 8
   iterations: 10000
