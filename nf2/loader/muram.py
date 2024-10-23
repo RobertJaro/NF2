@@ -107,7 +107,7 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
 
 class MURaMDataset(MapDataset):
 
-    def __init__(self, data_path, los_trv_azi_transform=False, *args, **kwargs):
+    def __init__(self, data_path, los_trv_azi_transform=False, scaling=None, *args, **kwargs):
         sl, Nvar, shape, time = read_muram_slice(data_path)
 
         bz = sl[5, :, :] * np.sqrt(4 * np.pi)
@@ -115,6 +115,9 @@ class MURaMDataset(MapDataset):
         by = sl[7, :, :] * np.sqrt(4 * np.pi)
 
         b = np.stack([bx, by, bz], axis=-1)
+
+        if scaling is not None:
+            b = b * scaling
 
         if los_trv_azi_transform:
             b = img_to_los_trv_azi(b, f=np)
@@ -173,7 +176,7 @@ class MURaMSnapshot():
         base_height_pix = pix_height.mean()
 
         min_height = int(base_height_pix.to_value(u.pix))
-        max_height = int((base_height_pix + height / resolution).to_value(u.pix))
+        max_height = min_height + int((height / resolution).to_value(u.pix))
         b = b[:, :, min_height:max_height]
         tau = tau[:, :, min_height:max_height]
 

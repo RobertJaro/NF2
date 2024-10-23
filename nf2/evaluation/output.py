@@ -246,8 +246,11 @@ class HeightTransformOutput(CartesianOutput):
         self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
 
     def load_height_mapping(self, **kwargs):
+        mapping_out = []
         for coord_range, height_mapping, ds_per_pixel in zip(self.coord_range_list, self.height_mapping_list,
                                                              self.ds_per_pixel_list):
+            if height_mapping is None:
+                continue
             x_min, x_max = coord_range[0]
             y_min, y_max = coord_range[1]
             z = height_mapping['z'] / self.Mm_per_ds
@@ -262,21 +265,23 @@ class HeightTransformOutput(CartesianOutput):
             height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
 
             model_out = self.load_transformed_coords(coords, height_range, **kwargs)
-            yield {'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
-                   'original_coords': coords * self.Mm_per_ds * u.Mm,
-                   'height_range': height_range * self.Mm_per_ds * u.Mm}
+            entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
+                     'original_coords': coords * self.Mm_per_ds * u.Mm,
+                     'height_range': height_range * self.Mm_per_ds * u.Mm}
+            mapping_out.append(entry)
+        return mapping_out
 
     def load_transformed_coords(self, coords, height_range, batch_size=int(2 ** 12), progress=False):
         def _load(coords, height_range):
             # normalize and to tensor
-            coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
+            coords = torch.tensor(coords, dtype=torch.float32)
             coords_shape = coords.shape
             coords = coords.reshape((-1, 3))
 
             height_range = torch.tensor(height_range, dtype=torch.float32)
             height_range = height_range.reshape((-1, 2))
 
-            cube = []
+            cube = {}
             it = range(int(np.ceil(coords.shape[0] / batch_size)))
             it = tqdm(it) if progress else it
             for k in it:
@@ -287,14 +292,16 @@ class HeightTransformOutput(CartesianOutput):
                 height_range_batch = height_range[k * batch_size: (k + 1) * batch_size]
                 height_range_batch = height_range_batch.to(self.device)
 
-                transformed_coords = self.transform_module.transform_coords(coord, height_range_batch)
+                transformed_coords = self.transform_module({'coords': coord, 'height_range': height_range_batch})
 
-                cube += [transformed_coords.detach().cpu()]
+                for k, v in transformed_coords.items():
+                    if k not in cube:
+                        cube[k] = []
+                    cube[k] += [v.detach().cpu()]
 
-            cube = torch.cat(cube)
-            cube = cube.reshape(*coords_shape).numpy()
+            cube = {k: torch.cat(v).reshape(*coords_shape).numpy() for k, v in cube.items()}
 
-            return {'coords': cube}
+            return cube
 
         with torch.no_grad():
             return _load(coords, height_range)

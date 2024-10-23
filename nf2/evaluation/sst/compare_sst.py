@@ -9,7 +9,7 @@ from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from nf2.evaluation.metric import b_nabla_bz, curl
-from nf2.evaluation.output import CartesianOutput
+from nf2.evaluation.output import CartesianOutput, HeightTransformOutput
 from nf2.loader.muram import MURaMSnapshot
 
 # if __name__ == '__main__':
@@ -26,10 +26,8 @@ sst_data = fits.getdata('/glade/work/rjarolim/data/SST/panorama_8542_StkI.fits')
 
 mfr_1slice_model = CartesianOutput(
     '/glade/work/rjarolim/nf2/sst/13392_1slices_0851_v01/extrapolation_result.nf2')
-# mfr_2slice_model = CartesianOutput(
-#     '/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2')
 mfr_2slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/sst/13392_3slices_0851_v02/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2')
 
 x_min, x_max = mfr_1slice_model.coord_range[0]
 y_min, y_max = mfr_1slice_model.coord_range[1]
@@ -45,6 +43,9 @@ coords = np.stack(
                 indexing='ij'), -1)
 mfr_1slice_out = mfr_1slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
 mfr_2slice_out = mfr_2slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
+
+height_model = HeightTransformOutput('/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2')
+height_out = height_model.load_height_mapping()
 
 ########################################################################################################################
 # y_slice = 470
@@ -106,6 +107,11 @@ axs[0].set_ylabel('Z [Mm]')
 [ax.axes.yaxis.set_ticklabels([]) for ax in axs[1:]]
 [ax.set_xlim(y_range) for ax in axs]
 [ax.set_ylim([0, 40]) for ax in axs]
+
+
+h_coords = height_out[0]['coords']
+h_y_slice = np.argmin(np.abs(h_coords[:, 0, 0, 0].to_value(u.Mm) - y_slice * Mm_per_pixel))
+ax.plot(np.linspace(y_min, y_max, h_coords.shape[1]) * Mm_per_ds, h_coords[h_y_slice, :, 0, 2].to_value(u.Mm), color='black', linestyle='--')
 
 plt.tight_layout()
 plt.savefig(os.path.join(out_path, 'sst_b_nabla_bz.png'), dpi=300, transparent=True)
