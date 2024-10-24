@@ -88,7 +88,7 @@ b_norm = LogNorm(vmin=10, vmax=1e3)
 extent = np.array([x_min, x_max, y_min, y_max]) * Mm_per_ds
 yz_extent = [y_min * Mm_per_ds, y_max * Mm_per_ds, *height_range]
 
-fig, axs = plt.subplots(5, 5, figsize=(20, 10))
+fig, axs = plt.subplots(4, 5, figsize=(20, 10))
 
 
 for i, (model_out, height_out) in enumerate(zip(config_outs, config_height_outs)):
@@ -133,13 +133,6 @@ for i, (model_out, height_out) in enumerate(zip(config_outs, config_height_outs)
     fig.colorbar(im, cax=cax, orientation='vertical', label=r'$|B|$ [G]')
     ax.set_xlim(y_range)
     ax.set_ylim([0, 30])
-    #
-    ax = column[4]
-    im = ax.imshow(model_out['metrics']['free_energy'].sum(2).to_value(u.erg/u.cm**3).T * (Mm_per_pixel * 1e8) ** 2, origin='lower',
-                     extent=extent, cmap='jet')
-    divider = make_axes_locatable(ax)
-    cax = divider.append_axes('right', size='2%', pad=0.05)
-    fig.colorbar(im, cax=cax, orientation='vertical', label='Free energy [erg cm$^{-1}$]')
 
 for i, label in enumerate(labels):
     axs[0, i].set_title(label)
