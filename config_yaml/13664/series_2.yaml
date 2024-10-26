@@ -1,0 +1,41 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sharp/13664_v4/series_2"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13664_series_2"
+meta_path: "/glade/work/rjarolim/nf2/sharp/13664_v4/init_2/last.ckpt"
+logging:
+  project: AR 13664
+  name: series
+data:
+  type: sharp
+  data_path: [
+    {
+      Bp: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Bp.fits',
+      Br: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Br.fits',
+      Bt: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Bt.fits',
+      Bp_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Bp_err.fits',
+      Br_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Br_err.fits',
+      Bt_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.20240509*Bt_err.fits'
+    },
+    {
+      Bp: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bp.fits',
+      Br: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Br.fits',
+      Bt: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bt.fits',
+      Bp_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bp_err.fits',
+      Br_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Br_err.fits',
+      Bt_err: '/glade/work/rjarolim/data/nf2/13664/hmi.sharp_cea_720s.11149.2024051*Bt_err.fits'
+    }
+  ]
+  num_workers: 8
+  iterations: 2.0e+3
+model:
+  type: vector_potential
+  dim: 256
+training:
+  check_val_every_n_epoch: 5 # validation plots in 1h steps
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1
+      ds_id: [ boundary_01, potential ]
+    - type: force_free
+      lambda: 1.0e-1

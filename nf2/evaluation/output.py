@@ -10,102 +10,11 @@ from tqdm import tqdm
 
 from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical
 from nf2.evaluation.energy import get_free_mag_energy
-from nf2.evaluation.metric import energy, normalized_divergence
-from nf2.train.model import VectorPotentialModel, calculate_current_from_jacobian
+from nf2.evaluation.metric import energy
+from nf2.evaluation.output_metrics import metric_mapping
+from nf2.train.model import VectorPotentialModel
+from nf2.train.transform import HeightTransformModel
 
-
-def current_density(jac_matrix, **kwargs):
-    j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
-    return j.to(u.G / u.s)
-
-
-def b_nabla_bz(b, jac_matrix, **kwargs):
-    # compute B * nabla * Bz
-    bx = b[..., 0]
-    by = b[..., 1]
-    bz = b[..., 2]
-    dBx_dx = jac_matrix[..., 0, 0]
-    dBx_dy = jac_matrix[..., 0, 1]
-    dBx_dz = jac_matrix[..., 0, 2]
-    dBy_dx = jac_matrix[..., 1, 0]
-    dBy_dy = jac_matrix[..., 1, 1]
-    dBy_dz = jac_matrix[..., 1, 2]
-    dBz_dx = jac_matrix[..., 2, 0]
-    dBz_dy = jac_matrix[..., 2, 1]
-    dBz_dz = jac_matrix[..., 2, 2]
-    #
-    norm_B = np.linalg.norm(b, axis=-1) + 1e-10 * b.unit
-
-    dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
-    dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
-    dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
-
-    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
-                 (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
-    b_nabla_bz = b_nabla_bz.to(1 / u.Mm)
-    return b_nabla_bz
-
-def magnetic_helicity(b, a, **kwargs):
-    return np.sum(a * b, axis=-1)
-
-def twist(b, jac_matrix, **kwargs):
-    j = calculate_current_from_jacobian(jac_matrix, f=np)
-    twist = np.linalg.norm(j, axis=-1) / np.linalg.norm(b, axis=-1)
-    threshold = np.linalg.norm(b, axis=-1).to_value(u.G) < 10 # set twist to 0 for weak fields (coronal holes)
-    twist[threshold] = 0 * u.Mm ** -1
-    twist = twist.to(u.Mm ** -1)
-    return twist
-
-
-def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
-    dBx_dx = jac_matrix[..., 0, 0]
-    dBy_dx = jac_matrix[..., 1, 0]
-    dBz_dx = jac_matrix[..., 2, 0]
-    dBx_dy = jac_matrix[..., 0, 1]
-    dBy_dy = jac_matrix[..., 1, 1]
-    dBz_dy = jac_matrix[..., 2, 1]
-    dBx_dz = jac_matrix[..., 0, 2]
-    dBy_dz = jac_matrix[..., 1, 2]
-    dBz_dz = jac_matrix[..., 2, 2]
-    # E = b^2 = b_x^2 + b_y^2 + b_z^2
-    # dE/dx = 2 * (b_x * dBx_dx + b_y * dBy_dx + b_z * dBz_dx)
-    # dE/dy = 2 * (b_x * dBx_dy + b_y * dBy_dy + b_z * dBz_dy)
-    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
-    dE_dx = 2 * (b[..., 0] * dBx_dx + b[..., 1] * dBy_dx + b[..., 2] * dBz_dx)
-    dE_dy = 2 * (b[..., 0] * dBx_dy + b[..., 1] * dBy_dy + b[..., 2] * dBz_dy)
-    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
-
-    coords_spherical = cartesian_to_spherical(coords, f=np)
-    t = coords_spherical[..., 1]
-    p = coords_spherical[..., 2]
-    dE_dr = (np.sin(t) * np.cos(p)) * dE_dx + \
-            (np.sin(t) * np.sin(p)) * dE_dy + \
-            np.cos(p) * dE_dz
-
-    return dE_dr
-
-
-def energy_gradient(b, jac_matrix, **kwargs):
-    dBx_dz = jac_matrix[..., 0, 2]
-    dBy_dz = jac_matrix[..., 1, 2]
-    dBz_dz = jac_matrix[..., 2, 2]
-    # E = b^2 = b_x^2 + b_y^2 + b_z^2
-    # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
-    dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
-
-    return dE_dz
-
-
-def los_trv_azi(b, **kwargs):
-    bx, by, bz = b[..., 0], b[..., 1], b[..., 2]
-    b_los = bz.to_value(u.G)
-    b_trv = np.sqrt(bx ** 2 + by ** 2).to_value(u.G)
-    azimuth = np.arctan2(by, bx).to_value(u.deg)
-    return np.stack([b_los, b_trv, azimuth], -1)
-
-def free_energy(b, **kwargs):
-    free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
-    return free_energy
 
 class BaseOutput:
 
@@ -117,7 +26,6 @@ class BaseOutput:
         model = self.state['model']
         self._requires_grad = isinstance(model, VectorPotentialModel)
         self.model = nn.DataParallel(model) if torch.cuda.device_count() > 1 else model
-        self.spatial_norm = 1
         self.device = device
         self.c = constants.c
 
@@ -129,12 +37,13 @@ class BaseOutput:
     def m_per_ds(self):
         return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
-    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True,
-                    metrics={'j': current_density}):
+    def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True, metrics=None):
         batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
+        metrics = metrics if metrics is not None else []
+
         def _load(coords):
             # normalize and to tensor
-            coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
+            coords = torch.tensor(coords, dtype=torch.float32)
             coords_shape = coords.shape
             coords = coords.reshape((-1, 3))
 
@@ -160,21 +69,26 @@ class BaseOutput:
                 model_out['a'] = model_out['a'] * self.G_per_dB * self.m_per_ds
             return model_out
 
-        if compute_jacobian or self._requires_grad:
+        if self._requires_grad or compute_jacobian:
             model_out = _load(coords)
-            jac_matrix = model_out['jac_matrix']
-            jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
-            model_out['jac_matrix'] = jac_matrix
 
-            state = {**model_out, 'coords': coords}
-
-            for k, f in metrics.items():
-                model_out[k] = f(**state)
-
-            return model_out
+            if compute_jacobian:
+                jac_matrix = model_out['jac_matrix']
+                jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
+                model_out['jac_matrix'] = jac_matrix
         else:
             with torch.no_grad():
-                return _load(coords)
+                model_out = _load(coords)
+
+        state = {**model_out, 'coords': coords}
+        metrics_out = {}
+        for key in metrics:
+            metric_out = metric_mapping[key](**state)
+            metrics_out.update(metric_out)
+            state.update(metric_out)
+
+        model_out['metrics'] = metrics_out
+        return model_out
 
 
 class CartesianOutput(BaseOutput):
@@ -191,7 +105,7 @@ class CartesianOutput(BaseOutput):
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
         self.wcs = self.state['data']['wcs'] if 'wcs' in self.state['data'] else None
-        self.time = parse(self.wcs[0].wcs.dateobs) if (self.wcs is not None) and len(self.wcs) >= 1 else None
+        self.time = None if self.wcs is None or len(self.wcs) >= 1 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
@@ -201,28 +115,27 @@ class CartesianOutput(BaseOutput):
                                                                                            height_range)
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
-        pixel_per_ds = self.Mm_per_ds / Mm_per_pixel
+        ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
         coords = np.stack(
-            np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds) + 1),
-                        np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds) + 1),
-                        np.linspace(z_min, z_max, int((z_max - z_min) * pixel_per_ds) + 1), indexing='ij'), -1)
-
+            np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)),
+                        np.linspace(y_min, y_max, np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)),
+                        np.linspace(z_min, z_max, np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)),
+                        indexing='ij'), -1)
         model_out = self.load_coords(coords, **kwargs)
 
         return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
 
-    def load_boundary(self, Mm_per_pixel=None, **kwargs):
+    def load_slice(self, z=0 * u.Mm, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
-        pixel_per_ds = self.Mm_per_ds / Mm_per_pixel
 
         coords = np.stack(
-            np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds + 1)),
-                        np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds + 1)),
-                        np.zeros((1,), dtype=np.float32), indexing='ij'), -1)
+            np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / self.ds_per_pixel + 1).astype(int)),
+                        np.linspace(y_min, y_max, np.round((y_max - y_min) / self.ds_per_pixel + 1).astype(int)),
+                        np.ones((1,), dtype=np.float32) * z.to_value(u.Mm) / self.Mm_per_pixel, indexing='ij'), -1)
         coords = coords[:, :, 0]
 
         model_out = self.load_coords(coords, **kwargs)
@@ -269,7 +182,7 @@ class CartesianOutput(BaseOutput):
         z_min, z_max = (0, self.max_height / self.Mm_per_ds)
 
         max_iterations = ((x_max - x_min) + (y_max - y_min) + (
-                    z_max - z_min)) / base_step * 3 if max_iterations is None else max_iterations
+                z_max - z_min)) / base_step * 3 if max_iterations is None else max_iterations
 
         field_lines = {i: [c] for i, c in enumerate(start_coords)}
 
@@ -321,16 +234,23 @@ class HeightTransformOutput(CartesianOutput):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        assert 'transform_module' in self.state, 'Requires transform module!'
-        self.transform_module = self.state['transform_module']
+
+        self.transforms = self.state['transforms']
+        height_transforms = [t for t in self.transforms if isinstance(t, HeightTransformModel)]
+
+        assert len(height_transforms) == 1, 'Requires transform module!'
+        self.transform_module = height_transforms[0]
 
         self.coord_range_list = self.state['data']['coord_range']
         self.height_mapping_list = self.state['data']['height_mapping']
         self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
 
     def load_height_mapping(self, **kwargs):
+        mapping_out = []
         for coord_range, height_mapping, ds_per_pixel in zip(self.coord_range_list, self.height_mapping_list,
                                                              self.ds_per_pixel_list):
+            if height_mapping is None:
+                continue
             x_min, x_max = coord_range[0]
             y_min, y_max = coord_range[1]
             z = height_mapping['z'] / self.Mm_per_ds
@@ -345,21 +265,23 @@ class HeightTransformOutput(CartesianOutput):
             height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
 
             model_out = self.load_transformed_coords(coords, height_range, **kwargs)
-            yield {'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
-                   'original_coords': coords * self.Mm_per_ds * u.Mm,
-                   'height_range': height_range * self.Mm_per_ds * u.Mm}
+            entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
+                     'original_coords': coords * self.Mm_per_ds * u.Mm,
+                     'height_range': height_range * self.Mm_per_ds * u.Mm}
+            mapping_out.append(entry)
+        return mapping_out
 
     def load_transformed_coords(self, coords, height_range, batch_size=int(2 ** 12), progress=False):
         def _load(coords, height_range):
             # normalize and to tensor
-            coords = torch.tensor(coords / self.spatial_norm, dtype=torch.float32)
+            coords = torch.tensor(coords, dtype=torch.float32)
             coords_shape = coords.shape
             coords = coords.reshape((-1, 3))
 
             height_range = torch.tensor(height_range, dtype=torch.float32)
             height_range = height_range.reshape((-1, 2))
 
-            cube = []
+            cube = {}
             it = range(int(np.ceil(coords.shape[0] / batch_size)))
             it = tqdm(it) if progress else it
             for k in it:
@@ -370,14 +292,16 @@ class HeightTransformOutput(CartesianOutput):
                 height_range_batch = height_range[k * batch_size: (k + 1) * batch_size]
                 height_range_batch = height_range_batch.to(self.device)
 
-                transformed_coords = self.transform_module.transform_coords(coord, height_range_batch)
+                transformed_coords = self.transform_module({'coords': coord, 'height_range': height_range_batch})
 
-                cube += [transformed_coords.detach().cpu()]
+                for k, v in transformed_coords.items():
+                    if k not in cube:
+                        cube[k] = []
+                    cube[k] += [v.detach().cpu()]
 
-            cube = torch.cat(cube)
-            cube = cube.reshape(*coords_shape).numpy()
+            cube = {k: torch.cat(v).reshape(*coords_shape).numpy() for k, v in cube.items()}
 
-            return {'coords': cube}
+            return cube
 
         with torch.no_grad():
             return _load(coords, height_range)
@@ -390,7 +314,6 @@ class SphericalOutput(BaseOutput):
         assert self.state['data']['type'] == 'spherical', 'Requires spherical NF2 data!'
 
         self.radius_range = self.state['data']['radius_range']
-        self.spatial_norm = (self.m_per_ds / (1 * u.solRad)).to_value(u.dimensionless_unscaled)
 
     def load_spherical(self, radius_range: u.Quantity = None,
                        latitude_range: u.Quantity = (0, np.pi) * u.rad,
@@ -404,8 +327,8 @@ class SphericalOutput(BaseOutput):
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
-
-        model_out = self.load_coords(cartesian_coords, **kwargs)
+        scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        model_out = self.load_coords(scaled_coords, **kwargs)
         return {**model_out, 'coords': cartesian_coords, 'spherical_coords': spherical_coords}
 
     def load(self,
@@ -452,15 +375,25 @@ class SphericalOutput(BaseOutput):
                 lon_cond = lon_cond | ((lon_coord < max_lon - 2 * np.pi) & (lon_coord >= 0))
         rad_cond = (rad_coord >= radius_range[0].to_value(u.solRad)) & (rad_coord < radius_range[1].to_value(u.solRad))
         condition = rad_cond & lat_cond & lon_cond
-        sub_coords = coords[condition]
 
-        cube_shape = coords.shape[:-1]
+        scaled_coords = coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        sub_coords = scaled_coords[condition]
+
+        cube_shape = scaled_coords.shape[:-1]
         model_out = self.load_coords(sub_coords, **kwargs)
 
-        spherical_out = {'spherical_coords': spherical_coords, 'coords': coords}
+        spherical_out = {'spherical_coords': spherical_coords, 'coords': coords, 'metrics': {}}
+        metrics = model_out.pop('metrics')
+        for k, sub_v in metrics.items():
+            volume = np.ones(cube_shape + sub_v.shape[1:]) * nan_value
+            if hasattr(sub_v, 'unit'):  # preserve units
+                volume = volume * sub_v.unit
+            volume[condition] = sub_v
+            spherical_out['metrics'][k] = volume
+
         for k, sub_v in model_out.items():
             volume = np.ones(cube_shape + sub_v.shape[1:]) * nan_value
-            if hasattr(sub_v, 'unit'): # preserve units
+            if hasattr(sub_v, 'unit'):  # preserve units
                 volume = volume * sub_v.unit
             volume[condition] = sub_v
             spherical_out[k] = volume
@@ -471,7 +404,8 @@ class SphericalOutput(BaseOutput):
 
     def load_spherical_coords(self, spherical_coords: SkyCoord, **kwargs):
         cartesian_coords, spherical_coords = self._skycoords_to_cartesian(spherical_coords)
-        model_out = self.load_coords(cartesian_coords, **kwargs)
+        scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
+        model_out = self.load_coords(scaled_coords, **kwargs)
         model_out['spherical_coords'] = spherical_coords
         model_out['coords'] = cartesian_coords
         return model_out

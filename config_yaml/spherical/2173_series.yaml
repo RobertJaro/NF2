@@ -1,0 +1,163 @@
+---
+base_path: "/glade/work/rjarolim/nf2/spherical/2173_series_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/2173_series_v02"
+meta_path: "/glade/work/rjarolim/nf2/spherical/2173/20160205_160000_v04/last.ckpt"
+logging:
+  project: spherical
+  name: "2173 series"
+data:
+  type: spherical
+  data_path:
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_171200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_171200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_171200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_172400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_172400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_172400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_173600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_173600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_173600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_174800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_174800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_174800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_180000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_180000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_180000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_181200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_181200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_181200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_182400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_182400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_182400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_183600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_183600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_183600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_184800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_184800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_184800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_190000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_190000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_190000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_191200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_191200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_191200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_192400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_192400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_192400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_193600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_193600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_193600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_194800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_194800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_194800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_200000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_200000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_200000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_201200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_201200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_201200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_202400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_202400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_202400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_203600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_203600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_203600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_204800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_204800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_204800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_210000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_210000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_210000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_211200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_211200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_211200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_212400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_212400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_212400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_213600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_213600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_213600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_214800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_214800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_214800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_220000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_220000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_220000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_221200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_221200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_221200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_222400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_222400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_222400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_223600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_223600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_223600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_224800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_224800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_224800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_230000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_230000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_230000_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_231200_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_231200_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_231200_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_232400_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_232400_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_232400_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_233600_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_233600_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_233600_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_234800_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_234800_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_234800_TAI.Bp.fits"
+    - Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160206_000000_TAI.Br.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160206_000000_TAI.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160206_000000_TAI.Bp.fits"
+  synoptic_fits_path:
+      Br: "/glade/work/rjarolim/data/global/fd_2173/hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits"
+      Bt: "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bt.fits"
+      Bp: "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bp.fits"
+  validation_configs:
+    - type: spherical_slices
+      ds_id: slices
+      n_slices: 10
+      plot_currents: true
+      longitude_range: [ 1.446, 4.273 ]
+      latitude_range: [  0.424, 2.938 ]
+    - type: spherical_slices
+      ds_id: full_sphere
+      n_slices: 10
+      plot_currents: true
+    - type: sphere
+      ds_id: sphere
+      longitude_range: [ 1.446, 4.273 ]
+      latitude_range: [  0.424, 2.938 ]
+  max_radius: 1.3
+  G_per_dB: 2000
+  num_workers: 8
+  batch_size: 16384
+  iterations: 2000
+model:
+  type: vector_potential
+  dim: 512
+training:
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 100.0
+      ds_id: [full_disk, synoptic]
+    - type: energy_gradient
+      lambda: 10.0
+      ds_id: random
+      base_radius: 1.04
+    - type: potential
+      lambda: 1.0e-2
+      ds_id: random
+      base_radius: 1.04
+    - type: force_free
+      lambda: 0.1
+    - type: divergence
+      lambda: 0.0

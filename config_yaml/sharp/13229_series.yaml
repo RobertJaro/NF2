@@ -1,0 +1,36 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sharp/13229/series"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13229_series"
+meta_path: "/glade/work/rjarolim/nf2/sharp/13229/init/last.ckpt"
+logging:
+  project: AR 13229
+  name: series
+data:
+  type: sharp
+  data_path: [
+    {
+      Bp: '/glade/work/rjarolim/data/nf2/13229_large/*Bp.fits',
+      Br: '/glade/work/rjarolim/data/nf2/13229_large/*Br.fits',
+      Bt: '/glade/work/rjarolim/data/nf2/13229_large/*Bt.fits',
+      Bp_err: '/glade/work/rjarolim/data/nf2/13229_large/*Bp_err.fits',
+      Br_err: '/glade/work/rjarolim/data/nf2/13229_large/*Br_err.fits',
+      Bt_err: '/glade/work/rjarolim/data/nf2/13229_large/*Bt_err.fits'
+    }
+  ]
+  num_workers: 8
+  iterations: 5.0e+3
+  z_range: [0, 200]
+model:
+  type: b
+  dim: 256
+training:
+  check_val_every_n_epoch: 5 # validation plots in 1h steps
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1
+      ds_id: [ boundary_01, potential ]
+    - type: force_free
+      lambda: 1.0e-1
+    - type: divergence
+      lambda: 1.0e-1

@@ -1,0 +1,36 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sharp/377_magnetostatic_v03"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_magnetostatic_v03"
+logging:
+  project: nf2-cartesian
+  name: magnetostatic - no divergence regularization
+data:
+  type: fits
+  slices:
+    - fits_path:
+        Br: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
+        Bt: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
+      error_path:
+        Br_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
+      batch_size: 2048
+  random_config:
+    batch_size: 4096
+  num_workers: 8
+  iterations: 10000
+  batch_size: 1024
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 100
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, potential]
+    - type: implicit_magnetostatic
+      lambda: 1.0e-3
+      divergence_regularization: False

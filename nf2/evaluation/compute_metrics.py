@@ -1,7 +1,8 @@
 import argparse
 
 from nf2.evaluation.metric import normalized_divergence, weighted_theta, theta_J, sigma_J
-from nf2.evaluation.output import current_density, CartesianOutput
+from nf2.evaluation.output import CartesianOutput
+from nf2.evaluation.output_metrics import current_density
 
 
 def main():

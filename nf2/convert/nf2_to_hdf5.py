@@ -4,7 +4,7 @@ from threading import Thread
 
 import h5py
 
-from nf2.evaluation.output import CartesianOutput, current_density
+from nf2.evaluation.output import CartesianOutput
 
 
 class _SaveFileTask(Thread):
@@ -14,6 +14,7 @@ class _SaveFileTask(Thread):
         self.out_path = out_path
         self.output = output
         self.nf2_out = nf2_out
+
     def run(self):
         f = h5py.File(self.out_path, 'w')
         f.create_dataset('B', data=self.output['b'], dtype='f4', compression='gzip')
@@ -37,7 +38,6 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwa
     task = _SaveFileTask(out_path, output, nf2_out)
     task.start()
     return task
-
 
 
 def main():

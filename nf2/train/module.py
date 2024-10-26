@@ -1,19 +1,21 @@
 import copy
 import logging
 
+import torch
 from pytorch_lightning import LightningModule
+from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
-from nf2.train.loss import *
-from nf2.train.model import BModel, VectorPotentialModel, HeightTransformModel, MagnetoStaticModel, MagnetoStaticModelV2
+from nf2.train.loss import loss_module_mapping
+from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, MagnetoStaticModelV2
+from nf2.train.transform import HeightTransformModel, AzimuthTransformModel
 
 
 class NF2Module(LightningModule):
 
     def __init__(self, validation_mapping, data_config, model_kwargs=None, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
-                 coordinate_transform={"type": None},
-                 meta_path=None, **kwargs):
+                 transforms=[], meta_path=None, **kwargs):
         """
         The main module for training the neural field model.
 
@@ -44,14 +46,8 @@ class NF2Module(LightningModule):
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 
         # init coordinate mapping model
-        coordinate_transform = copy.deepcopy(coordinate_transform)
-        transform_type = coordinate_transform.pop('type')
-        if transform_type is None or transform_type == 'none':
-            transform_module = None
-        elif transform_type == 'height':
-            transform_module = HeightTransformModel(3, **coordinate_transform)
-        else:
-            raise ValueError(f"Invalid coordinate mapping model: {transform_type}")
+        transform_modules = self.load_transfrom_config(transforms)
+        self.transform_modules = nn.ModuleList(transform_modules)
 
         # load meta state
         if meta_path:
@@ -70,13 +66,36 @@ class NF2Module(LightningModule):
                 {"type": "divergence", "lambda": 1e-1},
             ]
 
-        # mapping
-        loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv_azi': LosTrvAziBoundaryLoss,
-                               'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                               'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
-                               'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
-                               'flux_preservation': FluxPreservationLoss, 'magneto_static': MagnetoStaticLoss}
         # init lambdas and loss modules
+        loss_modules, lambdas, scheduled_lambdas = self.load_loss_config(data_config, loss_config)
+        self.loss_modules = nn.ModuleDict(loss_modules)
+        self.scheduled_lambdas = nn.ParameterDict(scheduled_lambdas)
+        self.lambdas = nn.ParameterDict(lambdas)
+
+        self.model = model
+        self.validation_mapping = validation_mapping
+        self.lr_params = lr_params
+
+        #
+        self.validation_outputs = {}
+
+    def load_transfrom_config(self, transforms):
+        transform_modules = []
+        for transform_config in transforms:
+            transform_config = copy.deepcopy(transform_config)
+
+            transform_type = transform_config.pop('type')
+            ds_ids = transform_config.pop('ds_id')
+            if transform_type == 'height':
+                transform_module = HeightTransformModel(**transform_config, ds_id=ds_ids)
+            elif transform_type == 'azimuth':
+                transform_module = AzimuthTransformModel(**transform_config, ds_id=ds_ids)
+            else:
+                raise ValueError(f"Invalid coordinate mapping model: {transform_type}")
+            transform_modules.append(transform_module)
+        return transform_modules
+
+    def load_loss_config(self, data_config, loss_config):
         scheduled_lambdas = {}
         lambdas = {}
         loss_modules = {}
@@ -111,21 +130,12 @@ class NF2Module(LightningModule):
             # additional kwargs
             loss_module = {name: loss_module_mapping[k](**config, **data_config)}
             loss_modules.update(loss_module)
-
-        self.model = model
-        self.transform_module = transform_module
-        self.validation_mapping = validation_mapping
-        self.lr_params = lr_params
-        self.scheduled_lambdas = nn.ParameterDict(scheduled_lambdas)
-        self.lambdas = nn.ParameterDict(lambdas)
-        #
-        self.validation_outputs = {}
-        self.loss_modules = nn.ModuleDict(loss_modules)
+        return loss_modules, lambdas, scheduled_lambdas
 
     def configure_optimizers(self):
         parameters = list(self.model.parameters())
-        if self.transform_module is not None:
-            parameters += list(self.transform_module.parameters())
+        parameters += list(self.transform_modules.parameters())
+        parameters += list(self.loss_modules.parameters())
         if isinstance(self.lr_params, dict):
             lr_start = self.lr_params['start']
             lr_end = self.lr_params['end']
@@ -150,8 +160,7 @@ class NF2Module(LightningModule):
             batch[k]['coords'].requires_grad = True
 
         # transform batch
-        if self.transform_module is not None:
-            batch = self.transform_module(batch)
+        self.apply_transforms(batch)
 
         # concatenate all points
         coords = torch.cat([batch[k]['coords'] for k in loader_keys], 0)
@@ -175,19 +184,44 @@ class NF2Module(LightningModule):
 
         loss_dict = {}
         for name, loss_module in self.loss_modules.items():
-            ds_id = loss_module.ds_id
-            if isinstance(ds_id, list):
-                states = [state_dict[i] for i in ds_id]
-                state_keys = states[0].keys()
-                state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
-            else:
-                state = state_dict[ds_id]
-            loss = {name: loss_module(**state)}
-            loss_dict.update(loss)
+            try:
+                ds_id = loss_module.ds_id
+                if isinstance(ds_id, list):
+                    states = [state_dict[i] for i in ds_id]
+                    state_keys = states[0].keys()
+                    state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
+                else:
+                    state = state_dict[ds_id]
+                loss = {name: loss_module(**state)}
+                loss_dict.update(loss)
+            except Exception as e:
+                logging.error(f"Error in loss module: {name}")
+                raise e
         total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
 
         loss_dict['loss'] = total_loss
         return loss_dict
+
+    def apply_transforms(self, batch):
+        loader_keys = list(batch.keys())
+        for transform_module in self.transform_modules:
+            ds_ids = transform_module.ds_id
+            tensor_ids = transform_module.tensor_ids
+            # concatenate all tensors
+            transform_ds_ids = [k for k in loader_keys if k in ds_ids]
+            transform_batch = {tensor_id: torch.cat([batch[k][tensor_id] for k in transform_ds_ids], 0) for tensor_id in
+                               tensor_ids}
+            batch_lengths = [batch[k][tensor_ids[0]].shape[0] for k in transform_ds_ids]
+            transformed_batch = transform_module(transform_batch)
+
+            # update batch
+            for k in transformed_batch.keys():
+                value = transformed_batch[k]
+
+                number_idx = 0
+                for ds_id, batch_length in zip(transform_ds_ids, batch_lengths):
+                    batch[ds_id][k] = value[number_idx:number_idx + batch_length]
+                    number_idx += batch_length
 
     @torch.no_grad()
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
@@ -221,10 +255,14 @@ class NF2Module(LightningModule):
         coords = batch['coords']
         coords.requires_grad = True
 
-        if self.transform_module is not None:
-            if self.validation_mapping[dataloader_idx] in self.transform_module.validation_ds_id:
-                batch = self.transform_module.transform_batch(batch)
+        for transform_module in self.transform_modules:
+            ds_ids = transform_module.ds_id
+            if self.validation_mapping[dataloader_idx] in ds_ids:
+                transform_out = transform_module(batch)
+                for k, v in transform_out.items():
+                    batch[k] = v
 
+        coords = batch['coords']
         model_out = self.model(coords)
 
         jac_matrix = model_out['jac_matrix']
@@ -295,7 +333,6 @@ class NF2Module(LightningModule):
 def save(save_path, nf2, data_module, config):
     save_state = {'model': nf2.model,
                   'config': config,
-                  'data': data_module.config, }
-    if nf2.transform_module is not None:
-        save_state['transform_module'] = nf2.transform_module
+                  'data': data_module.config,
+                  'transforms': nf2.transform_modules, }
     torch.save(save_state, save_path)
