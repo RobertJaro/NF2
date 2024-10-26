@@ -41,7 +41,6 @@ def get_integrated_euv_map(euv_files, ref_wcs):
     euv_map = Map(integrated_euv * time, ref_wcs)
     return euv_map
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
     parser.add_argument('--nf2_path', type=str, help='path to the directory of the NF2 files')
