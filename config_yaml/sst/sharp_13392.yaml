@@ -1,0 +1,34 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v02"
+logging:
+  project: nf2-sst
+  name: "13392 SHARP 09:12"
+data:
+  type: fits
+  slices:
+    - type: fld_inc_azi
+      fits_path:
+        B_fld: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.field.fits"
+        B_inc: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.inclination.fits"
+        B_azi: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.azimuth.fits"
+#        B_amb: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.disambig.fits"
+      batch_size: 8192
+      slice: [380, 840, 0, 1000]
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary_los_trv_azi
+      lambda: 1.0
+      ds_id: boundary_01
+    - type: boundary
+      name: potential_boundary
+      lambda: 0.1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2

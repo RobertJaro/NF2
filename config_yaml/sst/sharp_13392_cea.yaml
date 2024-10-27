@@ -1,0 +1,32 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_cea_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_cea_v01"
+logging:
+  project: nf2-sst
+  name: "13392 SHARP CEA 09:12"
+data:
+  type: fits
+  slices:
+    - fits_path:
+        Br: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Br.fits"
+        Bt: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_cea_720s.9875.20230806_091200_TAI.Bp.fits"
+      batch_size: 8192
+      slice: [430, 900, 0, 1000]
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary
+      lambda: 1.0
+      ds_id: boundary_01
+    - type: boundary
+      name: potential_boundary
+      lambda: 0.1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2

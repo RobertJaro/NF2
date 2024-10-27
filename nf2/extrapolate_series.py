@@ -4,7 +4,6 @@ import os
 import shutil
 
 import torch
-import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.callbacks import ModelCheckpoint
@@ -14,6 +13,7 @@ from nf2.loader.fits import FITSSeriesDataModule
 from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
+from nf2.train.util import load_yaml_config
 
 
 def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, training={}, config=None):
@@ -55,7 +55,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
         shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
         data['plot_overview'] = False  # skip overview plot for restored model
 
-    fits_paths, error_paths = _load_paths(data)
+    fits_paths, error_paths = _load_paths(data['data_path'])
 
     # reload model training
     ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
@@ -105,9 +105,12 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
     trainer.fit(nf2, data_module, ckpt_path=ckpt_path)
 
 
-def _load_paths(data):
-    data_path = data['data_path']
-    if isinstance(data_path, str):
+def _load_paths(data_path):
+    if isinstance(data_path, list):
+        results = [_load_paths(d) for d in data_path]
+        fits_paths = [f for r in results for f in r[0]]
+        error_paths = [f for r in results for f in r[1]] if all([r[1] is not None for r in results]) else None
+    elif isinstance(data_path, str):
         p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
         t_files = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))  # y
         r_files = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))  # z
@@ -158,14 +161,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
-    args = parser.parse_args()
+    args, overwrite_args = parser.parse_known_args()
 
-    with open(args.config) as config:
-        info = yaml.safe_load(config)
-        for key, value in info.items():
-            args.__dict__[key] = value
+    yaml_config_file = args.config
+    config = load_yaml_config(yaml_config_file, overwrite_args)
 
-    run(**args.__dict__)
+    run(**config)
 
 
 if __name__ == '__main__':

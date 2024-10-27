@@ -176,9 +176,14 @@ class SlicesDataset(Dataset):
     def __init__(self, coord_range, ds_per_pixel, n_slices=10, batch_size=4096, **kwargs):
         x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
         y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
+        if coord_range[2, 0] == 0:
+            z_range = np.linspace(coord_range[2, 0], coord_range[2, 1], n_slices, dtype=np.float32)
+        else:
+            z_range = np.linspace(0, coord_range[2, 1], n_slices - 1, dtype=np.float32)
+            z_range = np.concatenate([np.array([coord_range[2, 0]]), z_range])
         coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
                                         np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
-                                        np.linspace(coord_range[2, 0], coord_range[2, 1], n_slices, dtype=np.float32),
+                                        z_range,
                                         indexing='ij'), -1)
         self.cube_shape = coords.shape[:-1]
         #

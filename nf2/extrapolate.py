@@ -3,7 +3,6 @@ import os
 import shutil
 
 import torch
-import yaml
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
@@ -16,9 +15,10 @@ from nf2.loader.spherical import SphericalDataModule
 from nf2.loader.vsm import VSMDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
+from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, work_directory=None, logging={}, model={}, training={}, config=None):
+def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -39,14 +39,14 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
     if work_directory is None:
         work_directory = os.path.join(base_path, 'work')
     os.makedirs(work_directory, exist_ok=True)
-    data['work_directory'] = work_directory # set work directory for data loaders
+    data['work_directory'] = work_directory  # set work directory for data loaders
 
     save_path = os.path.join(base_path, 'extrapolation_result.nf2')
 
     # init logging
     wandb_logger = WandbLogger(**logging, save_dir=work_directory)
     config_dict = {'base_path': base_path, 'work_directory': work_directory, 'logging': logging,
-                   'model': model, 'training': training, 'config': config}
+                   'model': model, 'training': training, 'config': config, 'data': data}
     wandb_logger.experiment.config.update(config_dict, allow_val_change=True)
 
     # restore model checkpoint from wandb
@@ -73,7 +73,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
         raise NotImplementedError(f'Unknown data loader {data["type"]}')
 
     # initialize callbacks
-    callbacks = load_callbacks(data_module)
+    callback_modules = load_callbacks(data_module, additional_callbacks=callbacks)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
                     model_kwargs=model, **training)
@@ -92,7 +92,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
 
     torch.set_float32_matmul_precision('medium')  # for A100 GPUs
     n_gpus = torch.cuda.device_count()
-    callbacks += [checkpoint_callback, save_callback]
+    callback_modules += [checkpoint_callback, save_callback]
 
     trainer = Trainer(max_epochs=max_epochs,
                       logger=wandb_logger,
@@ -103,7 +103,7 @@ def run(base_path, data, work_directory=None, logging={}, model={}, training={},
                       val_check_interval=val_check_interval,
                       check_val_every_n_epoch=val_every_n_epochs,
                       gradient_clip_val=0.1,
-                      callbacks=callbacks)
+                      callbacks=callback_modules)
 
     trainer.fit(nf2, data_module, ckpt_path='last')
     save(save_path, nf2, data_module, config_dict)
@@ -115,14 +115,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
-    args = parser.parse_args()
+    args, overwrite_args = parser.parse_known_args()
 
-    with open(args.config) as config:
-        info = yaml.safe_load(config)
-        for key, value in info.items():
-            args.__dict__[key] = value
+    yaml_config_file = args.config
+    config = load_yaml_config(yaml_config_file, overwrite_args)
 
-    run(**args.__dict__)
+    run(**config)
 
 
 if __name__ == '__main__':

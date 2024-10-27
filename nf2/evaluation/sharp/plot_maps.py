@@ -2,7 +2,6 @@ import argparse
 import glob
 import os
 from copy import copy
-from datetime import datetime
 
 import numpy as np
 from astropy import units as u
@@ -53,6 +52,7 @@ def main():
         b_0 = maps['b_0'][i].value
         current_density_map = maps['current_density_map'][i].to_value(u.G * u.cm * u.s ** -1)
         free_energy_map = maps['free_energy_map'][i].to_value(u.erg * u.cm ** -2)
+        free_energy_map[free_energy_map < 1e9] = 1e9
 
         fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
         extent = np.array([0, b_0.shape[0], 0, b_0.shape[1]]) * Mm_per_pixel
@@ -95,7 +95,7 @@ def main():
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    cbar = fig.colorbar(b0_im, ax=ax, label='[G]')
+    cbar = fig.colorbar(b0_im, ax=ax, label='$B_z$ [G]')
     # set ticks
     cbar.set_ticks([-2000, -1000, 0, 1000, 2000])
     plt.tight_layout(pad=0)
@@ -104,14 +104,14 @@ def main():
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    fig.colorbar(euv_im, ax=ax, label='[DN / s]')
+    fig.colorbar(euv_im, ax=ax, label='AIA 131 $\AA$ [DN / s]')
     plt.tight_layout(pad=0)
     plt.savefig(os.path.join(result_path, f'euv_colorbar.jpg'), dpi=300)
     plt.close()
 
     fig, ax = plt.subplots(1, 1, figsize=(3, 1.5))
     ax.set_axis_off()
-    fig.colorbar(cd_im, ax=ax, label='[G cm / s]')
+    fig.colorbar(cd_im, ax=ax, label='$J$ [G cm / s]')
     plt.tight_layout(pad=0)
     plt.savefig(os.path.join(result_path, f'j_colorbar.jpg'), dpi=300)
     plt.close()

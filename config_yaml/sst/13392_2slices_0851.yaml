@@ -1,0 +1,69 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v03"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_2slices_0851_v03"
+logging:
+  project: nf2-sst
+  name: "13392 SST 08:51 - 6173+8542"
+data:
+  type: fits
+  slices:
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
+      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+      load_map: False
+      ambiguous_azimuth: True
+      batch_size: 4096
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
+      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+      height_mapping: { z: 2.0, z_min: 0, z_max: 23 }
+      load_map: False
+      ambiguous_azimuth: True
+      batch_size: 4096
+  num_workers: 8
+  iterations: 10000
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+  loss_config:
+    - type: boundary_los_trv_azi
+      lambda: 1.0
+      ds_id: [boundary_01, boundary_02]
+    - type: boundary
+      name: potential_boundary
+      lambda: 0.1
+      ds_id: potential
+    - type: force_free
+      lambda: 1.0e-2
+    - type: potential
+      lambda: 0.0 # 1.0e-4
+    - type: divergence
+      lambda:  0.0
+    - type: azimuth_disambiguation
+      lambda: {start: 1.0, end: 1.0e-2, iterations: 1.0e+5}
+      ds_id: [ boundary_01, boundary_02]
+    - type: min_height
+      lambda: 1.0e-3
+      ds_id: [ boundary_02 ]
+  transforms:
+    - type: height
+      ds_id: [ boundary_02, validation_boundary_02]
+    - type: azimuth
+      ds_id: [ boundary_01, boundary_02, validation_boundary_01, validation_boundary_02 ]
+callbacks:
+  - type: disambiguation
+    name: disambiguation-01
+    ds_id: validation_boundary_01
+  - type: disambiguation
+    name: disambiguation-02
+    ds_id: validation_boundary_02

@@ -373,6 +373,77 @@ class BoundaryCallback(Callback):
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
+class DisambiguationCallback(Callback):
+
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, name=None):
+        self.validation_dataset_key = validation_dataset_key
+        self.cube_shape = cube_shape
+        self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
+        self.name = name
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        if self.validation_dataset_key not in pl_module.validation_outputs:
+            return
+
+        outputs = pl_module.validation_outputs[self.validation_dataset_key]
+        b_true = outputs['b_true']
+        flip = outputs['flip']
+
+        flip = flip.cpu().numpy().reshape([*self.cube_shape])
+        azimuth_amb = b_true[..., 2].cpu().numpy().reshape([*self.cube_shape])
+
+        azimuth = azimuth_amb + np.round(flip) * np.pi
+
+        extent = None
+
+        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+        ax = axs[0, 0]
+        im = ax.imshow(azimuth.T, cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=2 * np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[0, 1]
+        im = ax.imshow(azimuth_amb.T, cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=2 * np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[1, 0]
+        im = ax.imshow(azimuth.T % (np.pi), cmap='twilight', origin='lower',
+                         extent=extent, vmin=0, vmax=np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[1, 1]
+        im = ax.imshow(azimuth_amb.T % (np.pi), cmap='twilight', origin='lower',
+                            extent=extent, vmin=0, vmax=np.pi)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+
+        ax = axs[2, 0]
+        im = ax.imshow(flip.T, cmap='bwr', origin='lower', extent=extent, vmin=0, vmax=1)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Flip Probability')
+
+        axs[2, 1].set_axis_off()
+
+        axs[0, 0].set_title('Predicted Azimuth')
+        axs[0, 1].set_title('Ambiguous Azimuth')
+
+        fig.tight_layout()
+        name = f"{self.validation_dataset_key} - Disambiguation" if self.name is None else self.name
+        wandb.log({name: fig})
+        plt.close('all')
+
+
 class LosTrvAziBoundaryCallback(Callback):
 
     def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
@@ -386,44 +457,89 @@ class LosTrvAziBoundaryCallback(Callback):
             return
 
         outputs = pl_module.validation_outputs[self.validation_dataset_key]
-        b = outputs['b']
+        b_xyz = outputs['b']
         b_true = outputs['b_true']
 
         # apply transforms
         if 'transform' in outputs:
             transform = outputs['transform']
-            b = torch.einsum('ijk,ik->ij', transform, b)
+            b_xyz = torch.einsum('ijk,ik->ij', transform, b_xyz)
 
-        b = img_to_los_trv_azi(b, f=torch)
-        b[..., 0:2] = b[..., 0:2] * self.gauss_per_dB
+        b_xyz = b_xyz * self.gauss_per_dB
+        b_los_trv_azi = img_to_los_trv_azi(b_xyz, f=torch)
         b_true[..., 0:2] = b_true[..., 0:2] * self.gauss_per_dB
 
-        b_xyz = los_trv_azi_to_img(b, f=torch)
         b_true_xyz = los_trv_azi_to_img(b_true, f=torch)
         # compute diff
-        b_diff = torch.abs(b_xyz - b_true_xyz)
+        b_diff = b_xyz - b_true_xyz
         b_diff = torch.nanmean(b_diff.pow(2).sum(-1).pow(0.5))
         evaluation = {'b_diff': b_diff.detach()}
         #
-        b_xyz = los_trv_azi_to_img(b, ambiguous=True, f=torch)
-        b_true_xyz = los_trv_azi_to_img(b_true, ambiguous=True, f=torch)
+        b_xyz_amb = los_trv_azi_to_img(b_los_trv_azi, ambiguous=True, f=torch)
+        b_true_xyz_amb = los_trv_azi_to_img(b_true, ambiguous=True, f=torch)
         # compute diff
-        b_diff = torch.abs(b_xyz - b_true_xyz)
+        b_diff = torch.abs(b_xyz_amb - b_true_xyz_amb)
         b_diff = torch.nanmean(b_diff.pow(2).sum(-1).pow(0.5))
         evaluation['b_amb_diff'] = b_diff.detach()
 
         wandb.log({"valid": {self.validation_dataset_key: evaluation}})
 
-        b = b.cpu().numpy().reshape([*self.cube_shape, 3])
+        b_los_trv_azi = b_los_trv_azi.cpu().numpy().reshape([*self.cube_shape, 3])
         b_true = b_true.cpu().numpy().reshape([*self.cube_shape, 3])
+        b_xyz = b_xyz.cpu().numpy().reshape([*self.cube_shape, 3])
+        b_true_xyz = b_true_xyz.cpu().numpy().reshape([*self.cube_shape, 3])
 
         if 'original_coords' in outputs:
             original_coords = outputs['original_coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
             transformed_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            self.plot_b_coords(b, b_true, original_coords, transformed_coords)
+            self.plot_b_coords(b_los_trv_azi, b_true, original_coords, transformed_coords)
         else:
             original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            self.plot_b(b, b_true, original_coords)
+            self.plot_b(b_los_trv_azi, b_true, original_coords)
+            #
+            self.plot_bxyz(b_xyz, b_true_xyz, original_coords)
+
+    def plot_bxyz(self, b, b_true, original_coords):
+        extent = None
+
+        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+        b_norm = np.nanmax(np.abs(b_true))
+        b_norm = min(500, b_norm)
+
+        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[0, 0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[0, 1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[1, 0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[1, 1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        im = axs[2, 0].imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[2, 0])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        im = axs[2, 1].imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(axs[2, 1])
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[G]')
+
+        fig.tight_layout()
+        wandb.log({f"{self.validation_dataset_key} - Bxyz": fig})
+        plt.close('all')
 
     def plot_b(self, b, b_true, original_coords):
         extent = [original_coords[..., 0].min(), original_coords[..., 0].max(),

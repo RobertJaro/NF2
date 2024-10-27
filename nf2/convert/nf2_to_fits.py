@@ -3,7 +3,7 @@ import os
 
 from astropy.io import fits
 
-from nf2.evaluation.output import CartesianOutput, current_density
+from nf2.evaluation.output import CartesianOutput
 
 
 def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwargs):
