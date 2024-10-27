@@ -2,7 +2,6 @@ import argparse
 import glob
 import os
 from copy import copy
-from datetime import datetime
 
 import numpy as np
 from astropy import units as u

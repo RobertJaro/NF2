@@ -22,7 +22,7 @@ class BaseOutput:
         if device is None:
             device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
-        self.state = torch.load(checkpoint, map_location=device)
+        self.state = torch.load(checkpoint, map_location=device, weights_only=False)
         model = self.state['model']
         self._requires_grad = isinstance(model, VectorPotentialModel)
         self.model = nn.DataParallel(model) if torch.cuda.device_count() > 1 else model
