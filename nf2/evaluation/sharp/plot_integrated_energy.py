@@ -179,6 +179,8 @@ m_flare_times = [
     (datetime(2024, 5, 8, 11, 26), datetime(2024, 5, 8, 12, 22)),  # M8.7
     # (datetime(2024, 5, 8, 17, 32), datetime(2024, 5, 8, 18, 0)),  # M7.9
     # (datetime(2024, 5, 8, 19, 15), datetime(2024, 5, 8, 19, 29)),  # M2.0
+    # (datetime(2024, 5, 8, 22, 4), datetime(2024, 5, 8, 23, 30)),  # M9.9
+    # (datetime(2024, 5, 8, 22, 5), datetime(2024, 5, 8, 22, 45)),  # M9.7
     #
     (datetime(2024, 5, 9, 3, 7), datetime(2024, 5, 9, 3, 23)),  # M4.0
     (datetime(2024, 5, 9, 3, 23), datetime(2024, 5, 9, 3, 49)),  # M4.6
@@ -188,8 +190,6 @@ m_flare_times = [
     (datetime(2024, 5, 9, 11, 52), datetime(2024, 5, 9, 12, 2)),  # M3.1
     (datetime(2024, 5, 9, 12, 5), datetime(2024, 5, 9, 12, 20)),  # M2.9
     (datetime(2024, 5, 9, 13, 16), datetime(2024, 5, 9, 13, 29)),  # M3.7
-    # (datetime(2024, 5, 8, 22, 4), datetime(2024, 5, 8, 23, 30)),  # M9.9
-    # (datetime(2024, 5, 8, 22, 5), datetime(2024, 5, 8, 22, 45)),  # M9.7
     (datetime(2024, 5, 9, 22, 24), datetime(2024, 5, 9, 22, 47)),  # M2.6
     (datetime(2024, 5, 9, 23, 44), datetime(2024, 5, 9, 23, 55)),  # M1.6
     #

@@ -145,7 +145,7 @@ plt.close()
 ########################################################################################################################
 # plot energy and current density profiles
 
-fig, axs = plt.subplots(1, 4, figsize=(10, 10))
+fig, axs = plt.subplots(1, 4, figsize=(10, 5))
 
 
 heights = np.linspace(0, 40, config1_out['b'].shape[2])

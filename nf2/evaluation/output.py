@@ -13,7 +13,7 @@ from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping
 from nf2.train.model import VectorPotentialModel
-from nf2.train.transform import HeightTransformModel
+from nf2.train.transform import HeightTransformModel, AzimuthTransformModel
 
 
 class BaseOutput:
@@ -111,8 +111,8 @@ class CartesianOutput(BaseOutput):
     def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
-        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None else (h / self.Mm_per_ds for h in
-                                                                                           height_range)
+        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None \
+            else (h / self.Mm_per_ds for h in height_range)
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
@@ -267,7 +267,7 @@ class HeightTransformOutput(CartesianOutput):
             model_out = self.load_transformed_coords(coords, height_range, **kwargs)
             entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
                      'original_coords': coords * self.Mm_per_ds * u.Mm,
-                     'height_range': height_range * self.Mm_per_ds * u.Mm}
+                     'height_range': height_range * self.Mm_per_ds * u.Mm, 'Mm_per_pixel': self.Mm_per_ds / pixel_per_ds}
             mapping_out.append(entry)
         return mapping_out
 
@@ -305,6 +305,69 @@ class HeightTransformOutput(CartesianOutput):
 
         with torch.no_grad():
             return _load(coords, height_range)
+
+class DisambiguationOutput(CartesianOutput):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.transforms = self.state['transforms']
+        disambiguation_transforms = [t for t in self.transforms if isinstance(t, AzimuthTransformModel)]
+
+        assert len(disambiguation_transforms) == 1, 'Requires transform module!'
+        self.transform_module = disambiguation_transforms[0]
+
+        self.coord_range_list = self.state['data']['coord_range']
+        self.height_mapping_list = self.state['data']['height_mapping']
+        self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
+
+    def load_slice(self, z=0 * u.Mm, coord_range=None, **kwargs):
+        disambiguation = []
+
+        for coord_range, ds_per_pixel in zip(self.coord_range_list, self.ds_per_pixel_list):
+            x_min, x_max = coord_range[0]
+            y_min, y_max = coord_range[1]
+            z = z.to_value(u.Mm) / self.Mm_per_ds
+
+            pixel_per_ds = 1 / ds_per_pixel
+            coords = np.stack(
+                np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
+                            np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds)),
+                            z, indexing='ij'), -1)
+
+            model_out = self.load_transformed_coords(coords, **kwargs)
+            entry = {'coords': coords * self.Mm_per_ds * u.Mm, 'flip': model_out['flip']}
+            disambiguation.append(entry)
+        return disambiguation
+
+    def load_transformed_coords(self, coords, batch_size=int(2 ** 12), progress=False):
+        def _load(coords):
+            # normalize and to tensor
+            coords = torch.tensor(coords, dtype=torch.float32)
+            coords_shape = coords.shape
+            coords = coords.reshape((-1, 3))
+
+            cube = {}
+            it = range(int(np.ceil(coords.shape[0] / batch_size)))
+            it = tqdm(it) if progress else it
+            for k in it:
+                self.transform_module.zero_grad()
+                coord = coords[k * batch_size: (k + 1) * batch_size]
+                coord = coord.to(self.device)
+
+                transformed_coords = self.transform_module({'coords': coord})
+
+                for k, v in transformed_coords.items():
+                    if k not in cube:
+                        cube[k] = []
+                    cube[k] += [v.detach().cpu()]
+
+            cube = {k: torch.cat(v).reshape(*coords_shape[:-1]).numpy() for k, v in cube.items()}
+
+            return cube
+
+        with torch.no_grad():
+            return _load(coords)
 
 
 class SphericalOutput(BaseOutput):

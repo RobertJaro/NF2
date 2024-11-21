@@ -1,21 +1,22 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/sst/sharp_13392_ambiguous_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_ambiguous_v02"
+base_path: "/glade/work/rjarolim/nf2/sst/13392_0851_7699_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_0851_7699_v01"
 logging:
   project: nf2-sst
-  name: "13392 SHARP 09:12 - ambiguous"
+  name: "13392 SST 08:51 - 7699"
 data:
   type: fits
   slices:
-    - type: fld_inc_azi
+    - type: los_trv_azi
+      Mm_per_pixel: 0.09
       fits_path:
-        B_fld: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.field.fits"
-        B_inc: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.inclination.fits"
-        B_azi: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.azimuth.fits"
-#        B_amb: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.disambig.fits"
+        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
+      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+      load_map: False
       ambiguous_azimuth: True
       batch_size: 8192
-      slice: [380, 840, 0, 1000]
   num_workers: 8
   iterations: 10000
 model:
@@ -34,7 +35,7 @@ training:
     - type: force_free
       lambda: 1.0e-2
     - type: potential
-      lambda: {start: 1.0e-2, end: 1.0e-4, iterations: 1.0e+5}
+      lambda: 1.0e-3
     - type: divergence
       lambda:  0.0
     - type: azimuth_disambiguation

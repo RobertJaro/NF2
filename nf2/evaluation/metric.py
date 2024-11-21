@@ -142,3 +142,33 @@ def b_nabla_bz(b):
     b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
                  (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
     return b_nabla_bz
+
+def b_nabla_bz_v2(b):
+    bx = b[..., 0]
+    by = b[..., 1]
+    bz = b[..., 2]
+
+    b_u = b / (np.linalg.norm(b, axis=-1)[..., None] + 1e-7)
+
+    jac_matrix = np.stack(np.gradient(b_u, axis=(0, 1, 2)), -1)
+    dBux_dx = jac_matrix[..., 0, 0]
+    dBux_dy = jac_matrix[..., 0, 1]
+    dBux_dz = jac_matrix[..., 0, 2]
+    dBuy_dx = jac_matrix[..., 1, 0]
+    dBuy_dy = jac_matrix[..., 1, 1]
+    dBuy_dz = jac_matrix[..., 1, 2]
+    dBuz_dx = jac_matrix[..., 2, 0]
+    dBuz_dy = jac_matrix[..., 2, 1]
+    dBuz_dz = jac_matrix[..., 2, 2]
+
+    b_nabla_bz = (b_u[..., 0] * dBuz_dx + b_u[..., 1] * dBuz_dy + b_u[..., 2] * dBuz_dz)
+
+    # norm_B = np.linalg.norm(b, axis=-1)
+    #
+    # dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
+    # dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
+    # dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
+    #
+    # b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
+    #              (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    return b_nabla_bz

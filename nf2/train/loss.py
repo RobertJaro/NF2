@@ -386,7 +386,7 @@ class AzimuthDisambiguationLoss(BaseLoss):
 class MinHeightLoss(BaseLoss):
 
     def forward(self, coords, *args, **kwargs):
-        min_height_regularization = torch.abs(coords[:, 2])
+        min_height_regularization = coords[:, 2].pow(2) #torch.abs(coords[:, 2])
         # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
         min_height_regularization = min_height_regularization.mean()
         return min_height_regularization

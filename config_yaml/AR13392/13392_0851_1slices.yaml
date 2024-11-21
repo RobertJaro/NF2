@@ -1,18 +1,18 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/sst/13392_7699_0851_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_7699_0851_v01"
+base_path: "/glade/work/rjarolim/nf2/sst/13392_0851_1slices_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_0851_1slices_v01"
 logging:
   project: nf2-sst
-  name: "13392 SST 08:51 - 7699"
+  name: "13392 SST 08:51 - 6173"
 data:
   type: fits
   slices:
     - type: los_trv_azi
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
       mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
       load_map: False
       ambiguous_azimuth: True
