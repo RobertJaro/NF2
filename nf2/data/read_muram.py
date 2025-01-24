@@ -297,10 +297,6 @@ class MuramSlice():
         self.Bz = sl[5, :, :] * np.sqrt(4 * np.pi) * u.Gauss
         self.Bx = sl[6, :, :] * np.sqrt(4 * np.pi) * u.Gauss
         self.By = sl[7, :, :] * np.sqrt(4 * np.pi) * u.Gauss
-        # TODO: bug based on convention.
-        #   We assume that the above are always written, and the following are sequentially
-        #   enabled.  The real way to do this is to read the configuration and figure out
-        #   what was really written out.
         if Nvar > 8:
             self.Temp = sl[8, :, :] * u.K
         if Nvar > 9:
