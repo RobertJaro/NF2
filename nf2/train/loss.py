@@ -16,6 +16,10 @@ class BaseLoss(nn.Module):
 
 class ForceFreeLoss(BaseLoss):
 
+    def __init__(self, height_scaling=False, **kwargs):
+        super().__init__(**kwargs)
+        self.height_scaling = height_scaling
+
     def forward(self, b, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
@@ -35,7 +39,11 @@ class ForceFreeLoss(BaseLoss):
         jxb = torch.cross(j, b, -1)
         normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
         force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
-        #
+
+        if self.height_scaling:
+            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
+            b_height_scaling = kwargs['b_height_scaling'].detach()
+            force_free_loss = force_free_loss / (b_height_scaling[..., 0] + 1e-6)
         return force_free_loss.mean()
 
 
@@ -63,12 +71,14 @@ class MagnetoStaticLoss(BaseLoss):
         jxb = torch.cross(j, b, -1)
         grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
         #
-        equation = jxb - grad_P
-        # assure that the normalization does not influence the loss
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-        loss = torch.sum(equation ** 2, dim=-1) / normalization
+        equation = jxb / (4 * torch.pi) - grad_P
+        # apply height scaling
+        p_height_scaling = kwargs['p_height_scaling'].detach()
+        b_height_scaling = kwargs['b_height_scaling'].detach()
+        loss = equation.pow(2).sum(-1, keepdim=True) / (b_height_scaling.pow(2) + p_height_scaling  + 1e-6).pow(2)
+        loss = loss.mean()
         #
-        return loss.mean()
+        return loss
 
 class ImplicitMagnetoStaticLoss(BaseLoss):
 
@@ -124,12 +134,21 @@ class ImplicitMagnetoStaticLoss(BaseLoss):
 
 class DivergenceLoss(BaseLoss):
 
+    def __init__(self, height_scaling=False, **kwargs):
+        super().__init__(**kwargs)
+        self.height_scaling = height_scaling
+
     def forward(self, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dy = jac_matrix[:, 1, 1]
         dBz_dz = jac_matrix[:, 2, 2]
 
         divergence_loss = (dBx_dx + dBy_dy + dBz_dz) ** 2
+
+        if self.height_scaling:
+            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
+            b_height_scaling = kwargs['b_height_scaling'].detach()
+            divergence_loss = divergence_loss / (b_height_scaling[..., 0].pow(2) + 1e-6)
 
         return divergence_loss.mean()
 
@@ -193,10 +212,11 @@ class PotentialLoss(BaseLoss):
 
 class EnergyGradientLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
+    def __init__(self, base_radius, Mm_per_ds, height_scaling=False, **kwargs):
         super().__init__(**kwargs)
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
         self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
+        self.height_scaling = height_scaling
         # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
@@ -224,11 +244,13 @@ class EnergyGradientLoss(BaseLoss):
                 (torch.sin(t) * torch.sin(p)) * dE_dy + \
                 torch.cos(p) * dE_dz
 
-        radius_weight = torch.norm(coords, dim=-1)
-        radius_weight = torch.clip(radius_weight - self.base_radius,
-                                   min=0) / self.solar_radius  # normalize to solar radius
+        radius_mask = torch.norm(coords, dim=-1) > self.base_radius
+        energy_gradient_regularization = torch.relu(dE_dr) * radius_mask
 
-        energy_gradient_regularization = torch.relu(dE_dr) * radius_weight ** 2
+        if self.height_scaling:
+            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
+            b_height_scaling = kwargs['b_height_scaling'].detach()
+            energy_gradient_regularization = energy_gradient_regularization / (b_height_scaling[..., 0] + 1e-6)
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization
@@ -350,13 +372,24 @@ class LosBoundaryLoss(BaseLoss):
 
 class BoundaryLoss(BaseLoss):
 
+    def __init__(self, height_scaling=False, **kwargs):
+        super().__init__(**kwargs)
+        self.height_scaling = height_scaling
+
     def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
         # apply transforms
         transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         # compute diff
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
+        b_diff = torch.nansum(b_diff.pow(2), -1)
+
+        if self.height_scaling:
+            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
+            b_height_scaling = kwargs['b_height_scaling'].detach()
+            b_diff = b_diff / (b_height_scaling[..., 0].pow(2) + 1e-6)
+
+        b_diff = b_diff.mean()
 
         assert not torch.isnan(b_diff), 'b_diff is nan'
         return b_diff

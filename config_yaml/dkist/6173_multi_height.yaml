@@ -1,0 +1,58 @@
+---
+base_path: "/glade/work/rjarolim/nf2/dkist_v2/6173_multi_height_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/6173_multi_height_v02"
+logging:
+  project: nf2-dkist
+  name: "6173 multi-height"
+data:
+  type: fits
+  slices:
+    - type: fits
+      Mm_per_pixel: 0.36
+      fits_path:
+        Bp: "/glade/work/rjarolim/data/nf2/dkist/high_res/hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Bp_masked.fits"
+        Bt: "/glade/work/rjarolim/data/nf2/dkist/high_res/hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Bt_masked.fits"
+        Br: "/glade/work/rjarolim/data/nf2/dkist/high_res/hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Br_masked.fits"
+      load_map: False
+      batch_size: 8192
+    - type: fits
+      Mm_per_pixel: 0.072
+      fits_path:
+        Bp: "/glade/work/rjarolim/data/nf2/dkist/high_res/visp_embed_hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Bp_masked.fits"
+        Bt: "/glade/work/rjarolim/data/nf2/dkist/high_res/visp_embed_hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Bt_masked.fits"
+        Br: "/glade/work/rjarolim/data/nf2/dkist/high_res/visp_embed_hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Br_masked.fits"
+      load_map: False
+      batch_size: 8192
+    - type: los
+      Mm_per_pixel: 0.072
+      fits_path:
+        B_los: "/glade/work/rjarolim/data/nf2/dkist/high_res/visp5896_embed_hmi.sharp_cea_720s.6173.8843994.2023-10-16T20_34_36.400Z.Br_masked.fits"
+      height_mapping: { z: 1.0, z_min: 0, z_max: 15 }
+      load_map: False
+      batch_size: 8192
+  num_workers: 8
+  iterations: 10000
+model:
+  type: b
+  dim: 256
+training:
+  epochs: 20
+  loss_config:
+    - type: boundary
+      name: boundary_sharp
+      lambda: 1 #{start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: [boundary_01, potential]
+    - type: boundary
+      name: boundary_visp
+      lambda: {start: 1.0, end: 1.0e+1, iterations: 5.0e+4}
+      ds_id: [boundary_02, boundary_03]
+    - type: force_free
+      lambda: 1.0e-2
+    - type: divergence
+      lambda: 1.0e-2
+    - type: min_height
+      lambda: 1.0e-4
+      ds_id: [ boundary_03 ]
+  transforms:
+    - type: height
+      ds_id: [ boundary_03, validation_boundary_03 ]

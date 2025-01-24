@@ -1,3 +1,5 @@
+from typing import Iterator
+
 import numpy as np
 import torch
 from astropy import units as u
@@ -5,6 +7,8 @@ from matplotlib import pyplot as plt
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 from torch import nn
+from torch.distributions import Normal
+from torch.nn import Parameter
 
 from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian
 
@@ -33,8 +37,7 @@ class RadialTransformModel(nn.Module):
     def __init__(self, in_coords, dim, positional_encoding=True, ds_ids=[]):
         super().__init__()
         if positional_encoding:
-            posenc = GaussianPositionalEncoding(num_freqs=20,
-                                                d_input=in_coords)
+            posenc = GaussianPositionalEncoding(d_input=in_coords)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
@@ -69,20 +72,24 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, dim=256, n_layers=8, encoding=None, activation='sine'):
+    def __init__(self, in_coords, out_coords, dim=256, n_layers=8, encoding_config=None, activation='sine'):
         super().__init__()
-        if encoding is None or encoding == 'none':
+        encoding_type = encoding_config['type'] if encoding_config is not None else 'none'
+        if encoding_type == 'none':
             self.d_in = nn.Linear(in_coords, dim)
-        elif encoding == 'positional':
-            posenc = PositionalEncoding(20, in_coords)
-            d_in = nn.Linear(in_coords * 40, dim)
+        elif encoding_type == 'positional':
+            num_freqs = encoding_config['num_freqs'] if 'num_freqs' in encoding_config else 128
+            min_freq = encoding_config['min_freq'] if 'min_freq' in encoding_config else -2
+            max_freq = encoding_config['max_freq'] if 'max_freq' in encoding_config else 8
+            posenc = PositionalEncoding(in_coords, num_freqs=num_freqs, min_freq=min_freq, max_freq=max_freq)
+            d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
-        elif encoding == 'gaussian':
-            posenc = GaussianPositionalEncoding(20, in_coords)
+        elif encoding_type == 'gaussian':
+            posenc = GaussianPositionalEncoding(in_coords)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         else:
-            raise NotImplementedError(f'Unknown encoding {encoding}')
+            raise NotImplementedError(f'Unknown encoding {encoding_type}')
         lin = [nn.Linear(dim, dim) for _ in range(n_layers)]
         self.linear_layers = nn.ModuleList(lin)
         self.d_out = nn.Linear(dim, out_coords)
@@ -99,6 +106,215 @@ class GenericModel(nn.Module):
         return x
 
 
+class GenericDomainModel(nn.Module):
+
+    def __init__(self, Mm_per_ds, in_dim=3, out_dim=3, window_type='sigmoid', spherical=False, range_config=None,
+                 overlap_width=1.0,
+                 **model_config):
+        # use default range config if not provided
+        self.spherical = spherical
+        # use default range config if not provided
+        range_config = self._load_default_range_config(spherical) if range_config is None else range_config
+        domain_range = self._load_range(range_config, Mm_per_ds, spherical)
+        # normalize overlap width
+        overlap = overlap_width / Mm_per_ds
+        #
+        super().__init__()
+        self.models = nn.ModuleList([GenericModel(in_dim, out_dim, **model_config) for _ in range_config])
+        self.domain_range = nn.Parameter(torch.tensor(domain_range, dtype=torch.float32), requires_grad=False)
+        self.overlap = nn.Parameter(torch.tensor(overlap, dtype=torch.float32), requires_grad=False)
+        assert window_type in ['sigmoid', 'step'], f'Unknown window type {window_type}. Choose from [sigmoid, step]'
+        self.window_type = window_type
+        self.streams = [torch.cuda.Stream() for _ in range(len(self.models))]
+
+    def _load_range(self, range_config, Mm_per_ds, spherical):
+        # normalize range config
+        domain_range = [(rc['start'], rc['end']) for rc in range_config]
+        domain_range = [[np.nan if r is None else r for r in rc] for rc in domain_range]  # replace None with np.nan
+        if spherical:  # add solar radius offset
+            domain_range = np.array(domain_range) + (1 * u.solRad).to_value(u.Mm)
+        domain_range = np.array(domain_range) / Mm_per_ds
+        print('RANGE CONFIG', domain_range)
+        return domain_range
+
+    def _load_default_range_config(self, spherical):
+        if spherical:
+            return [{'start': None, 'end': 10},
+                    {'start': 10, 'end': 100},
+                    {'start': 100, 'end': None}, ]
+        else:
+            return [{'start': None, 'end': 10},
+                    {'start': 10, 'end': 50},
+                    {'start': 50, 'end': None},
+                    ]
+
+    def forward(self, coords):
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1)[..., None]
+
+        outputs = []
+        for i, model in enumerate(self.models):
+            start, end = self.domain_range[i]
+            overlap = self.overlap
+            if self.window_type == 'sigmoid':
+                left = torch.sigmoid((z - start) * 2 / overlap) if not torch.isnan(start) else 1
+                right = torch.sigmoid((z - end) * 2 / overlap) if not torch.isnan(end) else 0
+                window = left - right
+            elif self.window_type == 'step':
+                left_center = (z >= start) if not torch.isnan(start) else torch.ones_like(z, dtype=torch.bool)
+                right_center = (z < end) if not torch.isnan(end) else torch.ones_like(z, dtype=torch.bool)
+                center = left_center & right_center
+                left_overlap = (z >= start - overlap) & (z < start) if not torch.isnan(start) else torch.zeros_like(z,
+                                                                                                                    dtype=torch.bool)
+                right_overlap = (z >= end) & (z < end + overlap) if not torch.isnan(end) else torch.zeros_like(z,
+                                                                                                               dtype=torch.bool)
+                overlap = left_overlap | right_overlap
+                window = center.float() + 0.5 * overlap.float()
+            else:
+                raise NotImplementedError(f'Unknown window type {self.window_type}')
+            #
+            with torch.cuda.stream(self.streams[i]):
+                out = model(coords)
+            # combine outputs with window function
+            outputs.append(out * window)
+
+        torch.cuda.synchronize()
+        # sum outputs over domains
+        out = torch.sum(torch.stack(outputs, -1), -1)
+        return out
+
+
+class MultiDomainModel(nn.Module):
+
+    def __init__(self, Mm_per_ds, window_type='sigmoid', spherical=False, range_config=None, overlap_width=1.0,
+                 **model_config):
+        # use default range config if not provided
+        self.spherical = spherical
+        # use default range config if not provided
+        range_config = self._load_default_range_config(spherical) if range_config is None else range_config
+        domain_range = self._load_range(range_config, Mm_per_ds, spherical)
+        # normalize overlap width
+        overlap = overlap_width / Mm_per_ds
+        #
+        super().__init__()
+        self.models = nn.ModuleList([self._init_model(rc['model_type'], **model_config) for rc in range_config])
+        self.domain_range = nn.Parameter(torch.tensor(domain_range, dtype=torch.float32), requires_grad=False)
+        self.overlap = nn.Parameter(torch.tensor(overlap, dtype=torch.float32), requires_grad=False)
+        assert window_type in ['sigmoid', 'step'], f'Unknown window type {window_type}. Choose from [sigmoid, step]'
+        self.window_type = window_type
+
+    def _load_range(self, range_config, Mm_per_ds, spherical):
+        # normalize range config
+        domain_range = [(rc['start'], rc['end']) for rc in range_config]
+        domain_range = [[np.nan if r is None else r for r in rc] for rc in domain_range]  # replace None with np.nan
+        if spherical:  # add solar radius offset
+            domain_range = np.array(domain_range) + (1 * u.solRad).to_value(u.Mm)
+        domain_range = np.array(domain_range) / Mm_per_ds
+        print('RANGE CONFIG', domain_range)
+        return domain_range
+
+    def _load_default_range_config(self, spherical):
+        if spherical:
+            return [{'model_type': 'vector_potential', 'start': None, 'end': 10},
+                    {'model_type': 'vector_potential', 'start': 10, 'end': 100},
+                    {'model_type': 'potential', 'start': 100, 'end': None}, ]
+        else:
+            return [{'model_type': 'vector_potential', 'start': None, 'end': 10},
+                    {'model_type': 'vector_potential', 'start': 10, 'end': 50},
+                    {'model_type': 'vector_potential', 'start': 50, 'end': None},
+                    ]
+
+    def _init_model(self, model_type, **model_config):
+        # create models and parameters
+        if model_type == 'vector_potential':
+            model_class = VectorPotentialModel
+        elif model_type == 'b':
+            model_class = BModel
+        elif model_type == 'potential':
+            model_class = PotentialModel
+        elif model_type == 'radial':
+            model_class = RadialModel
+        else:
+            raise NotImplementedError(f'Unknown model {model_type}')
+        return model_class(**model_config)
+
+    def forward(self, coords, compute_jacobian=True):
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1)[..., None]
+
+        outputs = []
+        for i, model in enumerate(self.models):
+            start, end = self.domain_range[i]
+            overlap = self.overlap
+            if self.window_type == 'sigmoid':
+                left = torch.sigmoid((z - start) * 2 / overlap) if not torch.isnan(start) else 1
+                right = torch.sigmoid((z - end) * 2 / overlap) if not torch.isnan(end) else 0
+                window = left - right
+            elif self.window_type == 'step':
+                left_center = (z >= start) if not torch.isnan(start) else torch.ones_like(z, dtype=torch.bool)
+                right_center = (z < end) if not torch.isnan(end) else torch.ones_like(z, dtype=torch.bool)
+                center = left_center & right_center
+                left_overlap = (z >= start - overlap) & (z < start) if not torch.isnan(start) else torch.zeros_like(z,
+                                                                                                                    dtype=torch.bool)
+                right_overlap = (z >= end) & (z < end + overlap) if not torch.isnan(end) else torch.zeros_like(z,
+                                                                                                               dtype=torch.bool)
+                overlap = left_overlap | right_overlap
+                window = center.float() + 0.5 * overlap.float()
+            else:
+                raise NotImplementedError(f'Unknown window type {self.window_type}')
+            #
+            out = model(coords)['b']
+            # combine outputs with window function
+            outputs.append(out * window)
+
+        # sum outputs over domains
+        b = torch.sum(torch.stack(outputs, -1), -1)
+
+        out = {'b': b}
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out['jac_matrix'] = jac_matrix
+
+        return out
+
+
+class BDomainModel(GenericDomainModel):
+
+    def forward(self, coords, compute_jacobian=True):
+        b = super().forward(coords)
+        # b = torch.sinh(x * 10.0)
+
+        out = {'b': b}
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out['jac_matrix'] = jac_matrix
+        return out
+
+
+class VectorPotentialDomainModel(GenericDomainModel):
+
+    def forward(self, coords, compute_jacobian=True):
+        a = super().forward(coords)
+
+        jac_matrix = jacobian(a, coords)
+        dAy_dx = jac_matrix[:, 1, 0]
+        dAz_dx = jac_matrix[:, 2, 0]
+        dAx_dy = jac_matrix[:, 0, 1]
+        dAz_dy = jac_matrix[:, 2, 1]
+        dAx_dz = jac_matrix[:, 0, 2]
+        dAy_dz = jac_matrix[:, 1, 2]
+        rot_x = dAz_dy - dAy_dz
+        rot_y = dAx_dz - dAz_dx
+        rot_z = dAy_dx - dAx_dy
+        b = torch.stack([rot_x, rot_y, rot_z], -1)
+        out = {'b': b, 'a': a}
+
+        # compute jacobian
+        if compute_jacobian:
+            self.zero_grad()  # does this do anything?
+            jac_matrix = jacobian(out['b'], coords)
+            out['jac_matrix'] = jac_matrix
+        return out
+
+
 class BModel(GenericModel):
 
     def __init__(self, **kwargs):
@@ -110,6 +326,64 @@ class BModel(GenericModel):
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)
             out_dict['jac_matrix'] = jac_matrix
+        return out_dict
+
+
+class BScaledModel(nn.Module):
+
+    def __init__(self, spherical=False, **model_kwargs):
+        super().__init__()
+        self.b_model = GenericModel(3, 3, **model_kwargs)
+        self.height_scaling = GenericModel(1, 1, dim=8, n_layers=2)
+        self.spherical = spherical
+
+    def forward(self, coords, compute_jacobian=True):
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
+        b = self.b_model(coords)
+        b_height_scaling = 10 ** self.height_scaling(z)
+
+        b = b * b_height_scaling
+
+        out_dict = {'b': b, 'b_height_scaling': b_height_scaling}
+        #
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
+        return out_dict
+
+
+class VectorPotentialScaledModel(nn.Module):
+
+    def __init__(self, spherical=False, **model_kwargs):
+        super().__init__()
+        self.a_model = GenericModel(3, 3, **model_kwargs)
+        self.height_scaling = GenericModel(1, 1, dim=8, n_layers=2)
+        self.spherical = spherical
+
+    def forward(self, coords, compute_jacobian=True):
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
+        height_scaling = 10 ** self.height_scaling(z)
+
+        a = self.a_model(coords) * height_scaling
+        #
+        jac_matrix = jacobian(a, coords)
+        dAy_dx = jac_matrix[:, 1, 0]
+        dAz_dx = jac_matrix[:, 2, 0]
+        dAx_dy = jac_matrix[:, 0, 1]
+        dAz_dy = jac_matrix[:, 2, 1]
+        dAx_dz = jac_matrix[:, 0, 2]
+        dAy_dz = jac_matrix[:, 1, 2]
+        rot_x = dAz_dy - dAy_dz
+        rot_y = dAx_dz - dAz_dx
+        rot_z = dAy_dx - dAx_dy
+        b = torch.stack([rot_x, rot_y, rot_z], -1)
+        out_dict = {'b': b, 'a': a, 'b_height_scaling': height_scaling}
+        #
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
         return out_dict
 
 
@@ -141,11 +415,51 @@ class VectorPotentialModel(GenericModel):
         return out_dict
 
 
+class PotentialModel(GenericModel):
+
+    def __init__(self, **kwargs):
+        super().__init__(3, 1, **kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        phi = super().forward(coords)
+        #
+        jac_matrix = jacobian(phi, coords)
+        dphi_dx = jac_matrix[:, 0, 0]
+        dphi_dy = jac_matrix[:, 0, 1]
+        dphi_dz = jac_matrix[:, 0, 2]
+        b = -torch.stack([dphi_dx, dphi_dy, dphi_dz], -1)
+        out_dict = {'b': b, 'phi': phi}
+        #
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
+        return out_dict
+
+
+class RadialModel(GenericModel):
+
+    def __init__(self, **kwargs):
+        super().__init__(3, 1, **kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        b_scale = super().forward(coords)
+        r_unit = coords / torch.norm(coords, dim=-1, keepdim=True)
+
+        b = b_scale * r_unit
+        out_dict = {'b': b}
+
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+
+        return out_dict
+
+
 class PressureModel(GenericModel):
 
     def __init__(self, **kwargs):
         super().__init__(3, 1, **kwargs)
-        self.softplus = nn.Softplus()
 
     def forward(self, x):
         p = super().forward(x)
@@ -153,28 +467,40 @@ class PressureModel(GenericModel):
         return {'p': p}
 
 
-class MagnetoStaticModel(GenericModel):
+class PressureScaledModel(nn.Module):
 
-    def __init__(self, **kwargs):
-        super().__init__(3, 4)
+    def __init__(self, p_profile_model_path, **kwargs):
+        super().__init__()
+        self.p_profile_model = torch.load(p_profile_model_path)
+        self.p_model = GenericModel(3, 1, **kwargs)
 
     def forward(self, coords, compute_jacobian=True):
-        model_out = super().forward(coords)
-        b = model_out[:, :3]
-        p = 10 ** model_out[:, 3:]
-        out_dict = {'b': b, 'p': p}
+        z = coords[:, 2:3]
+        p_height_scaling = self.p_profile_model(z)
+        p = 10 ** (self.p_model(coords) + p_height_scaling)
+        out_dict = {'p': p, 'p_height_scaling': 10 ** p_height_scaling}
         if compute_jacobian:
-            jac_matrix = jacobian(model_out, coords)
+            jac_matrix = jacobian(p, coords)
             out_dict['jac_matrix'] = jac_matrix
+            # compute gradient P
+            dP_dx = jac_matrix[:, 0, 0]
+            dP_dy = jac_matrix[:, 0, 1]
+            dP_dz = jac_matrix[:, 0, 2]
+            grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
+            out_dict['grad_P'] = grad_P
         return out_dict
 
+    def parameters(self, recurse: bool = True) -> Iterator[Parameter]:
+        # only return the parameters of the p_model for optimization
+        return self.p_model.parameters(recurse)
 
-class MagnetoStaticModelV2(nn.Module):
 
-    def __init__(self, **kwargs):
+class MagnetoStaticModel(nn.Module):
+
+    def __init__(self, p_profile_model_path, vector_potential=False, **kwargs):
         super().__init__()
-        self.b_model = VectorPotentialModel(**kwargs)
-        self.p_model = PressureModel(**kwargs)
+        self.b_model = BScaledModel(**kwargs) if not vector_potential else VectorPotentialScaledModel(**kwargs)
+        self.p_model = PressureScaledModel(p_profile_model_path, **kwargs)
 
     def forward(self, coords, compute_jacobian=True):
         b_dict = self.b_model(coords)
@@ -193,29 +519,31 @@ class MagnetoStaticModelV2(nn.Module):
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, num_freqs, in_features, max_freq=8):
+    def __init__(self, in_features, num_freqs=128, min_freq=-2, max_freq=8):
         super().__init__()
-        frequencies = 2 ** torch.linspace(0, max_freq, num_freqs)
-        self.frequencies = nn.Parameter(frequencies[None, :, None], requires_grad=False)
-        self.d_output = in_features * (num_freqs * 2)
+        frequencies = 2 ** torch.linspace(min_freq, max_freq, num_freqs) * torch.pi
+        self.frequencies = nn.Parameter(frequencies, requires_grad=False)
+        self.d_output = in_features * (1 + num_freqs * 2)
 
     def forward(self, x):
-        encoded = x[:, None, :] * torch.pi * self.frequencies
-        encoded = encoded.reshape(x.shape[0], -1)
-        encoded = torch.cat([torch.sin(encoded), torch.cos(encoded)], -1)
+        encoded = torch.einsum('...i,j->...ij', x, self.frequencies)
+        encoded = encoded.reshape(*x.shape[:-1], -1)
+        encoded = torch.cat([torch.sin(encoded), torch.cos(encoded), x], -1)
         return encoded
+
 
 class GaussianPositionalEncoding(nn.Module):
 
-    def __init__(self, num_freqs, d_input, scale=1.):
+    def __init__(self, d_input, num_freqs=128, scale=2.0 ** 2):
         super().__init__()
-        frequencies = torch.randn(num_freqs, d_input) * scale
-        self.frequencies = nn.Parameter(frequencies[None], requires_grad=False)
+        dist = Normal(loc=0, scale=scale)
+        frequencies = dist.sample([num_freqs, d_input])
+        self.frequencies = nn.Parameter(2 * torch.pi * frequencies, requires_grad=False)
         self.d_output = d_input * (num_freqs * 2 + 1)
 
     def forward(self, x):
-        encoded = x[:, None, :] * self.frequencies
-        encoded = encoded.reshape(x.shape[0], -1)
+        encoded = torch.einsum('...j,ij->...ij', x, self.frequencies)
+        encoded = encoded.reshape(*x.shape[:-1], -1)
         encoded = torch.cat([x, torch.sin(encoded), torch.cos(encoded)], -1)
         return encoded
 

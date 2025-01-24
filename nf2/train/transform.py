@@ -16,7 +16,9 @@ class AzimuthTransformModel(BaseTransformModel):
 
     def __init__(self, **kwargs):
         super().__init__(tensor_ids=['coords', 'b_true'], **kwargs)
-        self.model = GenericModel(in_coords=3, out_coords=1, n_layers=8, dim=128, encoding='gaussian')
+        encoding_config = {'type': 'gaussian' }
+        self.model = GenericModel(in_coords=3, out_coords=1, n_layers=8, dim=128,
+                                  encoding_config=encoding_config)
 
     def forward(self, batch, **kwargs):
         coords = batch['coords']
@@ -31,7 +33,9 @@ class HeightTransformModel(BaseTransformModel):
 
     def __init__(self, **kwargs):
         super().__init__(tensor_ids=['coords', 'height_range', 'b_true'], **kwargs)
-        self.mapping_module = GenericModel(in_coords=3, out_coords=1, n_layers=4, dim=128, encoding='gaussian')
+        encoding_config = {'type': 'gaussian'}
+        self.mapping_module = GenericModel(in_coords=3, out_coords=1, n_layers=4, dim=128,
+                                           encoding_config=encoding_config)
 
     def forward(self, batch):
         coords = batch['coords']

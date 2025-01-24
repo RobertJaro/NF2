@@ -94,9 +94,11 @@ class FITSDataModule(BaseDataModule):
 
         config = {'type': 'cartesian', 'max_height': z_range[1],
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
-                  'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': []}
+                  'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': [],
+                  'cube_shape': []}
         for ds in slice_datasets:
             config['coord_range'].append(ds.coord_range)
+            config['cube_shape'].append(ds.cube_shape)
             config['ds_per_pixel'].append(ds.ds_per_pixel)
             config['height_mapping'].append(ds.height_mapping)
             config['wcs'].append(ds.wcs)
@@ -108,6 +110,8 @@ class FITSDataModule(BaseDataModule):
             return FITSDataset(**kwargs)
         elif type == 'los_trv_azi':
             return LosTrvAziFITSDataset(**kwargs)
+        elif type == 'los':
+            return LosFITSDataset(**kwargs)
         elif type == 'sharp':
             return SHARPDataset(**kwargs)
         elif type == 'fld_inc_azi':
@@ -119,18 +123,34 @@ class FITSDataModule(BaseDataModule):
 class FITSDataset(MapDataset):
 
     def __init__(self, fits_path, error_path=None, coords_path=None,
-                 bin=1, slice=None, **kwargs):
-
+                 bin=1, slice=None, load_map=True, **kwargs):
         file_p = fits_path['Bp']
         file_t = fits_path['Bt']
         file_r = fits_path['Br']
-        p_map, t_map, r_map = Map(file_p), Map(file_t), Map(file_r)
-        p_map = process_map(p_map, slice, bin)
-        t_map = process_map(t_map, slice, bin)
-        r_map = process_map(r_map, slice, bin)
 
-        b = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
-        wcs = r_map.wcs
+        if load_map:
+            p_map, t_map, r_map = Map(file_p), Map(file_t), Map(file_r)
+            p_map = process_map(p_map, slice, bin)
+            t_map = process_map(t_map, slice, bin)
+            r_map = process_map(r_map, slice, bin)
+
+            b = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
+            wcs = r_map.wcs
+        else:
+            p_data = fits.getdata(file_p)
+            t_data = fits.getdata(file_t)
+            r_data = fits.getdata(file_r)
+            if slice:
+                p_data = p_data[slice[0]:slice[1], slice[2]:slice[3]]
+                t_data = t_data[slice[0]:slice[1], slice[2]:slice[3]]
+                r_data = r_data[slice[0]:slice[1], slice[2]:slice[3]]
+            if bin > 1:
+                p_data = block_reduce(p_data, (bin, bin), func=np.mean)
+                t_data = block_reduce(t_data, (bin, bin), func=np.mean)
+                r_data = block_reduce(r_data, (bin, bin), func=np.mean)
+
+            b = np.stack([p_data, -t_data, r_data]).transpose()
+            wcs = None
 
         if error_path is not None:
             if isinstance(error_path, str):
@@ -208,6 +228,38 @@ class LosTrvAziFITSDataset(MapDataset):
         b = np.stack([los_data, trv_data, np.pi - azi_data]).transpose()
 
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
+
+class LosFITSDataset(MapDataset):
+
+    def __init__(self, fits_path, mask_path=None, mask_value=np.nan,
+                 bin=1, slice=None, load_map=True, **kwargs):
+        file_los = fits_path['B_los']
+
+        if load_map:
+            los_map = Map(file_los)
+            if mask_path is not None:
+                mask_map = Map(mask_path)
+                mask = mask_map.data
+                los_map.data[mask] = mask_value
+            los_map = process_map(los_map, slice, bin)
+            los_data = los_map.data
+            wcs = los_map.wcs
+        else:
+            los_data = fits.getdata(file_los)
+            if mask_path is not None:
+                mask = fits.getdata(mask_path)
+                mask = np.array(mask, dtype=bool)
+                los_data[mask] = mask_value
+            if slice:
+                los_data = los_data[slice[0]:slice[1], slice[2]:slice[3]]
+            if bin > 1:
+                los_data = block_reduce(los_data, (bin, bin), func=np.mean)
+            wcs = None
+
+        B_nan = np.ones_like(los_data) * np.nan
+        b = np.stack([B_nan, B_nan, los_data]).transpose()
+
+        super().__init__(b=b, wcs=wcs, **kwargs)
 
 class FldIncAziFITSDataset(MapDataset):
 

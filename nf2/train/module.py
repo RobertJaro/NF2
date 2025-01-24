@@ -7,7 +7,9 @@ from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import loss_module_mapping
-from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, MagnetoStaticModelV2
+from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
+    MultiDomainModel, BScaledModel, \
+    VectorPotentialScaledModel
 from nf2.train.transform import HeightTransformModel, AzimuthTransformModel
 
 
@@ -40,8 +42,16 @@ class NF2Module(LightningModule):
             model = VectorPotentialModel(**model_kwargs)
         elif model_type == 'magneto_static':
             model = MagnetoStaticModel(**model_kwargs)
-        elif model_type == 'magneto_static_v2':
-            model = MagnetoStaticModelV2(**model_kwargs)
+        elif model_type == 'vector_potential_domain':
+            model = VectorPotentialDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+        elif model_type == 'b_domain':
+            model = BDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+        elif model_type == 'multi_domain':
+            model = MultiDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+        elif model_type == 'b_scaled':
+            model = BScaledModel(**model_kwargs)
+        elif model_type == 'vp_scaled':
+            model = VectorPotentialScaledModel(**model_kwargs)
         else:
             raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
 

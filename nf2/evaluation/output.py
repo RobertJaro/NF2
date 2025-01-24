@@ -108,23 +108,26 @@ class CartesianOutput(BaseOutput):
         self.time = None if self.wcs is None or len(self.wcs) >= 1 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
-    def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
-        x_min, x_max = self.coord_range[0]
-        y_min, y_max = self.coord_range[1]
+    def load_cube(self, height_range=None, x_range=None, y_range=None, Mm_per_pixel=None, **kwargs):
+        x_min, x_max = self.coord_range[0] if x_range is None else np.array(x_range) / self.Mm_per_ds
+        y_min, y_max = self.coord_range[1] if y_range is None else np.array(y_range) / self.Mm_per_ds
         z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None \
             else (h / self.Mm_per_ds for h in height_range)
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
-        coords = np.stack(
-            np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)),
-                        np.linspace(y_min, y_max, np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)),
-                        np.linspace(z_min, z_max, np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)),
-                        indexing='ij'), -1)
+        n_x_pix = np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)
+        n_y_pix = np.round((y_max - y_min) / ds_per_pixel  + 1).astype(int)
+        n_z_pix = np.round((z_max - z_min) / ds_per_pixel  + 1).astype(int)
+
+        coords = np.stack(np.mgrid[:n_x_pix, :n_y_pix, :n_z_pix], -1)
+        coords = coords * ds_per_pixel + np.array([x_min, y_min, z_min]).reshape((1, 1, 1, 3))
+
         model_out = self.load_coords(coords, **kwargs)
 
-        return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
+        coords_Mm = coords / ds_per_pixel * Mm_per_pixel
+        return {**model_out, 'coords': coords_Mm, 'Mm_per_pixel': Mm_per_pixel}
 
     def load_slice(self, z=0 * u.Mm, Mm_per_pixel=None, **kwargs):
         x_min, x_max = self.coord_range[0]

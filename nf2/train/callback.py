@@ -122,7 +122,9 @@ class SlicesCallback(Callback):
         if 'p' in outputs:
             p = outputs['p']
             p = p.reshape([*self.cube_shape]).cpu().numpy()
-            self.plot_pressure(p, c_cube)
+            grad_P = outputs['grad_P']
+            grad_P = grad_P.reshape([*self.cube_shape, 3]).cpu().numpy()
+            self.plot_pressure(p, grad_P, c_cube)
 
     def plot_b(self, b, coords):
         n_samples = b.shape[2]
@@ -156,7 +158,8 @@ class SlicesCallback(Callback):
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+            norm = LogNorm(vmin=max(j[:, :, i].min(), 1e-6), vmax=max(j[:, :, i].max(), 1e-6))
+            im = axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm, extent=extent)
             axs[i].set_xlabel('X [Mm]')
             axs[i].set_ylabel('Y [Mm]')
             # add locatable colorbar
@@ -172,7 +175,8 @@ class SlicesCallback(Callback):
         # plot integrated current density
         j = np.sum(j, axis=2)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+        norm = LogNorm(vmin=max(j.min(), 1e-6), vmax=max(j.max(), 1e-6))
+        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=norm, extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -184,24 +188,30 @@ class SlicesCallback(Callback):
         wandb.log({f"{self.name} - Integrated Current density": fig})
         plt.close('all')
 
-    def plot_pressure(self, p, coords):
+    def plot_pressure(self, p, grad_P, coords):
+        grad_P = np.linalg.norm(grad_P, axis=-1)
         n_samples = p.shape[2]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        fig, axs = plt.subplots(2, n_samples, figsize=(n_samples * 4, 4))
         for i in range(n_samples):
             extent = [coords[0, 0, i, 0], coords[-1, -1, i, 0],
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[i].imshow(p[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
+            im = axs[0, i].imshow(p[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
             # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
+            divider = make_axes_locatable(axs[0, i])
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax, label='P')
-            axs[i].set_title(f'{height:.02f}')
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
+            # plot grad P
+            im = axs[1, i].imshow(grad_P[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+            divider = make_axes_locatable(axs[1, i])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax, label='$|\\nabla P|$')
+            #
+            axs[0, i].set_title(f'{height:.02f}')
+            axs[1, i].set_ylabel('Y [Mm]')
+        axs[0, 0].set_xlabel('X [Mm]')
+        axs[1, 0].set_xlabel('X [Mm]')
         fig.tight_layout()
         wandb.log({f"{self.name} - Plasma Pressure": fig})
         plt.close('all')

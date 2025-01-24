@@ -1,3 +1,4 @@
+import copy
 import os
 
 import numpy as np
@@ -18,10 +19,18 @@ class MURaMDataModule(BaseDataModule):
         # boundary dataset
         slice_datasets = {}
         bottom_boundary_dataset = None
+        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'work_directory': work_directory}
         for i, slice_config in enumerate(slices):
+            slice_config = copy.deepcopy(slice_config)
+            s_type = slice_config.pop('type', '2D')
             ds_id = slice_config.pop('name', f'boundary_{i + 1:02d}')
             bottom_boundary = slice_config.pop('bottom', False)
-            muram_dataset = MURaMDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory)
+            if s_type == '2D':
+                muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
+            elif s_type == '3D':
+                muram_dataset = MURaM3DDataset(**slice_config, **slice_base_kwargs)
+            else:
+                raise ValueError(f'Unknown slice type {s_type}')
             slice_datasets[ds_id] = muram_dataset
             if bottom_boundary:
                 bottom_boundary_dataset = muram_dataset
@@ -73,10 +82,18 @@ class MURaMDataModule(BaseDataModule):
         cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
 
         validation_slice_datasets = []
+        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'work_directory': work_directory,
+                             'shuffle': False, 'filter_nans': False, 'plot': False}
         for slice_config in slices:
+            slice_config = copy.deepcopy(slice_config)
+            s_type = slice_config.pop('type', '2D')
             slice_config['batch_size'] = validation_batch_size # override batch size
-            muram_dataset = MURaMDataset(**slice_config, G_per_dB=G_per_dB, Mm_per_ds=Mm_per_ds, work_directory=work_directory,
-                                         shuffle=False, filter_nans=False, plot=False)
+            if s_type == '2D':
+                muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
+            elif s_type == '3D':
+                muram_dataset = MURaM3DDataset(**slice_config, **slice_base_kwargs)
+            else:
+                raise ValueError(f'Unknown slice type {s_type}')
             validation_slice_datasets.append(muram_dataset)
         validation_slices_dataset = SlicesDataset(coord_range, ds_per_pixel, n_slices=10,
                                                   batch_size=validation_batch_size)
@@ -123,6 +140,17 @@ class MURaMDataset(MapDataset):
             b = img_to_los_trv_azi(b, f=np)
 
         super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=los_trv_azi_transform, *args, **kwargs)
+
+class MURaM3DDataset(MapDataset):
+
+    def __init__(self, data_path, iteration, base_height, *args, **kwargs):
+        snapshot = MURaMSnapshot(data_path, iteration)
+
+        b = snapshot.B
+        b = b[:, :, base_height]
+
+        super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
+
 
 class MURaMSnapshot():
 

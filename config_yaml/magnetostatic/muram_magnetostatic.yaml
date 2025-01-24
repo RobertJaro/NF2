@@ -1,0 +1,35 @@
+---
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/muram_v07"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_v07"
+logging:
+  project: magnetostatic
+  name: muram magnetostatic VP
+data:
+  type: muram
+  slices:
+    - type: "3D"
+      data_path: "/glade/campaign/hao/radmhd/rjarolim/magnetostatic"
+      iteration: 1000000
+      base_height: 116
+      batch_size: 4096
+  num_workers: 8
+  iterations: 10000
+model:
+  type: magneto_static
+  p_profile_model_path: "/glade/work/rjarolim/nf2/magnetostatic/profile/log_p_model.pt"
+  dim: 256
+  encoding_config: {type: "gaussian", scale: 64}
+  vector_potential: False
+training:
+  epochs: 100
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1.0
+      ds_id: [boundary_01, potential]
+      height_scaling: True
+    - type: magneto_static
+      lambda: 1.0e-2
+    - type: divergence
+      lambda: 1.0e-2
+      height_scaling: True
