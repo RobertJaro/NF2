@@ -118,19 +118,35 @@ class FITSDataModule(BaseDataModule):
 
 class FITSDataset(MapDataset):
 
-    def __init__(self, fits_path, error_path=None, coords_path=None,
+    def __init__(self, fits_path, load_map=True, error_path=None, coords_path=None,
                  bin=1, slice=None, **kwargs):
 
         file_p = fits_path['Bp']
         file_t = fits_path['Bt']
         file_r = fits_path['Br']
-        p_map, t_map, r_map = Map(file_p), Map(file_t), Map(file_r)
-        p_map = process_map(p_map, slice, bin)
-        t_map = process_map(t_map, slice, bin)
-        r_map = process_map(r_map, slice, bin)
 
-        b = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
-        wcs = r_map.wcs
+        if load_map:
+            p_map, t_map, r_map = Map(file_p), Map(file_t), Map(file_r)
+            p_map = process_map(p_map, slice, bin)
+            t_map = process_map(t_map, slice, bin)
+            r_map = process_map(r_map, slice, bin)
+
+            b = np.stack([p_map.data, -t_map.data, r_map.data]).transpose()
+            wcs = r_map.wcs
+        else:
+            p_data = fits.getdata(file_p)
+            t_data = fits.getdata(file_t)
+            r_data = fits.getdata(file_r)
+            if slice:
+                p_data = p_data[slice[0]:slice[1], slice[2]:slice[3]]
+                t_data = t_data[slice[0]:slice[1], slice[2]:slice[3]]
+                r_data = r_data[slice[0]:slice[1], slice[2]:slice[3]]
+            if bin > 1:
+                p_data = block_reduce(p_data, (bin, bin), func=np.mean)
+                t_data = block_reduce(t_data, (bin, bin), func=np.mean)
+                r_data = block_reduce(r_data, (bin, bin), func=np.mean)
+            b = np.stack([p_data, -t_data, r_data]).transpose()
+            wcs = None
 
         if error_path is not None:
             if isinstance(error_path, str):
@@ -141,11 +157,25 @@ class FITSDataset(MapDataset):
                 file_p_err = error_path['Bp_err']
                 file_t_err = error_path['Bt_err']
                 file_r_err = error_path['Br_err']
-            p_error_map, t_error_map, r_error_map = Map(file_p_err), Map(file_t_err), Map(file_r_err)
-            p_error_map = process_map(p_error_map, slice, bin)
-            t_error_map = process_map(t_error_map, slice, bin)
-            r_error_map = process_map(r_error_map, slice, bin)
-            b_err = np.stack([p_error_map.data, t_error_map.data, r_error_map.data]).transpose()
+            if load_map:
+                p_error_map, t_error_map, r_error_map = Map(file_p_err), Map(file_t_err), Map(file_r_err)
+                p_error_map = process_map(p_error_map, slice, bin)
+                t_error_map = process_map(t_error_map, slice, bin)
+                r_error_map = process_map(r_error_map, slice, bin)
+                b_err = np.stack([p_error_map.data, t_error_map.data, r_error_map.data]).transpose()
+            else:
+                p_err = fits.getdata(file_p_err)
+                t_err = fits.getdata(file_t_err)
+                r_err = fits.getdata(file_r_err)
+                if slice:
+                    p_err = p_err[slice[0]:slice[1], slice[2]:slice[3]]
+                    t_err = t_err[slice[0]:slice[1], slice[2]:slice[3]]
+                    r_err = r_err[slice[0]:slice[1], slice[2]:slice[3]]
+                if bin > 1:
+                    p_err = block_reduce(p_err, (bin, bin), func=np.mean)
+                    t_err = block_reduce(t_err, (bin, bin), func=np.mean)
+                    r_err = block_reduce(r_err, (bin, bin), func=np.mean)
+                b_err = np.stack([p_err, t_err, r_err]).transpose()
         else:
             b_err = None
 
