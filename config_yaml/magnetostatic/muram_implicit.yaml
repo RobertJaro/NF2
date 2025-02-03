@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnteostatic/muram_ff_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_ff_v01"
+base_path: "/glade/work/rjarolim/nf2/magnteostatic/muram_implicit_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_implicit_v01"
 logging:
   project: magnetostatic
-  name: muram force-free
+  name: muram implicit
 data:
   type: muram
   slices:
@@ -28,8 +28,8 @@ training:
       lambda: 1.0
       ds_id: [photosphere_b, potential]
       height_scaling: True
-    - type: force_free
-      lambda: 1.0e-2
+    - type: implicit_magnetostatic
+      lambda: 1.0e-4
       height_scaling: True
     - type: divergence
       lambda: 1.0e-2

@@ -2,24 +2,29 @@ import copy
 import os
 
 import numpy as np
+import wandb
+from astropy import units as u
 from astropy.nddata import block_reduce
+from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.data.util import img_to_los_trv_azi
-from nf2.loader.base import MapDataset, BaseDataModule
+from nf2.loader.base import MapDataset, BaseDataModule, TensorsDataset
 from nf2.loader.fits import PotentialBoundaryDataset
 
-from astropy import units as u
 
 class MURaMDataModule(BaseDataModule):
 
     def __init__(self, slices, work_directory, boundary_config=None, random_config=None,
-                 Mm_per_ds=.36 * 320, G_per_dB=2500, max_height=100, validation_batch_size=2 ** 15, log_shape=False,
+                 Mm_per_ds=.36 * 320, G_per_dB=2500, seconds_per_dt=60, max_height=100, validation_batch_size=2 ** 15,
+                 log_shape=False,
                  **kwargs):
         # boundary dataset
         slice_datasets = {}
         bottom_boundary_dataset = None
-        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'work_directory': work_directory}
+        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'seconds_per_dt': seconds_per_dt,
+                             'work_directory': work_directory}
         for i, slice_config in enumerate(slices):
             slice_config = copy.deepcopy(slice_config)
             s_type = slice_config.pop('type', '2D')
@@ -28,7 +33,9 @@ class MURaMDataModule(BaseDataModule):
             if s_type == '2D':
                 muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
             elif s_type == '3D':
-                muram_dataset = MURaM3DDataset(**slice_config, **slice_base_kwargs)
+                muram_dataset = MURaMCubeDataset(**slice_config, **slice_base_kwargs)
+            elif s_type == 'pressure':
+                muram_dataset = MURaMPressureDataset(**slice_config, **slice_base_kwargs)
             else:
                 raise ValueError(f'Unknown slice type {s_type}')
             slice_datasets[ds_id] = muram_dataset
@@ -82,16 +89,19 @@ class MURaMDataModule(BaseDataModule):
         cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
 
         validation_slice_datasets = []
-        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'work_directory': work_directory,
+        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'seconds_per_dt': seconds_per_dt,
+                             'work_directory': work_directory,
                              'shuffle': False, 'filter_nans': False, 'plot': False}
         for slice_config in slices:
             slice_config = copy.deepcopy(slice_config)
             s_type = slice_config.pop('type', '2D')
-            slice_config['batch_size'] = validation_batch_size # override batch size
+            slice_config['batch_size'] = validation_batch_size  # override batch size
             if s_type == '2D':
                 muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
             elif s_type == '3D':
-                muram_dataset = MURaM3DDataset(**slice_config, **slice_base_kwargs)
+                muram_dataset = MURaMCubeDataset(**slice_config, **slice_base_kwargs)
+            elif s_type == 'pressure':
+                muram_dataset = MURaMPressureDataset(**slice_config, **slice_base_kwargs)
             else:
                 raise ValueError(f'Unknown slice type {s_type}')
             validation_slice_datasets.append(muram_dataset)
@@ -103,7 +113,8 @@ class MURaMDataModule(BaseDataModule):
             validation_datasets[f'validation_boundary_{i + 1:02d}'] = dataset
 
         config = {'type': 'cartesian',
-                  'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'max_height': max_height,
+                  'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'seconds_per_dt': seconds_per_dt,
+                  'max_height': max_height,
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': []}
         for ds in slice_datasets.values():
             config['coord_range'].append(ds.coord_range)
@@ -114,13 +125,16 @@ class MURaMDataModule(BaseDataModule):
 
 
 muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
-             'By': {'id': 'result_prim_7', 'unit': u.Gauss},
-             'Bx': {'id': 'result_prim_6', 'unit': u.Gauss},
-             'vx': {'id': 'result_prim_1', 'unit': u.cm / u.s},
-             'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
-             'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
-             'tau': {'id': 'tau', 'unit': 1},
+                   'By': {'id': 'result_prim_7', 'unit': u.Gauss},
+                   'Bx': {'id': 'result_prim_6', 'unit': u.Gauss},
+                   'vx': {'id': 'result_prim_1', 'unit': u.cm / u.s},
+                   'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
+                   'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
+                   'tau': {'id': 'tau', 'unit': 1},
+                   'P': {'id': 'eosP', 'unit': u.erg / u.cm ** 3},
+                   'rho': {'id': 'result_prim_0', 'unit': u.g / u.cm ** 3},
                    }
+
 
 class MURaMDataset(MapDataset):
 
@@ -141,7 +155,8 @@ class MURaMDataset(MapDataset):
 
         super().__init__(b, Mm_per_pixel=0.192, los_trv_azi=los_trv_azi_transform, *args, **kwargs)
 
-class MURaM3DDataset(MapDataset):
+
+class MURaMCubeDataset(MapDataset):
 
     def __init__(self, data_path, iteration, base_height, *args, **kwargs):
         snapshot = MURaMSnapshot(data_path, iteration)
@@ -150,6 +165,98 @@ class MURaM3DDataset(MapDataset):
         b = b[:, :, base_height]
 
         super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
+
+class MURaMPressureDataset(TensorsDataset):
+    def __init__(self, data_path, iteration, base_height, G_per_dB, Mm_per_ds, wcs=None, **kwargs):
+        # Load MURaM snapshot
+        snapshot = MURaMSnapshot(data_path, iteration)
+        p = snapshot.P[:, :, base_height:, None]  # Trim height dimension
+
+        # Normalize pressure
+        p = p / G_per_dB ** 2
+
+        # Extract spatial resolution
+        dx, dy, dz = snapshot.ds
+        # Define boundary coordinates
+        x_dim, y_dim, z_dim = p.shape[:3]
+        coords_boundary = self._generate_boundary_coords(x_dim, y_dim, z_dim, dx, dy, dz, Mm_per_ds)
+
+        # Extract pressure values at boundaries
+        p_boundary = self._extract_boundary_pressure(p)
+
+        # Initialize class attributes
+        self.coord_range = np.array([
+            [coords_boundary[:, 0].min(), coords_boundary[:, 0].max()],
+            [coords_boundary[:, 1].min(), coords_boundary[:, 1].max()]
+        ])
+        self.cube_shape = p.shape[:-1]
+        self.wcs = wcs
+        self.ds_per_pixel = dx.to_value(u.Mm / u.pix) / Mm_per_ds
+        self.height_mapping = None
+
+        # Create tensors dictionary
+        tensors = {'p_true': p_boundary, 'coords': coords_boundary}
+
+        # Call superclass constructor
+        super().__init__(tensors, **kwargs)
+
+        # Plotting (Optional)
+        self._plot_pressure(p, G_per_dB)
+
+    def _generate_boundary_coords(self, x_dim, y_dim, z_dim, dx, dy, dz, Mm_per_ds):
+        """Generate coordinates for boundary planes in physical units."""
+
+        # Create boundary planes
+        coords_x_bottom = np.stack(np.meshgrid(0, np.arange(y_dim), np.arange(z_dim), indexing='ij'), axis=-1).reshape(
+            -1, 3)
+        coords_x_top = np.stack(np.meshgrid(x_dim - 1, np.arange(y_dim), np.arange(z_dim), indexing='ij'),
+                                axis=-1).reshape(-1, 3)
+
+        coords_y_bottom = np.stack(np.meshgrid(np.arange(x_dim), 0, np.arange(z_dim), indexing='ij'), axis=-1).reshape(
+            -1, 3)
+        coords_y_top = np.stack(np.meshgrid(np.arange(x_dim), y_dim - 1, np.arange(z_dim), indexing='ij'),
+                                axis=-1).reshape(-1, 3)
+
+        coords_z_bottom = np.stack(np.meshgrid(np.arange(x_dim), np.arange(y_dim), 0, indexing='ij'), axis=-1).reshape(
+            -1, 3)
+        coords_z_top = np.stack(np.meshgrid(np.arange(x_dim), np.arange(y_dim), z_dim - 1, indexing='ij'),
+                                axis=-1).reshape(-1, 3)
+
+        # Combine and remove duplicates
+        boundary_coords = np.concatenate(
+            [coords_x_bottom, coords_x_top, coords_y_bottom, coords_y_top, coords_z_bottom, coords_z_top],
+            dtype=np.float32)
+
+        # Scale to physical units
+        boundary_coords[:, 0] *= dx.to_value(u.Mm / u.pix) / Mm_per_ds
+        boundary_coords[:, 1] *= dy.to_value(u.Mm / u.pix) / Mm_per_ds
+        boundary_coords[:, 2] *= dz.to_value(u.Mm / u.pix) / Mm_per_ds
+
+        return boundary_coords
+
+    def _extract_boundary_pressure(self, p):
+        """Extract pressure values at the boundary planes."""
+        return np.concatenate([
+            p[0, :, :].reshape(-1, 1),  # x = 0
+            p[-1, :, :].reshape(-1, 1),  # x = -1
+            p[:, 0, :].reshape(-1, 1),  # y = 0
+            p[:, -1, :].reshape(-1, 1),  # y = -1
+            p[:, :, 0].reshape(-1, 1),  # z = 0
+            p[:, :, -1].reshape(-1, 1)  # z = -1
+        ])
+
+    def _plot_pressure(self, p, G_per_dB):
+        """Plot pressure and coordinate projections for verification."""
+        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
+
+        # Plot pressure slice at z=0
+        im = ax.imshow(p[:, :, 0, 0].T * G_per_dB ** 2, origin='lower', cmap='viridis', norm=LogNorm())
+        ax.set_title('Pressure at z=0')
+        fig.colorbar(im, ax=ax, orientation='vertical')
+
+        fig.tight_layout()
+        wandb.log({'Pressure': wandb.Image(fig)})
+        plt.close(fig)
 
 
 class MURaMSnapshot():
@@ -185,9 +292,9 @@ class MURaMSnapshot():
         return np.stack([self.vx, self.vy, self.vz], axis=-1)
 
     def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1):
-
         b = self.B
         tau = self.tau
+        p = self.P
 
         # integer division
         assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
@@ -199,6 +306,7 @@ class MURaMSnapshot():
 
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
+        p = block_reduce(p, (x_binning, y_binning, z_binning), np.mean)
 
         pix_height = np.argmin(np.abs(tau - target_tau), axis=2) * u.pix
         base_height_pix = pix_height.mean()
@@ -207,13 +315,14 @@ class MURaMSnapshot():
         max_height = min_height + int((height / resolution).to_value(u.pix))
         b = b[:, :, min_height:max_height]
         tau = tau[:, :, min_height:max_height]
+        p = p[:, :, min_height:max_height]
 
-        return {'B': b, 'tau': tau}
+        return {'B': b, 'tau': tau, 'P': p}
 
     def load_base(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, base_height=180):
         b = self.B[:, :, base_height:]
         tau = self.tau[:, :, base_height:]
-        v = np.stack([self.vx, self.vy, self.vz], axis=-1)
+        p = self.P[:, :, base_height:]
 
         # integer division
         assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
@@ -225,13 +334,15 @@ class MURaMSnapshot():
 
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
-
+        p = block_reduce(p, (x_binning, y_binning, z_binning), np.mean)
 
         max_height = int((height / resolution).to_value(u.pix))
         b = b[:, :, :max_height]
         tau = tau[:, :, :max_height]
+        p = p[:, :, :max_height]
 
-        return {'B': b, 'tau': tau}
+        return {'B': b, 'tau': tau, 'P': p}
+
 
 def read_muram_slice(filepath):
     data = np.fromfile(filepath, dtype=np.float32)

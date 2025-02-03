@@ -120,11 +120,16 @@ class SlicesCallback(Callback):
         self.plot_b(b_cube, c_cube)
         self.plot_current(j_cube, c_cube)
         if 'p' in outputs:
-            p = outputs['p']
+            p = outputs['p'] * self.gauss_per_dB ** 2
             p = p.reshape([*self.cube_shape]).cpu().numpy()
-            grad_P = outputs['grad_P']
+            grad_P = outputs['grad_P'] * self.gauss_per_dB ** 2 / self.Mm_per_ds
             grad_P = grad_P.reshape([*self.cube_shape, 3]).cpu().numpy()
             self.plot_pressure(p, grad_P, c_cube)
+
+        if 'rho' in outputs:
+            rho = outputs['rho']
+            rho = rho.reshape([*self.cube_shape]).cpu().numpy()
+            self.plot_density(rho, c_cube)
 
     def plot_b(self, b, coords):
         n_samples = b.shape[2]
@@ -197,16 +202,16 @@ class SlicesCallback(Callback):
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[0, i].imshow(p[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+            im = axs[0, i].imshow(p[:, :, i].T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             # add locatable colorbar
             divider = make_axes_locatable(axs[0, i])
             cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='P')
+            plt.colorbar(im, cax=cax, label='P [erg/cm^3]')
             # plot grad P
-            im = axs[1, i].imshow(grad_P[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+            im = axs[1, i].imshow(grad_P[:, :, i].T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             divider = make_axes_locatable(axs[1, i])
             cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='$|\\nabla P|$')
+            plt.colorbar(im, cax=cax, label='$|\\nabla P|$ [erg/cm^3/Mm]')
             #
             axs[0, i].set_title(f'{height:.02f}')
             axs[1, i].set_ylabel('Y [Mm]')
@@ -215,10 +220,10 @@ class SlicesCallback(Callback):
         fig.tight_layout()
         wandb.log({f"{self.name} - Plasma Pressure": fig})
         plt.close('all')
-        # plot integrated current density
+        # plot integrated plasma pressure
         p = np.sum(p, axis=2)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(p.T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+        im = ax.imshow(p.T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -228,6 +233,42 @@ class SlicesCallback(Callback):
         #
         fig.tight_layout()
         wandb.log({f"{self.name} - Integrated Plasma Pressure": fig})
+        plt.close('all')
+
+    def plot_density(self, rho, coords):
+        n_samples = rho.shape[2]
+        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        for i in range(n_samples):
+            extent = [coords[0, 0, i, 0], coords[-1, -1, i, 0],
+                      coords[0, 0, i, 1], coords[-1, -1, i, 1]]
+            extent = np.array(extent) * self.Mm_per_ds
+            height = coords[:, :, i, 2].mean() * self.Mm_per_ds
+            im = axs[i].imshow(rho[:, :, i].T, cmap='cividis', origin='lower', norm=LogNorm(), extent=extent)
+            axs[i].set_xlabel('X [Mm]')
+            axs[i].set_ylabel('Y [Mm]')
+            # add locatable colorbar
+            divider = make_axes_locatable(axs[i])
+            cax = divider.append_axes("right", size="5%", pad=0.05)
+            plt.colorbar(im, cax=cax, label='Density [g/cm^3]')
+            axs[i].set_title(f'{height:.02f} - $\\rho$')
+            axs[i].set_xlabel('X [Mm]')
+            axs[i].set_ylabel('Y [Mm]')
+        fig.tight_layout()
+        wandb.log({f"{self.name} - Density": fig})
+        plt.close('all')
+        # plot integrated plasma density
+        rho = np.sum(rho, axis=2)
+        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
+        im = ax.imshow(rho.T, cmap='cividis', origin='lower', norm=LogNorm(), extent=extent)
+        # add locatable colorbar
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='Density [g/cm^3]')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
+        #
+        fig.tight_layout()
+        wandb.log({f"{self.name} - Integrated Density": fig})
         plt.close('all')
 
 
@@ -378,6 +419,64 @@ class BoundaryCallback(Callback):
         axs[3, 1].set_title('Original z')
         axs[3, 1].set_xlabel('X [Mm]')
         axs[3, 1].set_ylabel('Y [Mm]')
+
+        fig.tight_layout()
+        wandb.log({f"{self.validation_dataset_key} - B": fig})
+        plt.close('all')
+
+class PressureBoundaryCallback(Callback):
+
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
+        self.validation_dataset_key = validation_dataset_key
+        self.cube_shape = cube_shape
+        self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        return
+
+        if self.validation_dataset_key not in pl_module.validation_outputs:
+            return
+
+        outputs = pl_module.validation_outputs[self.validation_dataset_key]
+        p = outputs['p']
+        p_true = outputs['p_true']
+
+        p = p * self.gauss_per_dB ** 2
+        p_true = p_true * self.gauss_per_dB ** 2
+
+        # compute diff
+        p_diff = torch.abs(p - p_true)
+        p_diff = torch.nanmean(p_diff.pow(2).sum(-1).pow(0.5))
+        evaluation = {'p_diff': p_diff.detach()}
+
+        wandb.log({"valid": {self.validation_dataset_key: evaluation}})
+
+        p = p.cpu().numpy().reshape(self.cube_shape)
+        p_true = p_true.cpu().numpy().reshape(self.cube_shape)
+
+        coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+        self.plot_p(p, p_true, coords)
+
+    def plot_p(self, p, p_true, coords):
+        extent = None
+        p_norm = LogNorm(vmin=np.nanmin(p_true), vmax=np.nanmax(p_true))
+
+        fig, axs = plt.subplots(1, 2, figsize=(8, 8))
+
+        ax = axs[0]
+        im = ax.imshow(p.T, cmap='viridis', norm=p_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[erg/cm^3]')
+        ax.set_title('Predicted Pressure')
+
+        ax = axs[1]
+        im = ax.imshow(p_true.T, cmap='viridis', norm=p_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label='[erg/cm^3]')
+        ax.set_title('True Pressure')
 
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})

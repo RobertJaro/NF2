@@ -1,9 +1,10 @@
 from nf2.data.dataset import SphereSlicesDataset, SlicesDataset, SphereDataset, CubeDataset
 from nf2.loader.base import MapDataset
 from nf2.loader.fits import FITSDataset
+from nf2.loader.muram import MURaMPressureDataset
 from nf2.loader.spherical import SphericalSliceDataset
 from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback, \
-    LosTrvAziBoundaryCallback, DisambiguationCallback
+    LosTrvAziBoundaryCallback, DisambiguationCallback, PressureBoundaryCallback
 
 
 def load_callbacks(data_module, additional_callbacks=[]):
@@ -29,6 +30,8 @@ def load_callbacks(data_module, additional_callbacks=[]):
             callback = MetricsCallback(validation_dataset_key, G_per_dB, Mm_per_ds)
         elif isinstance(ds, SphericalSliceDataset) or isinstance(ds, FITSDataset):
             callback = BoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
+        elif isinstance(ds, MURaMPressureDataset):
+            callback = PressureBoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)
         elif isinstance(ds, MapDataset):
             if ds.los_trv_azi:
                 callback = LosTrvAziBoundaryCallback(validation_dataset_key, ds.cube_shape, G_per_dB, Mm_per_ds)

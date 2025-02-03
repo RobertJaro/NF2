@@ -49,7 +49,16 @@ class ForceFreeLoss(BaseLoss):
 
 class MagnetoStaticLoss(BaseLoss):
 
-    def forward(self, b, jac_matrix, *args, **kwargs):
+    def __init__(self, Mm_per_ds, seconds_per_dt, **kwargs):
+        super().__init__(**kwargs)
+        # gravity = (274.0 * u.m / u.s ** 2).to_value(u.Mm / u.s ** 2)
+        # gravity = gravity * Mm_per_ds / seconds_per_dt ** 2
+        # print(f'Gravity: {gravity}')
+        # self.gravity = nn.Parameter(torch.tensor([0, 0, gravity], dtype=torch.float32).reshape((1, 3)),
+        #                             requires_grad=False)
+        # self.scale_height = nn.Parameter(torch.tensor(1.0, dtype=torch.float32), requires_grad=True)
+
+    def forward(self, b, p, jac_matrix, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
@@ -71,20 +80,23 @@ class MagnetoStaticLoss(BaseLoss):
         jxb = torch.cross(j, b, -1)
         grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
         #
-        equation = jxb / (4 * torch.pi) - grad_P
+        equation = jxb - (4 * torch.pi) * grad_P #+ rho * self.gravity)
         # apply height scaling
         p_height_scaling = kwargs['p_height_scaling'].detach()
         b_height_scaling = kwargs['b_height_scaling'].detach()
-        loss = equation.pow(2).sum(-1, keepdim=True) / (b_height_scaling.pow(2) + p_height_scaling  + 1e-6).pow(2)
+        loss = (equation.pow(2).sum(-1, keepdim=True) /
+                (b_height_scaling.pow(2) + p_height_scaling + 1e-6).pow(2))
         loss = loss.mean()
         #
         return loss
 
+
 class ImplicitMagnetoStaticLoss(BaseLoss):
 
-    def __init__(self, divergence_regularization=True, **kwargs):
+    def __init__(self, divergence_regularization=False, height_scaling=True, **kwargs):
         super().__init__(**kwargs)
         self.divergence_regularization = divergence_regularization
+        self.height_scaling = height_scaling
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -128,9 +140,16 @@ class ImplicitMagnetoStaticLoss(BaseLoss):
             loss = curl_JxB_loss + div_JxB_loss * (torch.exp(coords[:, 2] * 5) - 1)
         else:
             loss = curl_JxB_loss
-        loss =  loss / normalization
+
+        if self.height_scaling:
+            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
+            b_height_scaling = kwargs['b_height_scaling'].detach()
+            loss = loss / (b_height_scaling[..., 0].pow(2) + 1e-6)
+        else:
+            loss = loss / normalization
         #
         return loss.mean()
+
 
 class DivergenceLoss(BaseLoss):
 
@@ -395,6 +414,33 @@ class BoundaryLoss(BaseLoss):
         return b_diff
 
 
+class PressureBoundaryLoss(BaseLoss):
+
+    def __init__(self, height_scaling=True, **kwargs):
+        super().__init__(**kwargs)
+        self.height_scaling = height_scaling
+
+    def forward(self, p, p_true, *args, **kwargs):
+        # apply transforms
+        p_diff = (p - p_true).pow(2).sum(-1)
+
+        if self.height_scaling:
+            assert 'p_height_scaling' in kwargs, 'p_height_scaling not provided'
+            p_height_scaling = kwargs['p_height_scaling'].detach()
+            p_diff = p_diff / (p_height_scaling[..., 0] + 1e-6).pow(2)
+
+        return p_diff.mean()
+
+
+class PressureProfileLoss(BaseLoss):
+
+    def forward(self, p, p_height_scaling, *args, **kwargs):
+        diff = (p - p_height_scaling).pow(2)
+        p_height_scaling = p_height_scaling.detach()
+        diff = diff / (p_height_scaling + 1e-6).pow(2)
+        return diff.mean()
+
+
 class HeightLoss(BaseLoss):
 
     def forward(self, coords, original_coords, height_range, *args, **kwargs):
@@ -419,7 +465,7 @@ class AzimuthDisambiguationLoss(BaseLoss):
 class MinHeightLoss(BaseLoss):
 
     def forward(self, coords, *args, **kwargs):
-        min_height_regularization = coords[:, 2].pow(2) #torch.abs(coords[:, 2])
+        min_height_regularization = coords[:, 2].pow(2)  # torch.abs(coords[:, 2])
         # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
         min_height_regularization = min_height_regularization.mean()
         return min_height_regularization
@@ -433,4 +479,6 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
                        'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
-                       'azimuth_disambiguation': AzimuthDisambiguationLoss}
+                       'azimuth_disambiguation': AzimuthDisambiguationLoss,
+                       'pressure_boundary': PressureBoundaryLoss, 'pressure_profile': PressureProfileLoss,
+                       }
