@@ -17,25 +17,27 @@ from nf2.loader.fits import PotentialBoundaryDataset
 class MURaMDataModule(BaseDataModule):
 
     def __init__(self, slices, work_directory, boundary_config=None, random_config=None,
-                 Mm_per_ds=.36 * 320, G_per_dB=2500, seconds_per_dt=60, max_height=100, validation_batch_size=2 ** 15,
+                 Mm_per_ds=.36 * 320, G_per_dB=2500, seconds_per_dt=60, max_height=100,
+                 batch_size=2**15, validation_batch_size=2 ** 15,
                  log_shape=False,
                  **kwargs):
         # boundary dataset
         slice_datasets = {}
         bottom_boundary_dataset = None
         slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'seconds_per_dt': seconds_per_dt,
-                             'work_directory': work_directory}
+                             'work_directory': work_directory, 'batch_size': batch_size}
         for i, slice_config in enumerate(slices):
             slice_config = copy.deepcopy(slice_config)
             s_type = slice_config.pop('type', '2D')
             ds_id = slice_config.pop('name', f'boundary_{i + 1:02d}')
             bottom_boundary = slice_config.pop('bottom', False)
-            if s_type == '2D':
-                muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
-            elif s_type == '3D':
-                muram_dataset = MURaMCubeDataset(**slice_config, **slice_base_kwargs)
+            slice_config = slice_base_kwargs | slice_config
+            if s_type == 'slice':
+                muram_dataset = MURaMDataset(**slice_config)
+            elif s_type == 'cube':
+                muram_dataset = MURaMCubeDataset(**slice_config)
             elif s_type == 'pressure':
-                muram_dataset = MURaMPressureDataset(**slice_config, **slice_base_kwargs)
+                muram_dataset = MURaMPressureDataset(**slice_config)
             else:
                 raise ValueError(f'Unknown slice type {s_type}')
             slice_datasets[ds_id] = muram_dataset
@@ -96,12 +98,13 @@ class MURaMDataModule(BaseDataModule):
             slice_config = copy.deepcopy(slice_config)
             s_type = slice_config.pop('type', '2D')
             slice_config['batch_size'] = validation_batch_size  # override batch size
-            if s_type == '2D':
-                muram_dataset = MURaMDataset(**slice_config, **slice_base_kwargs)
-            elif s_type == '3D':
-                muram_dataset = MURaMCubeDataset(**slice_config, **slice_base_kwargs)
+            slice_config = slice_base_kwargs | slice_config
+            if s_type == 'slice':
+                muram_dataset = MURaMDataset(**slice_config)
+            elif s_type == 'cube':
+                muram_dataset = MURaMCubeDataset(**slice_config)
             elif s_type == 'pressure':
-                muram_dataset = MURaMPressureDataset(**slice_config, **slice_base_kwargs)
+                muram_dataset = MURaMPressureDataset(**slice_config)
             else:
                 raise ValueError(f'Unknown slice type {s_type}')
             validation_slice_datasets.append(muram_dataset)

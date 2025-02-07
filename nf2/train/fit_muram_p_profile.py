@@ -11,8 +11,9 @@ from nf2.train.model import GenericModel
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--muram_source_path', type=str, required=True)
-parser.add_argument('--out_path', type=str, required=True)
 parser.add_argument('--iteration', type=int, required=True)
+parser.add_argument('--base_height', type=int, default=116)
+parser.add_argument('--out_path', type=str, required=True)
 args = parser.parse_args()
 
 out_path = args.out_path
@@ -21,7 +22,7 @@ os.makedirs(out_path, exist_ok=True)
 snapshot = MURaMSnapshot(args.muram_source_path, args.iteration)
 
 Mm_per_pixel = snapshot.ds[2].to_value(u.Mm / u.pix)
-base_height = 116
+base_height = args.base_height
 # max_height = int(100 / Mm_per_pixel) + base_height
 # min_height =  base_height - int(5 / Mm_per_pixel)
 muram_p = snapshot.P #u.G ** 2 * u.cm ** 2

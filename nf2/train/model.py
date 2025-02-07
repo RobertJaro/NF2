@@ -100,6 +100,14 @@ class GenericModel(nn.Module):
         return x
 
 
+class ScalingModel(GenericModel):
+
+    def __init__(self):
+        super().__init__(in_coords=1, out_coords=1, dim=8, n_layers=2)
+
+    def forward(self, z):
+        return 10 ** super().forward(z)
+
 class GenericDomainModel(nn.Module):
 
     def __init__(self, Mm_per_ds, in_dim=3, out_dim=3, window_type='sigmoid', spherical=False, range_config=None,
@@ -327,16 +335,16 @@ class BScaledModel(nn.Module):
 
     def __init__(self, spherical=False, **model_kwargs):
         super().__init__()
-        self.b_model = GenericModel(3, 3, **model_kwargs)
-        self.height_scaling = GenericModel(1, 1, dim=8, n_layers=2)
+        self.b_model = GenericModel(3, 4, **model_kwargs)
+        self.b_height_scaling_model = ScalingModel()
         self.spherical = spherical
 
     def forward(self, coords, compute_jacobian=True):
-        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
-        b = self.b_model(coords)
-        b_height_scaling = 10 ** self.height_scaling(z)
+        x = self.b_model(coords)
+        b = x[:, :3] * 10 ** x[:, 3:4]
 
-        b = b * b_height_scaling
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
+        b_height_scaling = self.b_height_scaling_model(z)
 
         out_dict = {'b': b, 'b_height_scaling': b_height_scaling}
         #
@@ -351,15 +359,16 @@ class VectorPotentialScaledModel(nn.Module):
 
     def __init__(self, spherical=False, **model_kwargs):
         super().__init__()
-        self.a_model = GenericModel(3, 3, **model_kwargs)
-        self.height_scaling = GenericModel(1, 1, dim=8, n_layers=2)
+        self.b_model = GenericModel(3, 4, **model_kwargs)
+        self.b_height_scaling_model = ScalingModel()
         self.spherical = spherical
 
     def forward(self, coords, compute_jacobian=True):
-        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
-        height_scaling = 10 ** self.height_scaling(z)
+        x = self.b_model(coords)
+        a = x[:, :3] * 10 ** x[:, 3:4]
 
-        a = self.a_model(coords) * height_scaling
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
+        b_height_scaling = self.b_height_scaling_model(z)
         #
         jac_matrix = jacobian(a, coords)
         dAy_dx = jac_matrix[:, 1, 0]
@@ -372,7 +381,7 @@ class VectorPotentialScaledModel(nn.Module):
         rot_y = dAx_dz - dAz_dx
         rot_z = dAy_dx - dAx_dy
         b = torch.stack([rot_x, rot_y, rot_z], -1)
-        out_dict = {'b': b, 'a': a, 'b_height_scaling': height_scaling}
+        out_dict = {'b': b, 'a': a, 'b_height_scaling': b_height_scaling}
         #
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)
@@ -488,9 +497,11 @@ class PressureScaledModel(nn.Module):
 
 class MagnetoStaticModel(nn.Module):
 
-    def __init__(self, p_profile_model_path, vector_potential=False, **kwargs):
+    def __init__(self, b_model_path, p_profile_model_path, train_b=True, **kwargs):
         super().__init__()
-        self.b_model = BScaledModel(**kwargs) if not vector_potential else VectorPotentialScaledModel(**kwargs)
+        self.b_model = torch.load(b_model_path)['model']
+        if not train_b:
+            self.b_model.requires_grad_(False)
         self.p_model = PressureScaledModel(p_profile_model_path, **kwargs)
 
     def forward(self, coords, compute_jacobian=True):

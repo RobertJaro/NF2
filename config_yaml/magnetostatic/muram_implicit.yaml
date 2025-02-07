@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnteostatic/muram_implicit_v01"
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/muram_implicit_v01"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_implicit_v01"
 logging:
   project: magnetostatic
@@ -7,7 +7,7 @@ logging:
 data:
   type: muram
   slices:
-    - type: "3D"
+    - type: "cube"
       name: "photosphere_b"
       data_path: "/glade/campaign/hao/radmhd/rjarolim/magnetostatic"
       iteration: 1000000

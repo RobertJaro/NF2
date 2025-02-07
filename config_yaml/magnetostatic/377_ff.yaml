@@ -1,8 +1,8 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnteostatic/377_ff_v01"
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/377_ff_v01"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_ff_v01"
 logging:
-  project: magnteostatic
+  project: magnetostatic
   name: "377 ff"
 data:
   type: fits

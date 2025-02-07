@@ -9,7 +9,7 @@ from astropy import units as u
 
 class BatchesDataset(Dataset):
 
-    def __init__(self, batches_file_paths, batch_size=2 ** 13, **kwargs):
+    def __init__(self, batches_file_paths, batch_size, **kwargs):
         """Data set for lazy loading a pre-batched numpy data array.
 
         :param batches_path: path to the numpy array.

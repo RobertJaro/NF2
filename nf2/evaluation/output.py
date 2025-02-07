@@ -119,9 +119,9 @@ class CartesianOutput(BaseOutput):
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
-        n_x_pix = np.round((x_max - x_min) / ds_per_pixel).astype(int)
-        n_y_pix = np.round((y_max - y_min) / ds_per_pixel).astype(int)
-        n_z_pix = np.round((z_max - z_min) / ds_per_pixel).astype(int)
+        n_x_pix = np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)
+        n_y_pix = np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)
+        n_z_pix = np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)
 
         coords = np.stack(np.mgrid[:n_x_pix, :n_y_pix, :n_z_pix], -1)
         coords = coords * ds_per_pixel + np.array([x_min, y_min, z_min]).reshape((1, 1, 1, 3))
