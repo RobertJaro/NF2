@@ -25,7 +25,7 @@ center = reference_map.center.transform_to(frames.HeliographicCarrington)
 
 spherical_model = SphericalOutput('/glade/work/rjarolim/nf2/spherical/377_v05/extrapolation_result.nf2')
 spherical_out = spherical_model.load_spherical(
-    latitude_range=((np.pi / 2 * u.rad) - top_right.lat, (np.pi / 2 * u.rad) - bottom_left.lat),
+    latitude_range=(top_right.lat, bottom_left.lat),
     longitude_range=(bottom_left.lon, top_right.lon),
     radius_range=(1. * u.solRad, 1 * u.solRad + 100 * u.Mm),
     sampling=[cartesian_out['coords'].shape[2], cartesian_out['coords'].shape[1], cartesian_out['coords'].shape[0]],
@@ -34,7 +34,7 @@ spherical_out = spherical_model.load_spherical(
 
 subframe_model = SphericalOutput('/glade/work/rjarolim/nf2/spherical/377_subframe_v04/extrapolation_result.nf2')
 subframe_out = subframe_model.load_spherical(
-    latitude_range=((np.pi / 2 * u.rad) - top_right.lat, (np.pi / 2 * u.rad) - bottom_left.lat),
+    latitude_range=(top_right.lat, bottom_left.lat),
     longitude_range=(bottom_left.lon, top_right.lon),
     radius_range=(1. * u.solRad, 1 * u.solRad + 100 * u.Mm),
     sampling=[cartesian_out['coords'].shape[2], cartesian_out['coords'].shape[1], cartesian_out['coords'].shape[0]],
@@ -43,7 +43,7 @@ subframe_out = subframe_model.load_spherical(
 
 pb_model = SphericalOutput('/glade/work/rjarolim/nf2/spherical/377_potential_v01/extrapolation_result.nf2')
 pb_out = spherical_model.load_spherical(
-    latitude_range=((np.pi / 2 * u.rad) - top_right.lat, (np.pi / 2 * u.rad) - bottom_left.lat),
+    latitude_range=(top_right.lat, bottom_left.lat),
     longitude_range=(bottom_left.lon, top_right.lon),
     radius_range=(1. * u.solRad, 1 * u.solRad + 100 * u.Mm),
     sampling=[cartesian_out['coords'].shape[2], cartesian_out['coords'].shape[1], cartesian_out['coords'].shape[0]],

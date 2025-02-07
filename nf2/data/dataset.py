@@ -79,7 +79,7 @@ class CubeDataset(Dataset):
 class RandomSphericalCoordinateDataset(Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
-                 latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi),
+                 latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi),
                  radial_weighted_sampling=False, latitude_weighted_sampling=False, **kwargs):
         self.radius_range = radius_range
         self.Mm_per_ds = Mm_per_ds
@@ -106,9 +106,9 @@ class RandomSphericalCoordinateDataset(Dataset):
         # theta [0, pi]
         if self.latitude_weighted_sampling:
             lat_r = self.latitude_range
-            v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
+            v_min, v_max = np.min(np.sin(lat_r)), np.max(np.sin(lat_r))
             random_coords[:, 1] = v_min + random_coords[:, 1] * (v_max - v_min)
-            random_coords[:, 1] = torch.arccos(random_coords[:, 1])
+            random_coords[:, 1] = torch.arcsin(random_coords[:, 1])
         else:
             lat_r = self.latitude_range
             random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
@@ -123,7 +123,7 @@ class RandomSphericalCoordinateDataset(Dataset):
 
 class SphereDataset(Dataset):
 
-    def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), **kwargs):
+    def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024, latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi), **kwargs):
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(resolution * ratio)
         coords = np.stack(
@@ -148,7 +148,7 @@ class SphereDataset(Dataset):
 
 class SphereSlicesDataset(Dataset):
 
-    def __init__(self, radius_range, Mm_per_ds, latitude_range=(0, np.pi), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+    def __init__(self, radius_range, Mm_per_ds, latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
         coords = np.stack(

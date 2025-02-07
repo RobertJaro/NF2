@@ -130,7 +130,7 @@ if __name__ == '__main__':
 
         spherical_coords = model_out['spherical_coords']
         spherical_coords = SkyCoord(lon=spherical_coords[..., 2] * u.rad,
-                                    lat=(np.pi / 2 - spherical_coords[..., 1]) * u.rad,
+                                    lat=(spherical_coords[..., 1]) * u.rad,
                                     radius=spherical_coords[..., 0] * u.solRad,
                                     frame=br_map.coordinate_frame)
         pfss_cube_shape = spherical_coords.shape

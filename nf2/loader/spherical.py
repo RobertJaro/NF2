@@ -55,18 +55,30 @@ class SphericalSliceDataset(TensorsDataset):
     def _plot(self, b, coords, spherical_coords):
         b_min_max = np.nanmax(np.abs(b))
         fig, axs = plt.subplots(3, 1, figsize=(8, 8))
-        im = axs[0].imshow(b[..., 0].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
-        divider = make_axes_locatable(axs[0])
+
+        ax = axs[0]
+        im = ax.imshow(b[..., 0].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
-        im = axs[1].imshow(b[..., 1].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
-        divider = make_axes_locatable(axs[1])
+        ax.set_title('B_r')
+
+        ax = axs[1]
+        im = ax.imshow(b[..., 1].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
-        im = axs[2].imshow(b[..., 2].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
-        divider = make_axes_locatable(axs[2])
+        ax.set_title('B_t')
+
+        ax = axs[2]
+        im = ax.imshow(b[..., 2].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
+        ax.set_title('B_p')
+
+        fig.tight_layout()
+
         wandb.log({"Overview - B": fig})
         plt.close('all')
 
@@ -105,13 +117,13 @@ class SphericalMapDataset(SphericalSliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
+            spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
         # load data and transform matrix
-        b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
+        b_spherical = np.stack([r_map.data, -t_map.data, p_map.data]).transpose()
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
@@ -183,8 +195,8 @@ class SphericalMapDataset(SphericalSliceDataset):
         m_type = mask_config['type']
         if m_type == 'reference':
             ref_map = Map(mask_config['file'])
-            ref_map.meta[
-                'date-obs'] = r_map.date.to_datetime().isoformat()  # use reference time to avoid temporal shift
+            # use reference time to avoid temporal shift
+            ref_map.meta['date-obs'] = r_map.date.to_datetime().isoformat()
             reprojected_map = ref_map.reproject_to(r_map.wcs)
             mask = ~np.isnan(reprojected_map.data).T
         elif m_type == 'helioprojective':
@@ -203,7 +215,7 @@ class SphericalMapDataset(SphericalSliceDataset):
                    (spherical_coords[..., 2] > slice_lon[0]) & \
                    (spherical_coords[..., 2] < slice_lon[1])
         elif m_type == 'heliographic_carrington':
-            unit = u.Quantity(mask_config['unit']) if 'unit' in mask_config else u.rad
+            unit = u.Quantity(mask_config['unit']) if 'unit' in mask_config else u.deg
             slice_lon = (mask_config['longitude_range'] * unit).to_value(u.rad)
             slice_lat = (mask_config['latitude_range'] * unit).to_value(u.rad)
 
@@ -271,7 +283,7 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
         # load coordinates
         spherical_coords = np.stack([
             spherical_coords.radius.value,
-            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
+            spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to(u.rad).value]).T
 
         if mask is not None:

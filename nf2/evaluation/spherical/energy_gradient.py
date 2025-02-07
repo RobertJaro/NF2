@@ -41,7 +41,7 @@ for file in files:
     thetas_radians, radii = coords[:, :, 1], coords[:, :, 0]
     im = ax.pcolormesh(thetas_radians, radii, energy, norm=LogNorm(1e1, 1e3), cmap='viridis')
     ax.set_rlim(0, radius)
-    ax.set_thetalim(0, np.pi)
+    ax.set_thetalim(-np.pi/2, np.pi/2)
     ax.set_theta_zero_location('N')
     plt.colorbar(im, ax=ax, pad=0.1, shrink=0.8, label='Energy density [ergs/cm$^3$]')
     plt.savefig(os.path.join(results_path, f'energy_polar_{os.path.basename(file)}.jpg'), dpi=300)
@@ -54,7 +54,7 @@ for file in files:
     thetas_radians, radii = coords[:, :, 1], coords[:, :, 0]
     im = ax.pcolormesh(thetas_radians, radii, current_density, norm=LogNorm(1e3, 1e5), cmap='plasma')
     ax.set_rlim(0, radius)
-    ax.set_thetalim(0, np.pi)
+    ax.set_thetalim(-np.pi/2, np.pi/2)
     ax.set_theta_zero_location('N')
     plt.colorbar(im, ax=ax, pad=0.1, shrink=0.8, label='Current density [G/cm$^3$]')
     plt.savefig(os.path.join(results_path, f'current_density_polar_{os.path.basename(file)}.jpg'), dpi=300)
@@ -67,7 +67,7 @@ for file in files:
     thetas_radians, radii = coords[:, :, 1], coords[:, :, 0]
     im = ax.pcolormesh(thetas_radians, radii, energy_gradient, norm=SymLogNorm(1, vmin=-10, vmax=10), cmap='RdBu_r')
     ax.set_rlim(0, radius)
-    ax.set_thetalim(0, np.pi)
+    ax.set_thetalim(-np.pi/2, np.pi/2)
     ax.set_theta_zero_location('N')
     plt.colorbar(im, ax=ax, pad=0.1, shrink=0.8, label='Energy gradient [ergs/cm$^3$]')
     plt.savefig(os.path.join(results_path, f'energy_gradient_polar_{os.path.basename(file)}.jpg'), dpi=300)
