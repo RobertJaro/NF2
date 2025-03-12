@@ -8,11 +8,8 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
 from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.fits import FITSDataModule
-from nf2.loader.general import NumpyDataModule
-from nf2.loader.muram import MURaMDataModule
+from nf2.loader.cartesian import CartesianDataModule
 from nf2.loader.spherical import SphericalDataModule
-from nf2.loader.vsm import VSMDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
@@ -57,18 +54,12 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
         shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
         data['plot_overview'] = False  # skip overview plot for restored model
 
-    if data["type"] == 'numpy':
-        data_module = NumpyDataModule(**data)
-    elif data["type"] == 'fits':
-        data_module = FITSDataModule(**data)
-    elif data["type"] == 'solis':
-        data_module = VSMDataModule(**data)
+    elif data["type"] == 'cartesian':
+        data_module = CartesianDataModule(**data)
     elif data["type"] == 'analytical':
         data_module = AnalyticDataModule(**data)
     elif data["type"] == 'spherical':
         data_module = SphericalDataModule(**data)
-    elif data["type"] == 'muram':
-        data_module = MURaMDataModule(**data)
     else:
         raise NotImplementedError(f'Unknown data loader {data["type"]}')
 

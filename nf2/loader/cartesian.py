@@ -1,6 +1,6 @@
 import glob
 import os
-from copy import copy
+from copy import copy, deepcopy
 
 import numpy as np
 from astropy import units as u
@@ -9,27 +9,33 @@ from astropy.nddata import block_reduce
 from sunpy.map import Map
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
-from nf2.data.loader import load_potential_field_data
+from nf2.data.loader import load_potential_field_boundary
 from nf2.loader.base import TensorsDataset, BaseDataModule, MapDataset
+from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
 
 
-class FITSDataModule(BaseDataModule):
+class CartesianDataModule(BaseDataModule):
 
     def __init__(self, slices, work_directory, boundary_config=None,
                  random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 15, log_shape=False,
+                 batch_size=int(2 ** 12), random_batch_size=None,
                  **kwargs):
         # wrap data if only one slice is provided
         slices = slices if isinstance(slices, list) else [slices]
         # boundary dataset
-        slice_datasets = []
-        for config in slices:
-            boundary_dataset = self.init_boundary_dataset(**config,
+        training_datasets = {}
+        for i, config in enumerate(slices):
+            config = deepcopy(config)
+            name = config.pop('name', f'boundary_{i + 1:02d}')
+            if 'batch_size' not in config:
+                config['batch_size'] = batch_size
+            dataset = self.init_boundary_dataset(**config,
                                                           Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
-                                                          work_directory=work_directory, )
-            slice_datasets.append(boundary_dataset)
+                                                          work_directory=work_directory)
+            training_datasets[name] = dataset
 
-        bottom_boundary_dataset = slice_datasets[0]
+        bottom_boundary_dataset = list(training_datasets.values())[0]
 
         # random sampling dataset
         coord_range = bottom_boundary_dataset.coord_range
@@ -37,6 +43,8 @@ class FITSDataModule(BaseDataModule):
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
         random_config = random_config if random_config is not None else {}
+        if 'batch_size' not in random_config:
+            random_config['batch_size'] = random_batch_size if random_batch_size is not None else batch_size
         random_dataset = RandomCoordinateDataset(coord_range, **random_config)
 
         ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
@@ -56,28 +64,41 @@ class FITSDataModule(BaseDataModule):
             print(f'y: {coord_range[1, 0]:.2f} - {coord_range[1, 1]:.2f} ds')
             print(f'z: {coord_range[2, 0]:.2f} - {coord_range[2, 1]:.2f} ds')
 
-        training_datasets = {}
-        for i, dataset in enumerate(slice_datasets):
-            training_datasets[f'boundary_{i + 1:02d}'] = dataset
         training_datasets['random'] = random_dataset
 
         # top and side boundaries
         boundary_config = boundary_config if boundary_config is not None else \
-            {'type': 'potential', 'strides': 4, 'Mm_per_pixel': ds_per_pixel * Mm_per_ds}
-        if boundary_config['type'] == 'potential':
+            {'type': 'potential', 'strides': 4}
+        boundary_batch_size = boundary_config.pop('batch_size', batch_size)
+        boundary_type = boundary_config.pop('type')
+        if boundary_type == 'none':
+            pass
+        elif boundary_type == 'potential':
             bz = bottom_boundary_dataset.bz
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
-            potential_dataset = PotentialBoundaryDataset(bz=bz,
-                                                         height_pixel=coord_range[2, -1] / ds_per_pixel,
-                                                         ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
-                                                         work_directory=work_directory,
-                                                         strides=boundary_config['strides'])
-            training_datasets['potential'] = potential_dataset
+            boundary_ds = PotentialBoundaryDataset(bz=bz,
+                                                   height_pixel=coord_range[2, -1] / ds_per_pixel,
+                                                   ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
+                                                   work_directory=work_directory,
+                                                   batch_size=boundary_batch_size, **boundary_config)
+            training_datasets['potential'] = boundary_ds
+        elif boundary_type == 'potential_top':
+            bz = bottom_boundary_dataset.bz
+            bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
+            boundary_ds = PotentialTopBoundaryDataset(bz=bz,
+                                                      height_pixel=coord_range[2, -1] / ds_per_pixel,
+                                                      ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
+                                                      work_directory=work_directory,
+                                                      batch_size=boundary_batch_size, **boundary_config)
+            training_datasets['potential'] = boundary_ds
+        else:
+            raise ValueError(f'Unknown boundary type: {boundary_config["type"]}')
 
         # validation datasets
         cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
         validation_slice_datasets = []
         for slice_config in slices:
+            slice_config = deepcopy(slice_config)
             valid_slice_config = {k: v for k, v in slice_config.items() if k != 'batch_size'}
             validation_boundary_dataset = self.init_boundary_dataset(**valid_slice_config,
                                                                      Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
@@ -96,7 +117,9 @@ class FITSDataModule(BaseDataModule):
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': [],
                   'cube_shape': []}
-        for ds in slice_datasets:
+        for ds in training_datasets.values():
+            if not isinstance(ds, MapDataset):
+                continue
             config['coord_range'].append(ds.coord_range)
             config['cube_shape'].append(ds.cube_shape)
             config['ds_per_pixel'].append(ds.ds_per_pixel)
@@ -105,7 +128,7 @@ class FITSDataModule(BaseDataModule):
 
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
-    def init_boundary_dataset(self, type='fits', **kwargs):
+    def init_boundary_dataset(self, type, **kwargs):
         if type == 'fits':
             return FITSDataset(**kwargs)
         elif type == 'los_trv_azi':
@@ -116,8 +139,17 @@ class FITSDataModule(BaseDataModule):
             return SHARPDataset(**kwargs)
         elif type == 'fld_inc_azi':
             return FldIncAziFITSDataset(**kwargs)
+        elif type == 'numpy':
+            return NumpyDataset(**kwargs)
+        elif type == 'muram_slice':
+            return MURaMDataset(**kwargs)
+        elif type == 'muram_cube':
+            return MURaMCubeDataset(**kwargs)
+        elif type == 'muram_pressure':
+            return MURaMPressureDataset(**kwargs)
         else:
-            raise ValueError(f'Unknown boundary type: {type}')
+            raise ValueError(f'Unknown boundary type: {type}. Supported types: '
+                             f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
 
 
 class FITSDataset(MapDataset):
@@ -202,9 +234,9 @@ class LosTrvAziFITSDataset(MapDataset):
                 mask_map = Map(mask_path)
                 mask_map = process_map(mask_map, slice, bin)
                 mask = mask_map.data
-                los_data[mask] = 0 # np.nan
-                trv_data[mask] = 0 # np.nan
-                azi_data[mask] = 0 # np.nan
+                los_data[mask] = 0  # np.nan
+                trv_data[mask] = 0  # np.nan
+                azi_data[mask] = 0  # np.nan
         else:
             los_data = fits.getdata(file_los)
             trv_data = fits.getdata(file_trv)
@@ -212,9 +244,9 @@ class LosTrvAziFITSDataset(MapDataset):
             if mask_path is not None:
                 mask = fits.getdata(mask_path)
                 mask = np.array(mask, dtype=bool)
-                los_data[mask] = 0 # np.nan
-                trv_data[mask] = 0 # np.nan
-                azi_data[mask] = 0 # np.nan
+                los_data[mask] = 0  # np.nan
+                trv_data[mask] = 0  # np.nan
+                azi_data[mask] = 0  # np.nan
             if slice:
                 los_data = los_data[slice[0]:slice[1], slice[2]:slice[3]]
                 trv_data = trv_data[slice[0]:slice[1], slice[2]:slice[3]]
@@ -228,6 +260,7 @@ class LosTrvAziFITSDataset(MapDataset):
         b = np.stack([los_data, trv_data, np.pi - azi_data]).transpose()
 
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
+
 
 class LosFITSDataset(MapDataset):
 
@@ -260,6 +293,7 @@ class LosFITSDataset(MapDataset):
         b = np.stack([B_nan, B_nan, los_data]).transpose()
 
         super().__init__(b=b, wcs=wcs, **kwargs)
+
 
 class FldIncAziFITSDataset(MapDataset):
 
@@ -303,7 +337,7 @@ class FldIncAziFITSDataset(MapDataset):
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
 
 
-class FITSSeriesDataModule(FITSDataModule):
+class CartesianSeriesDataModule(CartesianDataModule):
 
     def __init__(self, fits_paths, error_paths=None, *args, **kwargs):
         self.args = args
@@ -334,18 +368,36 @@ class FITSSeriesDataModule(FITSDataModule):
         return super().train_dataloader()
 
 
-
 class SHARPDataset(FITSDataset):
 
     def __init__(self, **kwargs):
         super().__init__(Mm_per_pixel=.36, **kwargs)
 
 
+class NumpyDataset(MapDataset):
+
+    def __init__(self, data_path, **kwargs):
+        b = np.load(data_path)
+        super().__init__(b, **kwargs)
+
+
 class PotentialBoundaryDataset(TensorsDataset):
 
     def __init__(self, bz, height_pixel, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
-        coords, b_err, b = load_potential_field_data(bz, height_pixel, strides,
-                                                     progress=False)
+        coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
+                                                         progress=False)
+        coords = coords * ds_per_pixel
+        b_err = b_err / G_per_dB
+        b = b / G_per_dB
+
+        super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
+
+
+class PotentialTopBoundaryDataset(TensorsDataset):
+
+    def __init__(self, bz, height_pixel, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
+        coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
+                                                         only_top=True, progress=False)
         coords = coords * ds_per_pixel
         b_err = b_err / G_per_dB
         b = b / G_per_dB

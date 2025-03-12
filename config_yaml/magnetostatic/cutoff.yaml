@@ -1,0 +1,44 @@
+---
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/cutoff_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/cutoff_v01"
+logging:
+  project: magnetostatic
+  name: Cut-off
+data:
+  type: cartesian
+  slices:
+    - type: "muram_cube"
+      name: 'bottom_b'
+      data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
+      iteration: 474000
+      tau: 1.0
+      batch_size: 4096
+  z_range: [0, 60]
+  iterations: 10000
+  batch_size: 8192
+  random_batch_size: 16384
+model:
+  type: magneto_static
+  dim: 256
+  encoding_config: {type: "gaussian", scale: 1}
+  cutoff: True
+training:
+  epochs: 20
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1.0
+      ds_id: [bottom_b, potential]
+      b_scaling: True
+    - type: magneto_static
+      lambda: 1.0e-4
+    - type: divergence
+      lambda: 1.0e-2
+      b_scaling: True
+    - type: force_free
+      lambda: 0.0
+      b_scaling: True
+    - type: b_height_scaling
+      lambda: 1.0e-2
+    - type: p_height_scaling
+      lambda: 1.0e-2

@@ -1,6 +1,7 @@
 import copy
 import logging
 
+import numpy as np
 import torch
 from pytorch_lightning import LightningModule
 from torch import nn
@@ -32,7 +33,13 @@ class NF2Module(LightningModule):
             **kwargs: Additional keyword arguments.
         """
         super().__init__()
+        coord_ranges = np.array(data_config['coord_range'])
+        coord_range = np.stack([coord_ranges[:, :, 0].min(0),
+                                coord_ranges[:, :, 1].max(0),
+                                ], -1)
         model_kwargs = model_kwargs if model_kwargs is not None else {'type': 'b', 'dim': 256}
+        model_kwargs['coord_range'] = coord_range
+        model_kwargs['ds_per_pixel'] = max(data_config['ds_per_pixel'])
         # init model
         model_kwargs = copy.deepcopy(model_kwargs)
         model_type = model_kwargs.pop('type')
@@ -41,7 +48,7 @@ class NF2Module(LightningModule):
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
         elif model_type == 'magneto_static':
-            model = MagnetoStaticModel(**model_kwargs)
+            model = MagnetoStaticModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
         elif model_type == 'vector_potential_domain':
             model = VectorPotentialDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
         elif model_type == 'b_domain':
@@ -50,10 +57,12 @@ class NF2Module(LightningModule):
             model = MultiDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
         elif model_type == 'b_scaled':
             model = BScaledModel(**model_kwargs)
-        elif model_type == 'vp_scaled':
+        elif model_type == 'vector_potential_scaled':
             model = VectorPotentialScaledModel(**model_kwargs)
         else:
-            raise ValueError(f"Invalid model: {model_type}, must be in ['b', 'vector_potential', 'flux']")
+            valid_options = ['b', 'vector_potential', 'flux', 'magneto_static', 'vector_potential_domain', 'b_domain',
+                             'multi_domain', 'b_scaled', 'vector_potential_scaled']
+            raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
         transform_modules = self.load_transfrom_config(transforms)

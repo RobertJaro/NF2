@@ -50,7 +50,7 @@ class SphericalSlicesCallback(Callback):
                 extent = None
                 height = coords[j, :, :, 0].mean()
                 im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='upper', extent=extent)
+                                      origin='lower', extent=extent)
                 axs[i, j].set_xlabel('Longitude [deg]')
                 axs[i, j].set_ylabel('Latitude [deg]')
                 # add locatable colorbar
@@ -72,7 +72,7 @@ class SphericalSlicesCallback(Callback):
             # extent = np.rad2deg(extent)
             extent = None
             height = coords[i, :, :, 0].mean()
-            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
+            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             axs[i].set_xlabel('Longitude [deg]')
             axs[i].set_ylabel('Latitude [deg]')
             # add locatable colorbar
@@ -86,7 +86,7 @@ class SphericalSlicesCallback(Callback):
         # plot integrated current density
         j = np.sum(j, axis=0)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j, cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
+        im = ax.imshow(j, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -202,13 +202,15 @@ class SlicesCallback(Callback):
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[0, i].imshow(p[:, :, i].T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
+            p_slice = p[:, :, i] + 1e-6
+            im = axs[0, i].imshow(p_slice.T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             # add locatable colorbar
             divider = make_axes_locatable(axs[0, i])
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax, label='P [erg/cm^3]')
             # plot grad P
-            im = axs[1, i].imshow(grad_P[:, :, i].T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
+            grad_P_slice = grad_P[:, :, i] + 1e-6
+            im = axs[1, i].imshow(grad_P_slice.T, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
             divider = make_axes_locatable(axs[1, i])
             cax = divider.append_axes("right", size="5%", pad=0.05)
             plt.colorbar(im, cax=cax, label='$|\\nabla P|$ [erg/cm^3/Mm]')
@@ -321,9 +323,9 @@ class BoundaryCallback(Callback):
             self.plot_b_coords(b, b_true, original_coords, transformed_coords)
         else:
             original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            self.plot_b(b, b_true, original_coords)
+            self.plot_b(b, b_true)
 
-    def plot_b(self, b, b_true, original_coords):
+    def plot_b(self, b, b_true):
         extent = None
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))

@@ -215,9 +215,9 @@ class SphericalMapDataset(SphericalSliceDataset):
                    (spherical_coords[..., 2] > slice_lon[0]) & \
                    (spherical_coords[..., 2] < slice_lon[1])
         elif m_type == 'heliographic_carrington':
-            unit = u.Quantity(mask_config['unit']) if 'unit' in mask_config else u.deg
-            slice_lon = (mask_config['longitude_range'] * unit).to_value(u.rad)
-            slice_lat = (mask_config['latitude_range'] * unit).to_value(u.rad)
+            unit = mask_config['unit'] if 'unit' in mask_config else 'deg'
+            slice_lon = u.Quantity(mask_config['longitude_range'], unit).to_value(u.rad)
+            slice_lat = u.Quantity(mask_config['latitude_range'], unit).to_value(u.rad)
 
             lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
                        (spherical_coords[..., 1] < slice_lat[1])

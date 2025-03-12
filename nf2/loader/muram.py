@@ -1,4 +1,3 @@
-import copy
 import os
 
 import numpy as np
@@ -8,124 +7,8 @@ from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 
-from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.data.util import img_to_los_trv_azi
-from nf2.loader.base import MapDataset, BaseDataModule, TensorsDataset
-from nf2.loader.fits import PotentialBoundaryDataset
-
-
-class MURaMDataModule(BaseDataModule):
-
-    def __init__(self, slices, work_directory, boundary_config=None, random_config=None,
-                 Mm_per_ds=.36 * 320, G_per_dB=2500, seconds_per_dt=60, max_height=100,
-                 batch_size=2**15, validation_batch_size=2 ** 15,
-                 log_shape=False,
-                 **kwargs):
-        # boundary dataset
-        slice_datasets = {}
-        bottom_boundary_dataset = None
-        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'seconds_per_dt': seconds_per_dt,
-                             'work_directory': work_directory, 'batch_size': batch_size}
-        for i, slice_config in enumerate(slices):
-            slice_config = copy.deepcopy(slice_config)
-            s_type = slice_config.pop('type', '2D')
-            ds_id = slice_config.pop('name', f'boundary_{i + 1:02d}')
-            bottom_boundary = slice_config.pop('bottom', False)
-            slice_config = slice_base_kwargs | slice_config
-            if s_type == 'slice':
-                muram_dataset = MURaMDataset(**slice_config)
-            elif s_type == 'cube':
-                muram_dataset = MURaMCubeDataset(**slice_config)
-            elif s_type == 'pressure':
-                muram_dataset = MURaMPressureDataset(**slice_config)
-            else:
-                raise ValueError(f'Unknown slice type {s_type}')
-            slice_datasets[ds_id] = muram_dataset
-            if bottom_boundary:
-                bottom_boundary_dataset = muram_dataset
-
-        #
-        if bottom_boundary_dataset is None:
-            bottom_boundary_dataset = list(slice_datasets.values())[0]
-
-        # random sampling dataset
-        coord_range = bottom_boundary_dataset.coord_range
-        z_range = np.array([[0, max_height / Mm_per_ds]])
-        coord_range = np.concatenate([coord_range, z_range], axis=0)
-        random_config = random_config if random_config is not None else {}
-        random_dataset = RandomCoordinateDataset(coord_range, **random_config)
-
-        ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
-
-        if log_shape:
-            print(f'EXTRAPOLATING CUBE:')
-            # pretty plot cube range
-            print(f'x: {coord_range[0, 0] * Mm_per_ds:.2f} - {coord_range[0, 1] * Mm_per_ds:.2f} Mm')
-            print(f'y: {coord_range[1, 0] * Mm_per_ds:.2f} - {coord_range[1, 1] * Mm_per_ds:.2f} Mm')
-            print(f'z: {coord_range[2, 0] * Mm_per_ds:.2f} - {coord_range[2, 1] * Mm_per_ds:.2f} Mm')
-            print('------------------')
-            print(f'x: {coord_range[0, 0] / ds_per_pixel :.2f} - {coord_range[0, 1] / ds_per_pixel:.2f} pixel')
-            print(f'y: {coord_range[1, 0] / ds_per_pixel:.2f} - {coord_range[1, 1] / ds_per_pixel:.2f} pixel')
-            print(f'z: {coord_range[2, 0] / ds_per_pixel:.2f} - {coord_range[2, 1] / ds_per_pixel:.2f} pixel')
-            print('------------------')
-            print(f'x: {coord_range[0, 0]:.2f} - {coord_range[0, 1]:.2f} ds')
-            print(f'y: {coord_range[1, 0]:.2f} - {coord_range[1, 1]:.2f} ds')
-            print(f'z: {coord_range[2, 0]:.2f} - {coord_range[2, 1]:.2f} ds')
-
-        training_datasets = {}
-        for ds_id, dataset in slice_datasets.items():
-            training_datasets[ds_id] = dataset
-        training_datasets['random'] = random_dataset
-
-        # top and side boundaries
-        boundary_config = boundary_config if boundary_config is not None else {'type': 'potential', 'strides': 4}
-        if boundary_config['type'] == 'potential':
-            bz = bottom_boundary_dataset.bz
-            potential_dataset = PotentialBoundaryDataset(bz=bz, height_pixel=max_height / (ds_per_pixel * Mm_per_ds),
-                                                         ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
-                                                         work_directory=work_directory,
-                                                         strides=boundary_config['strides'])
-            training_datasets['potential'] = potential_dataset
-
-        # validation datasets
-        cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
-
-        validation_slice_datasets = []
-        slice_base_kwargs = {'G_per_dB': G_per_dB, 'Mm_per_ds': Mm_per_ds, 'seconds_per_dt': seconds_per_dt,
-                             'work_directory': work_directory,
-                             'shuffle': False, 'filter_nans': False, 'plot': False}
-        for slice_config in slices:
-            slice_config = copy.deepcopy(slice_config)
-            s_type = slice_config.pop('type', '2D')
-            slice_config['batch_size'] = validation_batch_size  # override batch size
-            slice_config = slice_base_kwargs | slice_config
-            if s_type == 'slice':
-                muram_dataset = MURaMDataset(**slice_config)
-            elif s_type == 'cube':
-                muram_dataset = MURaMCubeDataset(**slice_config)
-            elif s_type == 'pressure':
-                muram_dataset = MURaMPressureDataset(**slice_config)
-            else:
-                raise ValueError(f'Unknown slice type {s_type}')
-            validation_slice_datasets.append(muram_dataset)
-        validation_slices_dataset = SlicesDataset(coord_range, ds_per_pixel, n_slices=10,
-                                                  batch_size=validation_batch_size)
-
-        validation_datasets = {'cube': cube_dataset, 'slices': validation_slices_dataset}
-        for i, dataset in enumerate(validation_slice_datasets):
-            validation_datasets[f'validation_boundary_{i + 1:02d}'] = dataset
-
-        config = {'type': 'cartesian',
-                  'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB, 'seconds_per_dt': seconds_per_dt,
-                  'max_height': max_height,
-                  'coord_range': [], 'ds_per_pixel': [], 'height_mapping': []}
-        for ds in slice_datasets.values():
-            config['coord_range'].append(ds.coord_range)
-            config['ds_per_pixel'].append(ds.ds_per_pixel)
-            config['height_mapping'].append(ds.height_mapping)
-
-        super().__init__(training_datasets, validation_datasets, config, **kwargs)
-
+from nf2.loader.base import MapDataset, TensorsDataset
 
 muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
                    'By': {'id': 'result_prim_7', 'unit': u.Gauss},
@@ -161,20 +44,37 @@ class MURaMDataset(MapDataset):
 
 class MURaMCubeDataset(MapDataset):
 
-    def __init__(self, data_path, iteration, base_height, *args, **kwargs):
-        snapshot = MURaMSnapshot(data_path, iteration)
+    def __init__(self, data_path, iteration, base_height=None, tau=None, *args, **kwargs):
+        assert base_height is not None or tau is not None, 'Either base_height or tau must be provided'
+        assert base_height is None or tau is None, 'Only one of base_height or tau can be provided'
 
-        b = snapshot.B
-        b = b[:, :, base_height]
+        snapshot = MURaMSnapshot(data_path, iteration)
+        if base_height is not None:
+            b = snapshot.B
+            b = b[:, :, base_height]
+        elif tau is not None:
+            muram_out = snapshot.load_tau(tau)
+            b = muram_out['B']
+        else:
+            raise ValueError('Either base_height or tau must be provided')
 
         super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
 
-class MURaMPressureDataset(TensorsDataset):
-    def __init__(self, data_path, iteration, base_height, G_per_dB, Mm_per_ds, wcs=None, **kwargs):
-        # Load MURaM snapshot
-        snapshot = MURaMSnapshot(data_path, iteration)
-        p = snapshot.P[:, :, base_height:, None]  # Trim height dimension
 
+class MURaMPressureDataset(TensorsDataset):
+    def __init__(self, data_path, iteration, G_per_dB, Mm_per_ds, base_height=None, tau=None, wcs=None, **kwargs):
+        assert base_height is not None or tau is not None, 'Either base_height or tau must be provided'
+        assert base_height is None or tau is None, 'Only one of base_height or tau can be provided'
+
+        snapshot = MURaMSnapshot(data_path, iteration)
+        if base_height is not None:
+            p = snapshot.P
+            p = p[:, :, base_height:, None]
+        elif tau is not None:
+            muram_out = snapshot.load_cube(target_tau=tau)
+            p = muram_out['P'][..., None]
+        else:
+            raise ValueError('Either base_height or tau must be provided')
         # Normalize pressure
         p = p / G_per_dB ** 2
 
@@ -321,6 +221,31 @@ class MURaMSnapshot():
         p = p[:, :, min_height:max_height]
 
         return {'B': b, 'tau': tau, 'P': p}
+
+    def load_tau(self, target_tau, **kwargs):
+        tau = self.tau
+
+        pix_height = np.argmin(np.abs(tau - target_tau), axis=2)
+        height = int(pix_height.mean())
+        print('HEIGHT:', height)
+
+        return self.load_slice(**kwargs, height=height)
+
+    def load_slice(self, height, resolution=0.192 * u.Mm / u.pix):
+        b = self.B[:, :, height]
+        p = self.P[:, :, height]
+
+        # integer division
+        assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
+        assert resolution % self.ds[1] == 0, f'resolution {resolution} must be a multiple of {self.ds[1]}'
+        x_binning = resolution // self.ds[0]
+        y_binning = resolution // self.ds[1]
+
+        b = block_reduce(b, (x_binning, y_binning, 1), np.mean)
+        p = block_reduce(p, (x_binning, y_binning), np.mean)
+
+        return {'B': b, 'P': p}
+
 
     def load_base(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, base_height=180):
         b = self.B[:, :, base_height:]

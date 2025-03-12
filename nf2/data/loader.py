@@ -1,13 +1,9 @@
-import glob
 import os
 
 import numpy as np
-import torch
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
-from sunpy.map import Map, all_coordinates_from_map
 
-from nf2.data.util import spherical_to_cartesian
 from nf2.potential.potential_field import get_potential_boundary, get_potential_top
 
 
@@ -21,7 +17,7 @@ def prep_b_data(b_cube, error_cube, height,
     mf_err = error_cube.reshape((-1, 3))
     # load potential field
     if potential_boundary:
-        pf_coords, pf_err, pf_values = load_potential_field_data(b_cube, height, potential_strides)
+        pf_coords, pf_err, pf_values = load_potential_field_boundary(b_cube, height, potential_strides)
         # concatenate pf data points
         coords = np.concatenate([pf_coords, mf_coords])
         values = np.concatenate([pf_values, mf_values])
@@ -37,13 +33,16 @@ def prep_b_data(b_cube, error_cube, height,
 
     return coords, values, err
 
-def load_potential_field_data(bz, height, reduce, only_top=False, pf_error=0.0, **kwargs):
+
+def load_potential_field_boundary(bz, height, reduce, only_top=False, pf_error=0.0, **kwargs):
     if reduce > 1:
         bz = block_reduce(bz, (reduce, reduce), func=np.mean)
         height = height // reduce
     pf_batch_size = int(1024 * 512 ** 2 / np.prod(bz.shape))  # adjust batch to AR size
-    pf_coords, pf_values = get_potential_top(bz, height, batch_size=pf_batch_size, **kwargs) \
-        if only_top else get_potential_boundary(bz, height, batch_size=pf_batch_size, **kwargs)
+    if only_top:
+        pf_coords, pf_values = get_potential_top(bz, height, batch_size=pf_batch_size, **kwargs)
+    else:
+        pf_coords, pf_values = get_potential_boundary(bz, height, batch_size=pf_batch_size, **kwargs)
     pf_values = np.array(pf_values, dtype=np.float32)
     pf_coords = np.array(pf_coords, dtype=np.float32) * reduce  # expand to original coordinate spacing
     pf_err = np.ones_like(pf_values) * pf_error

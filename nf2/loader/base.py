@@ -9,7 +9,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, BatchesDataset
-from nf2.data.loader import load_potential_field_data
+from nf2.data.loader import load_potential_field_boundary
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 
@@ -115,6 +115,10 @@ class MapDataset(TensorsDataset):
 
         self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
                                      [coords[..., 1].min(), coords[..., 1].max()]])
+        self.ds = np.array([
+            np.diff(coords[:, 0, 0]).mean(),
+            np.diff(coords[0, :, 1]).mean(),
+        ])
 
         self.cube_shape = coords.shape[:-1]
         self.los_trv_azi = los_trv_azi
@@ -234,8 +238,8 @@ class SlicesDataModule(BaseDataModule):
         if boundary['type'] == 'potential':
             b_bottom = b_slices[:, :, 0]
             b_bottom = np.nan_to_num(b_bottom, nan=0)  # replace nans of mosaic data
-            pf_coords, pf_errors, pf_values = load_potential_field_data(b_bottom, height, boundary['strides'],
-                                                                        progress=True)
+            pf_coords, pf_errors, pf_values = load_potential_field_boundary(b_bottom, height, boundary['strides'],
+                                                                            progress=True)
             #
             pf_ranges = np.zeros((*pf_coords.shape[:-1], 2), dtype=np.float32)
             pf_ranges[:, 0] = pf_coords[:, 2]
@@ -248,8 +252,8 @@ class SlicesDataModule(BaseDataModule):
         elif boundary['type'] == 'potential_top':
             b_bottom = b_slices[:, :, 0]
             b_bottom = np.nan_to_num(b_bottom, nan=0)  # replace nans of mosaic data
-            pf_coords, pf_errors, pf_values = load_potential_field_data(b_bottom, height, boundary['strides'],
-                                                                        only_top=True, pf_error=0.1, progress=True)
+            pf_coords, pf_errors, pf_values = load_potential_field_boundary(b_bottom, height, boundary['strides'],
+                                                                            only_top=True, pf_error=0.1, progress=True)
             # log upper boundary
             fig, axs = plt.subplots(1, 3, figsize=(12, 4))
             pf_b_map = pf_values.reshape(b_bottom.shape)

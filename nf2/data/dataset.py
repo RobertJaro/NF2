@@ -79,8 +79,10 @@ class CubeDataset(Dataset):
 class RandomSphericalCoordinateDataset(Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
-                 latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi),
+                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
                  radial_weighted_sampling=False, latitude_weighted_sampling=False, **kwargs):
+        longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
+        latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         self.radius_range = radius_range
         self.Mm_per_ds = Mm_per_ds
         self.latitude_range = latitude_range
@@ -123,7 +125,12 @@ class RandomSphericalCoordinateDataset(Dataset):
 
 class SphereDataset(Dataset):
 
-    def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024, latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi), **kwargs):
+    def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024,
+                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
+                 **kwargs):
+        longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
+        latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        #
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(resolution * ratio)
         coords = np.stack(
@@ -148,7 +155,12 @@ class SphereDataset(Dataset):
 
 class SphereSlicesDataset(Dataset):
 
-    def __init__(self, radius_range, Mm_per_ds, latitude_range=(-np.pi/2, np.pi/2), longitude_range=(0, 2 * np.pi), longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+    def __init__(self, radius_range, Mm_per_ds,
+                 latitude_range=(-90, 90),  longitude_range=(0, 360), unit='deg',
+                 longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+        longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
+        latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        #
         ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
         coords = np.stack(
@@ -156,6 +168,7 @@ class SphereSlicesDataset(Dataset):
                         np.linspace(latitude_range[0], latitude_range[1], resolution_lat),
                         np.linspace(longitude_range[0], longitude_range[1], longitude_resolution),
                         indexing='ij'), -1)
+
         self.cube_shape = coords.shape[:-1]
 
         coords = spherical_to_cartesian(coords)

@@ -1,6 +1,6 @@
 from nf2.data.dataset import SphereSlicesDataset, SlicesDataset, SphereDataset, CubeDataset
 from nf2.loader.base import MapDataset
-from nf2.loader.fits import FITSDataset
+from nf2.loader.cartesian import FITSDataset
 from nf2.loader.muram import MURaMPressureDataset
 from nf2.loader.spherical import SphericalSliceDataset
 from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback, \
