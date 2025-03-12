@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/2173/{time}_v05"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/{time}_v05"
+base_path: "/glade/work/rjarolim/nf2/spherical/2173/{time}_v06"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/{time}_v06"
 logging:
   project: spherical
   name: "2173 {time}"

@@ -6,7 +6,7 @@ from astropy import units as u
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from nf2.loader.fits import process_map
+from nf2.loader.cartesian import process_map
 from sunpy.map import Map
 
 from nf2.evaluation.output import CartesianOutput, DisambiguationOutput

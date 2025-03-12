@@ -38,7 +38,7 @@ ref_b = np.stack([ref_r_map.data, ref_t_map.data, ref_p_map.data]).T
 
 spherical_coords = np.stack([
     coords.radius.to(u.solRad).value,
-    np.pi / 2 - coords.lat.to(u.rad).value,
+    coords.lat.to(u.rad).value,
     coords.lon.to(u.rad).value,
 ]).transpose()
 cartesian_coords = spherical_to_cartesian(spherical_coords)

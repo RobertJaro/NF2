@@ -1,0 +1,43 @@
+---
+base_path: "/glade/work/rjarolim/nf2/iswat_AR12760/version01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/iswat_AR12760_v01"
+logging:
+  project: "ISWAT AR12760"
+  name: Version 1
+data:
+  type: cartesian
+  slices:
+    - type: numpy
+      data_path: "/glade/work/rjarolim/data/nf2/iswat_AR12760/bxyz.npy"
+  num_workers: 8
+  batch_size: 8192
+  random_batch_size: 16384
+  iterations: 10000
+  G_per_dB: 100
+  z_range: [0, 105]
+  boundary_config:
+    type: 'potential_top'
+    batch_size: 1024
+model:
+  type: vector_potential_scaled
+  dim: 256
+  encoding_config: {type: "periodic_gaussian"}
+training:
+  epochs: 20
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: 1.0
+      ds_id: boundary_01
+      b_scaling: True
+    - type: boundary
+      name: potential_boundary
+      lambda: 1.0
+      ds_id: potential
+      b_scaling: True
+    - type: force_free
+      lambda: 1.0e-3
+      b_scaling: True
+    - type: divergence
+      lambda: 0.0
+      b_scaling: True

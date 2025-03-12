@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.loader.fits import FITSSeriesDataModule
+from nf2.loader.cartesian import CartesianSeriesDataModule
 from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
@@ -65,7 +65,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
 
     # initialize data module
     if data["type"] == 'sharp':
-        data_module = FITSSeriesDataModule(fits_paths, error_paths=error_paths, **data)
+        data_module = CartesianSeriesDataModule(fits_paths, error_paths=error_paths, **data)
     elif data["type"] == 'spherical':
         data_module = SphericalSeriesDataModule(fits_paths, **data)
     else:

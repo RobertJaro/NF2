@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/comparison/377_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v02"
+base_path: "/glade/work/rjarolim/nf2/spherical/comparison/377_scaled_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_scaled_v02"
 logging:
   project: spherical
-  name: '377 spherical'
+  name: '377 spherical - scaled'
 data:
   type: spherical
   train_configs:
@@ -80,12 +80,13 @@ data:
 model:
   type: vector_potential
   dim: 512
+  encoding_config: {type: "gaussian"}
 training:
   epochs: 1000
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4} #1
+      lambda: 10.0
       ds_id: full_disk
     - type: energy_gradient
       lambda: 10.0
@@ -96,4 +97,5 @@ training:
       ds_id: random
       base_radius: 1.04
     - type: force_free
-      lambda: 0.1
+      lambda: {start: 1.0e-6, end: 1.0e-2, iterations: 5.0e+4}
+      height_scaling: true

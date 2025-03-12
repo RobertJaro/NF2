@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 s_map = Map(args.file)
 center_coord = s_map.center.transform_to(frames.HeliographicCarrington)
-center_lat = np.pi / 2 * u.rad - center_coord.lat
+center_lat = center_coord.lat
 center_lon = center_coord.lon
 
 lat_bounds = np.array([center_lat.to_value(u.rad) - args.max_latitude,
@@ -26,6 +26,13 @@ lon_bounds = np.array([center_lon.to_value(u.rad) - args.max_longitude,
 if lon_bounds[0] < 0:
     lon_bounds += 2 * np.pi
 
+
+print(f'File: {args.file} -- radians')
 print(f'Center: lat {center_lat.to(u.rad):.3f}, lon {center_lon.to(u.rad):.3f}')
 print(f'Longitude bounds: {lon_bounds[0]:.3f}, {lon_bounds[1]:.3f}')
 print(f'Latitude bounds: {lat_bounds[0]:.3f}, {lat_bounds[1]:.3f}')
+
+print(f'File: {args.file} -- degrees')
+print(f'Center: lat {center_lat.to(u.deg):.3f}, lon {center_lon.to(u.deg):.3f}')
+print(f'Longitude bounds: {np.rad2deg(lon_bounds[0]):.3f}, {np.rad2deg(lon_bounds[1]):.3f}')
+print(f'Latitude bounds: {np.rad2deg(lat_bounds[0]):.3f}, {np.rad2deg(lat_bounds[1]):.3f}')

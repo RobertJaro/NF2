@@ -119,9 +119,9 @@ class CartesianOutput(BaseOutput):
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
-        n_x_pix = np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)
-        n_y_pix = np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)
-        n_z_pix = np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)
+        n_x_pix = np.round((x_max - x_min) / ds_per_pixel).astype(int)
+        n_y_pix = np.round((y_max - y_min) / ds_per_pixel).astype(int)
+        n_z_pix = np.round((z_max - z_min) / ds_per_pixel).astype(int)
 
         coords = np.stack(np.mgrid[:n_x_pix, :n_y_pix, :n_z_pix], -1)
         coords = coords * ds_per_pixel + np.array([x_min, y_min, z_min]).reshape((1, 1, 1, 3))
@@ -384,7 +384,7 @@ class SphericalOutput(BaseOutput):
         self.radius_range = self.state['data']['radius_range']
 
     def load_spherical(self, radius_range: u.Quantity = None,
-                       latitude_range: u.Quantity = (0, np.pi) * u.rad,
+                       latitude_range: u.Quantity = (-np.pi/2, np.pi/2) * u.rad,
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
@@ -401,7 +401,7 @@ class SphericalOutput(BaseOutput):
 
     def load(self,
              radius_range: u.Quantity = None,
-             latitude_range: u.Quantity = (0, np.pi) * u.rad,
+             latitude_range: u.Quantity = (-np.pi/2, np.pi/2) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, nan_value=0, **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
@@ -484,7 +484,7 @@ class SphericalOutput(BaseOutput):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to(u.solRad).value,
-            np.pi / 2 - spherical_coords.lat.to(u.rad).value,
+            spherical_coords.lat.to(u.rad).value,
             spherical_coords.lon.to(u.rad).value,
         ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)

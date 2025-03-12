@@ -43,7 +43,7 @@ class RadialTransformModel(nn.Module):
         self.ds_ids = ds_ids
         self.observer_transformer = ObserverTransformer()
 
-    def forward(self, batch):
+    def forward(self, coords, batch):
         for ds_id in self.ds_ids:
             transformed_coords = self.transform(batch[ds_id]['coords'], batch[ds_id]['obs_coords'],
                                                 batch[ds_id]['height_range'])
@@ -66,7 +66,7 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, dim=256, n_layers=8, encoding_config=None, activation='sine'):
+    def __init__(self, in_coords, out_coords, coord_range=None, ds_per_pixel=None, dim=256, n_layers=8, encoding_config=None, activation='sine'):
         super().__init__()
         encoding_type = encoding_config['type'] if encoding_config is not None else 'none'
         if encoding_type == 'none':
@@ -82,6 +82,16 @@ class GenericModel(nn.Module):
             posenc = GaussianPositionalEncoding(in_coords)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
+        elif encoding_type == 'periodic':
+            posenc = PeriodicEncoding(in_coords, coord_range=coord_range, ds_per_pixel=ds_per_pixel)
+            d_in = nn.Linear(posenc.d_output, dim)
+            self.d_in = nn.Sequential(posenc, d_in)
+        elif encoding_type == 'periodic_gaussian':
+            scale = encoding_config.pop('scale', 4.0)
+            periodic_enc = PeriodicEncoding(in_coords, coord_range=coord_range, ds_per_pixel=ds_per_pixel)
+            posenc = GaussianPositionalEncoding(periodic_enc.d_output, scale=scale)
+            d_in = nn.Linear(posenc.d_output, dim)
+            self.d_in = nn.Sequential(periodic_enc, posenc, d_in)
         else:
             raise NotImplementedError(f'Unknown encoding {encoding_type}')
         lin = [nn.Linear(dim, dim) for _ in range(n_layers)]
@@ -231,6 +241,8 @@ class MultiDomainModel(nn.Module):
             model_class = VectorPotentialModel
         elif model_type == 'b':
             model_class = BModel
+        elif model_type == 'b_scaled':
+            model_class = BScaledModel
         elif model_type == 'potential':
             model_class = PotentialModel
         elif model_type == 'radial':
@@ -243,6 +255,7 @@ class MultiDomainModel(nn.Module):
         z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1)[..., None]
 
         outputs = []
+        combined_out = {}
         for i, model in enumerate(self.models):
             start, end = self.domain_range[i]
             overlap = self.overlap
@@ -263,26 +276,27 @@ class MultiDomainModel(nn.Module):
             else:
                 raise NotImplementedError(f'Unknown window type {self.window_type}')
             #
-            out = model(coords)['b']
+            out = model(coords)
+            if 'b_height_scaling' in out:
+                combined_out['b_height_scaling'] = out['b_height_scaling']
             # combine outputs with window function
-            outputs.append(out * window)
+            outputs.append(out['b'] * window)
 
         # sum outputs over domains
         b = torch.sum(torch.stack(outputs, -1), -1)
 
-        out = {'b': b}
+        combined_out['b'] = b
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)
-            out['jac_matrix'] = jac_matrix
+            combined_out['jac_matrix'] = jac_matrix
 
-        return out
+        return combined_out
 
 
 class BDomainModel(GenericDomainModel):
 
     def forward(self, coords, compute_jacobian=True):
         b = super().forward(coords)
-        # b = torch.sinh(x * 10.0)
 
         out = {'b': b}
         if compute_jacobian:
@@ -335,13 +349,12 @@ class BScaledModel(nn.Module):
 
     def __init__(self, spherical=False, **model_kwargs):
         super().__init__()
-        self.b_model = GenericModel(3, 4, **model_kwargs)
+        self.b_model = GenericModel(3, 3, **model_kwargs)
         self.b_height_scaling_model = ScalingModel()
         self.spherical = spherical
 
     def forward(self, coords, compute_jacobian=True):
-        x = self.b_model(coords)
-        b = x[:, :3] * 10 ** x[:, 3:4]
+        b = self.b_model(coords)
 
         z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
         b_height_scaling = self.b_height_scaling_model(z)
@@ -359,16 +372,11 @@ class VectorPotentialScaledModel(nn.Module):
 
     def __init__(self, spherical=False, **model_kwargs):
         super().__init__()
-        self.b_model = GenericModel(3, 4, **model_kwargs)
-        self.b_height_scaling_model = ScalingModel()
-        self.spherical = spherical
+        self.a_model = GenericModel(3, 4, **model_kwargs)
 
     def forward(self, coords, compute_jacobian=True):
-        x = self.b_model(coords)
+        x = self.a_model(coords)
         a = x[:, :3] * 10 ** x[:, 3:4]
-
-        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
-        b_height_scaling = self.b_height_scaling_model(z)
         #
         jac_matrix = jacobian(a, coords)
         dAy_dx = jac_matrix[:, 1, 0]
@@ -381,7 +389,7 @@ class VectorPotentialScaledModel(nn.Module):
         rot_y = dAx_dz - dAz_dx
         rot_z = dAy_dx - dAx_dy
         b = torch.stack([rot_x, rot_y, rot_z], -1)
-        out_dict = {'b': b, 'a': a, 'b_height_scaling': b_height_scaling}
+        out_dict = {'b': b, 'a': a}
         #
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)
@@ -459,30 +467,33 @@ class RadialModel(GenericModel):
         return out_dict
 
 
-class PressureModel(GenericModel):
-
-    def __init__(self, **kwargs):
-        super().__init__(3, 1, **kwargs)
-
-    def forward(self, x):
-        p = super().forward(x)
-        p = 10 ** p
-        return {'p': p}
-
-
 class PressureScaledModel(nn.Module):
 
-    def __init__(self, p_profile_model_path, **kwargs):
+    def __init__(self, Mm_per_ds, domain_range=5, overlap=2, cutoff=False, **kwargs):
         super().__init__()
-        self.p_profile_model = torch.load(p_profile_model_path)
-        self.p_profile_model.requires_grad_(False)
+        self.domain_range = domain_range / Mm_per_ds
+        self.overlap = overlap / Mm_per_ds
+        self.p_height_scaling_model = ScalingModel()
         self.p_model = GenericModel(3, 1, **kwargs)
+        self.cutoff = cutoff
+
 
     def forward(self, coords, compute_jacobian=True):
+        p = 10 ** self.p_model(coords)
         z = coords[:, 2:3]
-        p_height_scaling = self.p_profile_model(z)
-        p = 10 ** (self.p_model(coords) + p_height_scaling)
-        out_dict = {'p': p, 'p_height_scaling': 10 ** p_height_scaling}
+
+        if self.cutoff:
+            # apply height mask
+            end = self.domain_range
+            overlap = self.overlap
+            #
+            right = torch.sigmoid((z - end) * 2 / overlap)
+            window = 1 - right
+            p = p * window
+        #
+        p_height_scaling = self.p_height_scaling_model(z)
+        #
+        out_dict = {'p': p, 'p_height_scaling': p_height_scaling}
         if compute_jacobian:
             jac_matrix = jacobian(p, coords)
             out_dict['jac_matrix'] = jac_matrix
@@ -494,15 +505,13 @@ class PressureScaledModel(nn.Module):
             out_dict['grad_P'] = grad_P
         return out_dict
 
-
 class MagnetoStaticModel(nn.Module):
 
-    def __init__(self, b_model_path, p_profile_model_path, train_b=True, **kwargs):
+    def __init__(self, Mm_per_ds, cutoff=False, **kwargs):
         super().__init__()
-        self.b_model = torch.load(b_model_path)['model']
-        if not train_b:
-            self.b_model.requires_grad_(False)
-        self.p_model = PressureScaledModel(p_profile_model_path, **kwargs)
+        self.b_model = BScaledModel(**kwargs)
+        self.p_model = PressureScaledModel(Mm_per_ds, cutoff=cutoff, **kwargs)
+
 
     def forward(self, coords, compute_jacobian=True):
         b_dict = self.b_model(coords)
@@ -549,6 +558,25 @@ class GaussianPositionalEncoding(nn.Module):
         encoded = torch.cat([x, torch.sin(encoded), torch.cos(encoded)], -1)
         return encoded
 
+
+class PeriodicEncoding(nn.Module):
+
+    def __init__(self, d_input, coord_range, ds_per_pixel):
+        super().__init__()
+        coord_range[..., 1] = coord_range[..., 1] + ds_per_pixel # add one pixel --> [0, 2pi] = [0, n_pix + 1]
+        self.coord_range = nn.Parameter(torch.tensor(coord_range, dtype=torch.float32), requires_grad=False)
+        self.d_output = d_input + 2
+
+    def forward(self, coord):
+        scaled_x = (coord[..., 0:1] - self.coord_range[0, 0]) / (
+                self.coord_range[0, 1] - self.coord_range[0, 0]) * 2 * torch.pi
+        scaled_y = (coord[..., 1:2] - self.coord_range[1, 0]) / (
+                self.coord_range[1, 1] - self.coord_range[1, 0]) * 2 * torch.pi
+        encoded_coord = torch.cat([
+            torch.sin(scaled_x), torch.cos(scaled_x),
+            torch.sin(scaled_y), torch.cos(scaled_y),
+            coord[..., 2:]], -1)
+        return encoded_coord
 
 class ObserverTransformer(nn.Module):
 

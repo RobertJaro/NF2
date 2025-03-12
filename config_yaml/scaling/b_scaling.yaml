@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_v06"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_1slices_v06"
+base_path: "/glade/work/rjarolim/nf2/scaling/muram_mfr_b_scaling_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_b_scaling_v01"
 logging:
-  project: auto-disambiguation
-  name: MURAM MFR - tau1
+  project: scaling
+  name: B Scaling
 data:
   type: cartesian
   slices:
@@ -14,14 +14,10 @@ data:
   iterations: 10000
   batch_size: 8192
   random_batch_size: 16384
-  max_height: 60
-  boundary_config:
-    type: 'potential_top'
-    batch_size: 1024
+  z_range: [0, 60]
 model:
-  type: b
+  type: b_scaled
   dim: 256
-  encoding_config: {type: "periodic", scale: 64}
 training:
   epochs: 15
   loss_config:
@@ -29,17 +25,17 @@ training:
       name: boundary
       lambda: 1.0
       ds_id: boundary_01
-      scale: True
+      b_scaling: True
     - type: boundary
       name: potential_boundary
       lambda: 1.0e-1
       ds_id: potential
-      scale: True
+      b_scaling: True
     - type: force_free
       lambda: 1.0e-3
-      height_scaling: True
+      b_scaling: True
     - type: divergence
       lambda: 1.0e-3
-      height_scaling: True
-    - type: sigma
-      lambda: 0.0
+      b_scaling: True
+    - type: b_height_scaling
+      lambda: 1.0e-2

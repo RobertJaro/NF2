@@ -32,11 +32,11 @@ mfr_muram_j = (curl(mfr_muram_b) / Mm_per_pixel * u.G / u.Mm) * constants.c / (4
 mfr_muram_j = mfr_muram_j.to_value(u.G / u.s)
 
 mfr_1slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_v04/extrapolation_result.nf2')
 mfr_2slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_2slices_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_3slices_v02/extrapolation_result.nf2')
 mfr_2slices_amb_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_2slices_ambiguous_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/disambiguation/muram_mfr_1slices_ambiguous_v03/extrapolation_result.nf2')
 
 x_min, x_max = mfr_1slice_model.coord_range[0]
 y_min, y_max = mfr_1slice_model.coord_range[1]
@@ -71,27 +71,29 @@ extent = [y_min * Mm_per_ds, y_max * Mm_per_ds, 0, 10]
 
 
 def _plot(ax, b, coord, bnbz, title):
-    coord = coord[x_slice]
+    c = coord[x_slice, :, :, 1:]
     #
+    print(bnbz.shape)
     im = ax.imshow(bnbz[x_slice, :, :].T, origin='lower', cmap='RdBu_r', vmin=-.1, vmax=.1, extent=extent)
     ax.set_title(title)
     #
     byz_pre = b[x_slice, :, :, 1:]
-    coord_q = coord[::2, ::2]  # block_reduce(coord, (3, 3, 1), np.mean)
+    coord_q = c[::2, ::2]  # block_reduce(coord, (3, 3, 1), np.mean)
     b_q = byz_pre[::2, ::2]  # block_reduce(byz_pre, (3, 3, 1), np.mean)
-    b_q = b_q / np.linalg.norm(b_q, axis=-1)[..., None]
-    print(b_q.shape, coord_q.shape)
+    b_q = b_q / np.linalg.norm(b_q, axis=-1, keepdims=True)
     ax.quiver(coord_q[..., 0], coord_q[..., 1], b_q[..., 0], b_q[..., 1], color='darkgray', scale=40, pivot='middle')
     #
     return im
 
 fig, axs = plt.subplots(1, 4, figsize=(15, 2.7))
 
-coord = np.stack(np.meshgrid(np.linspace(y_min * Mm_per_ds, y_max * Mm_per_ds, mfr_muram_b.shape[1]),
+coord = np.stack(np.meshgrid(
+                    np.linspace(x_min * Mm_per_ds, x_max * Mm_per_ds, mfr_muram_b.shape[0]),
+                np.linspace(y_min * Mm_per_ds, y_max * Mm_per_ds, mfr_muram_b.shape[1]),
                     np.linspace(0, 10, mfr_muram_b.shape[2]), indexing='ij'), -1)
 _plot(axs[0], mfr_muram_b, coord, mfr_muram_BnablaBz, 'MURaM')
 
-coord = mfr_1slice_out['coords'] * Mm_per_ds
+coord = mfr_1slice_out['coords']
 _plot(axs[1], mfr_1slice_out['b'].to_value(u.G), coord, mfr_1slice_out['metrics']['b_nabla_bz'], 'NF2 - single height')
 
 _plot(axs[2], mfr_2slice_out['b'].to_value(u.G), coord, mfr_2slice_out['metrics']['b_nabla_bz'], 'NF2 - multi height')
