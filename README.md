@@ -1,7 +1,7 @@
 # Neural Network Force-Free magnetic field extrapolation - NF2
 <img src="https://github.com/RobertJaro/NF2/blob/main/images/logo.jpg" width="150" height="150">
 
-# [Usage](#usage) --- [Paper](#paper) --- [Data](#data)
+# [Usage](#usage) --- [Paper](#publications) --- [Data](#data)
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/notebooks/NF2_SHARP_extrapolation.ipynb)
 
@@ -265,7 +265,7 @@ BibTeX:
 ```
 
 ### Multi-height extrapolations
-[Jarolim et al. 2024, ApJL](https://doi.org/10.3847/2041-8213/ad2450) \
+[Jarolim et al. 2024a, ApJL](https://doi.org/10.3847/2041-8213/ad2450) \
 Jarolim, R., Tremblay, B., Rempel, M., Molnar, M., Veronig, A. M., Thalmann, J. K., & Podladchikova, T. (2024). **Advancing solar magnetic field extrapolations through multiheight magnetic field measurements**. The Astrophysical Journal Letters, 963(1), L21.
 
 BibTeX:
@@ -287,7 +287,37 @@ BibTeX:
 }
 ```
 
+### Divergence-free extrapolations using the vector potential
+
+[Jarolim et al. 2024b, ApJL](https://doi.org/10.3847/2041-8213/ad8914) \
+Jarolim, R., Veronig, A. M., Purkhart, S., Zhang, P., & Rempel, M. (2024). **Magnetic Field Evolution of the Solar Active Region 13664**. The Astrophysical Journal Letters, 976(1), L12.
+
+BibTeX:
+```
+@ARTICLE{2024ApJ...976L..12J,
+       author = {{Jarolim}, Robert and {Veronig}, Astrid M. and {Purkhart}, Stefan and {Zhang}, Peijin and {Rempel}, Matthias},
+        title = "{Magnetic Field Evolution of the Solar Active Region 13664}",
+      journal = {\apjl},
+     keywords = {Solar flares, Solar activity, Solar magnetic fields, Solar magnetic reconnection, Magnetohydrodynamical simulations, 1496, 1475, 1503, 1504, 1966, Astrophysics - Solar and Stellar Astrophysics},
+         year = 2024,
+        month = nov,
+       volume = {976},
+       number = {1},
+          eid = {L12},
+        pages = {L12},
+          doi = {10.3847/2041-8213/ad8914},
+archivePrefix = {arXiv},
+       eprint = {2409.08124},
+ primaryClass = {astro-ph.SR},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...976L..12J},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
+}
+```
+
+
 ### Applications
+
+Purkhart, S., Veronig, A. M., Kliem, B., Jarolim, R., Dissauer, K., Dickson, E. C., ... & Krucker, S. (2024). **Multipoint study of the rapid filament evolution during a confined C2 flare on 28 March 2022, leading to eruption**. Astronomy & Astrophysics, 689, A259.
 
 Purkhart, S., Veronig, A.M., Dickson, E.C., Battaglia, A.F., Krucker, S., Jarolim, R., Kliem, B., Dissauer, K. and Podladchikova, T., 2023. **Multipoint study of the energy release and transport in the 28 March 2022, M4 flare using STIX, EUI, and AIA during the first Solar Orbiter nominal mission perihelion**. Astronomy & Astrophysics, 679, p.A99.
 
