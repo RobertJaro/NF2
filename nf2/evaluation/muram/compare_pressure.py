@@ -26,10 +26,9 @@ if __name__ == '__main__':
     Mm_per_pixel = args.Mm_per_pixel
 
     snapshot = MURaMSnapshot(args.muram_source_path, args.muram_iteration)
-    muram_P = snapshot.P[:, :, 64:]
-    muram_B = snapshot.B[:, :, 64:]
-    muram_dx_Mm_per_pixel = snapshot.ds[0].to_value(u.Mm / u.pix)
-    muram_dz_Mm_per_pixel = snapshot.ds[2].to_value(u.Mm / u.pix)
+    muram_out = snapshot.load_cube(resolution=args.Mm_per_pixel * u.Mm / u.pix, target_tau=1.0, height=60 * u.Mm)
+    muram_P = muram_out['P']
+    muram_B = muram_out['B']
 
     nf2_model = CartesianOutput(args.nf2_path)
     nf2_out = nf2_model.load_cube(Mm_per_pixel=Mm_per_pixel, metrics=['j'], progress=True)
@@ -95,7 +94,7 @@ if __name__ == '__main__':
     for i in range(6):
         pix_nf2 = int(Mm_range[i] / Mm_per_pixel)
         nf2_pressure_slice = nf2_out['p'][:, :, pix_nf2, 0].to_value(u.G ** 2)
-        pix_muram = int(Mm_range[i] / muram_dz_Mm_per_pixel)
+        pix_muram = int(Mm_range[i] / Mm_per_pixel)
         muram_pressure_slice = muram_P[:, :, pix_muram]
         #
         norm = LogNorm(vmin=muram_pressure_slice.min(), vmax=muram_pressure_slice.max())
@@ -122,7 +121,7 @@ if __name__ == '__main__':
     # Plot pressure profile
     fig, ax = plt.subplots(1, 1, figsize=(10, 5))
 
-    ax.plot(muram_P.sum((0, 1)) * muram_dx_Mm_per_pixel ** 2, np.arange(muram_P.shape[2]) * muram_dz_Mm_per_pixel, label='MURaM - MEAN')
+    ax.plot(muram_P.sum((0, 1)) * Mm_per_pixel ** 2, np.arange(muram_P.shape[2]) * Mm_per_pixel, label='MURaM - MEAN')
     ax.plot(nf2_out['p'].sum((0, 1, -1)) * Mm_per_pixel ** 2, np.arange(nf2_out['p'].shape[2]) * Mm_per_pixel, label='NF2 - MEAN')
 
     ax.set_ylabel('Height [Mm]')
@@ -141,8 +140,8 @@ if __name__ == '__main__':
 
     ax.plot(magnetic_energy_nf2.sum((0, 1)) * (Mm_per_pixel * 1e8) ** 2,
             np.arange(magnetic_energy_nf2.shape[2]) * (Mm_per_pixel * 1e8), label='NF2')
-    ax.plot(magnetic_energy_muram.sum((0, 1)) * (muram_dx_Mm_per_pixel * 1e8) ** 2,
-            np.arange(magnetic_energy_muram.shape[2]) * (muram_dz_Mm_per_pixel * 1e8), label='MURaM')
+    ax.plot(magnetic_energy_muram.sum((0, 1)) * (Mm_per_pixel * 1e8) ** 2,
+            np.arange(magnetic_energy_muram.shape[2]) * (Mm_per_pixel * 1e8), label='MURaM')
 
     ax.set_ylabel('Height [Mm]')
     ax.set_xlabel('Magnetic energy [erg/cm]')

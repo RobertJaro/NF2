@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnetostatic/force_free_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/force_free_v02"
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/force_free_v03"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/force_free_v03"
 logging:
   project: magnetostatic
   name: Force-Free
@@ -10,29 +10,27 @@ data:
     - type: "muram_cube"
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
       iteration: 474000
-      tau: 1.0
+      tau: 0.1
       batch_size: 4096
   z_range: [0, 60]
   iterations: 10000
   batch_size: 8192
   random_batch_size: 16384
 model:
-  type: b_scaled
+  type: b
   dim: 256
-#  encoding_config: {type: "gaussian", scale: 1}
 training:
   epochs: 20
   loss_config:
     - type: boundary
       name: boundary
-      lambda: 1.0
-      ds_id: [boundary_01, potential]
-      b_scaling: True
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: boundary_01
+    - type: boundary
+      name: potential
+      lambda: 10.0
+      ds_id: potential
     - type: divergence
       lambda: 1.0e-2
-      b_scaling: True
     - type: force_free
-      lambda: 1.0e-4
-      b_scaling: True
-    - type: b_height_scaling
       lambda: 1.0e-2

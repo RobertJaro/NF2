@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnetostatic/pressure_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/pressure_v1"
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/pressure_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/pressure_v02"
 logging:
   project: magnetostatic
   name: Pressure Boundary
@@ -11,13 +11,13 @@ data:
       name: 'bottom_b'
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
       iteration: 474000
-      tau: 1.0
+      tau: 0.1
       batch_size: 4096
     - type: "muram_pressure"
       name: 'pressure'
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
       iteration: 474000
-      tau: 1.0
+      tau: 0.1
       batch_size: 4096
   z_range: [0, 60]
   iterations: 10000
@@ -26,7 +26,8 @@ data:
 model:
   type: magneto_static
   dim: 256
-  encoding_config: {type: "gaussian", scale: 1}
+  encoding_config: {type: "gaussian", scale: 64}
+  cutoff: True
 training:
   epochs: 20
   loss_config:
@@ -34,7 +35,6 @@ training:
       name: boundary
       lambda: 1.0
       ds_id: [bottom_b, potential]
-      b_scaling: True
     - type: pressure_boundary
       lambda: 1.0e-1
       ds_id: [pressure]
@@ -42,13 +42,12 @@ training:
       lambda: 1.0e-4
     - type: divergence
       lambda: 1.0e-2
-      b_scaling: True
     - type: force_free
       lambda: 0.0
-      b_scaling: True
-#    - type: pressure_profile
-#      lambda: 0.0
     - type: b_height_scaling
       lambda: 1.0e-2
+      height_scaling: False
     - type: p_height_scaling
+      lambda: 1.0e-2
+    - type: min_pressure
       lambda: 1.0e-2
