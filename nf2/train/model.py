@@ -66,7 +66,8 @@ class RadialTransformModel(nn.Module):
 
 class GenericModel(nn.Module):
 
-    def __init__(self, in_coords, out_coords, coord_range=None, ds_per_pixel=None, dim=256, n_layers=8, encoding_config=None, activation='sine'):
+    def __init__(self, in_coords, out_coords, coord_range=None, ds_per_pixel=None, dim=256, n_layers=8,
+                 encoding_config=None, activation='sine'):
         super().__init__()
         encoding_type = encoding_config['type'] if encoding_config is not None else 'none'
         if encoding_type == 'none':
@@ -117,6 +118,7 @@ class ScalingModel(GenericModel):
 
     def forward(self, z):
         return 10 ** super().forward(z)
+
 
 class GenericDomainModel(nn.Module):
 
@@ -373,10 +375,15 @@ class VectorPotentialScaledModel(nn.Module):
     def __init__(self, spherical=False, **model_kwargs):
         super().__init__()
         self.a_model = GenericModel(3, 4, **model_kwargs)
+        self.b_height_scaling_model = ScalingModel()
+        self.spherical = spherical
 
     def forward(self, coords, compute_jacobian=True):
         x = self.a_model(coords)
         a = x[:, :3] * 10 ** x[:, 3:4]
+
+        z = coords[:, 2:3] if not self.spherical else torch.norm(coords[..., :3], dim=-1, keepdim=True)
+        b_height_scaling = self.b_height_scaling_model(z)
         #
         jac_matrix = jacobian(a, coords)
         dAy_dx = jac_matrix[:, 1, 0]
@@ -389,7 +396,7 @@ class VectorPotentialScaledModel(nn.Module):
         rot_y = dAx_dz - dAz_dx
         rot_z = dAy_dx - dAx_dy
         b = torch.stack([rot_x, rot_y, rot_z], -1)
-        out_dict = {'b': b, 'a': a}
+        out_dict = {'b': b, 'a': a, 'b_height_scaling': b_height_scaling}
         #
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)
@@ -477,7 +484,6 @@ class PressureScaledModel(nn.Module):
         self.p_model = GenericModel(3, 1, **kwargs)
         self.cutoff = cutoff
 
-
     def forward(self, coords, compute_jacobian=True):
         p = 10 ** self.p_model(coords)
         z = coords[:, 2:3]
@@ -505,13 +511,54 @@ class PressureScaledModel(nn.Module):
             out_dict['grad_P'] = grad_P
         return out_dict
 
+
+class PressureModel(GenericModel):
+
+    def __init__(self, Mm_per_ds, domain_range=5, overlap=2, cutoff=False, **kwargs):
+        super().__init__(3, 1, **kwargs)
+
+        self.domain_range = domain_range / Mm_per_ds
+        self.overlap = overlap / Mm_per_ds
+        self.cutoff = cutoff
+
+    def forward(self, coords, compute_jacobian=True):
+        p = 10 ** super().forward(coords)
+
+        z = coords[:, 2:3]
+
+        if self.cutoff:
+            # apply height mask
+            end = self.domain_range
+            overlap = self.overlap
+            #
+            right = torch.sigmoid((z - end) * 2 / overlap)
+            window = 1 - right
+            p = p * window
+
+        out_dict = {'p': p}
+        if compute_jacobian:
+            jac_matrix = jacobian(p, coords)
+            out_dict['jac_matrix'] = jac_matrix
+            # compute gradient P
+            dP_dx = jac_matrix[:, 0, 0]
+            dP_dy = jac_matrix[:, 0, 1]
+            dP_dz = jac_matrix[:, 0, 2]
+            grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
+            out_dict['grad_P'] = grad_P
+        return out_dict
+
+
 class MagnetoStaticModel(nn.Module):
 
-    def __init__(self, Mm_per_ds, cutoff=False, **kwargs):
+    def __init__(self, Mm_per_ds, b_model_config=None, cutoff=False, **kwargs):
         super().__init__()
-        self.b_model = BScaledModel(**kwargs)
-        self.p_model = PressureScaledModel(Mm_per_ds, cutoff=cutoff, **kwargs)
-
+        if b_model_config is not None:
+            self.b_model = torch.load(b_model_config['path'])['model']
+            if b_model_config.get('freeze', False):
+                self.b_model.requires_grad = False
+        else:
+            self.b_model = BModel(**kwargs)
+        self.p_model = PressureModel(Mm_per_ds=Mm_per_ds, cutoff=cutoff, **kwargs)
 
     def forward(self, coords, compute_jacobian=True):
         b_dict = self.b_model(coords)
@@ -563,7 +610,7 @@ class PeriodicEncoding(nn.Module):
 
     def __init__(self, d_input, coord_range, ds_per_pixel):
         super().__init__()
-        coord_range[..., 1] = coord_range[..., 1] + ds_per_pixel # add one pixel --> [0, 2pi] = [0, n_pix + 1]
+        coord_range[..., 1] = coord_range[..., 1] + ds_per_pixel  # add one pixel --> [0, 2pi] = [0, n_pix + 1]
         self.coord_range = nn.Parameter(torch.tensor(coord_range, dtype=torch.float32), requires_grad=False)
         self.d_output = d_input + 2
 
@@ -577,6 +624,7 @@ class PeriodicEncoding(nn.Module):
             torch.sin(scaled_y), torch.cos(scaled_y),
             coord[..., 2:]], -1)
         return encoded_coord
+
 
 class ObserverTransformer(nn.Module):
 

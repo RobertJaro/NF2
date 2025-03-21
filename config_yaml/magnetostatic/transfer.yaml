@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/magnetostatic/standard_v03"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/standard_v03"
+base_path: "/glade/work/rjarolim/nf2/magnetostatic/transfer_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/transfer_v01"
 logging:
   project: magnetostatic
-  name: Standard
+  name: Transfer
 data:
   type: cartesian
   slices:
@@ -18,6 +18,7 @@ data:
   random_batch_size: 16384
 model:
   type: magneto_static
+  b_model_config: {path: "/glade/work/rjarolim/nf2/magnetostatic/force_free_v03/extrapolation_result.nf2", freeze: true}
   dim: 256
 training:
   epochs: 20

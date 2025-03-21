@@ -91,20 +91,21 @@ class MagnetoStaticLoss(BaseLoss):
         # rho = M*P / R*T
         # rho*g  = M*P*g / R*T = P / H
         equation = jxb - (4 * torch.pi) * (grad_P + rho_g)
+        loss = equation.pow(2).sum(-1) / (b.pow(2).sum(-1) + 1e-6)
         # [B^2] + [P]
 
-        if self.height_scaling:
-            # apply height scaling
-            p_height_scaling = kwargs['p_height_scaling'].detach()
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            normalization = (b_height_scaling + p_height_scaling).pow(2).sum(-1) + 1e-6
-            loss = equation.pow(2).sum(-1) / normalization
-        else:
-            p_height_scaling = kwargs['p_height_scaling'].detach()
-            # normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-            # loss = equation.pow(2).sum(-1) / normalization
-            normalization = (torch.sum(b ** 2, dim=-1) + p_height_scaling + 1e-7)
-            loss = equation.pow(2).sum(-1) / normalization
+        # if self.height_scaling:
+        #     # apply height scaling
+        #     p_height_scaling = kwargs['p_height_scaling'].detach()
+        #     b_height_scaling = kwargs['b_height_scaling'].detach()
+        #     normalization = (b_height_scaling + p_height_scaling).pow(2).sum(-1) + 1e-6
+        #     loss = equation.pow(2).sum(-1) / normalization
+        # else:
+        #     p_height_scaling = kwargs['p_height_scaling'].detach()
+        #     # normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
+        #     # loss = equation.pow(2).sum(-1) / normalization
+        #     normalization = (torch.sum(b ** 2, dim=-1) + p_height_scaling + 1e-7)
+        #     loss = equation.pow(2).sum(-1) / normalization
 
         loss = loss.mean()
         #
@@ -476,18 +477,22 @@ class PressureBoundaryLoss(BaseLoss):
 
     def forward(self, p, p_true, *args, **kwargs):
         # apply transforms
-        p_diff = (torch.log10(p) - torch.log10(p_true)).pow(2).sum(-1)
+        # p_diff = (torch.log10(p) - torch.log10(p_true)).pow(2).sum(-1)
+        p_diff = (p - p_true).pow(2).sum(-1)
 
         return p_diff.mean()
 
 
-class PressureProfileLoss(BaseLoss):
+class MinPressureLoss(BaseLoss):
 
-    def forward(self, p, p_height_scaling, *args, **kwargs):
-        diff = (p - p_height_scaling).pow(2)
-        p_height_scaling = p_height_scaling.detach()
-        diff = diff / (p_height_scaling + 1e-6).pow(2)
-        return diff.mean()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.scale_L = nn.Parameter(torch.tensor(0.1, dtype=torch.float32), requires_grad=False)
+
+
+    def forward(self, p, coords, *args, **kwargs):
+        height_weight = 1 - torch.exp(-coords[:, 2] / self.scale_L)
+        return (p * height_weight).sum() / height_weight.sum()
 
 
 class HeightLoss(BaseLoss):
@@ -545,6 +550,6 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
                        'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
                        'azimuth_disambiguation': AzimuthDisambiguationLoss,
-                       'pressure_boundary': PressureBoundaryLoss, 'pressure_profile': PressureProfileLoss,
+                       'pressure_boundary': PressureBoundaryLoss, 'min_pressure': MinPressureLoss,
                        'b_height_scaling': BHeightScalingLoss, 'p_height_scaling': PHeightScalingLoss
                        }

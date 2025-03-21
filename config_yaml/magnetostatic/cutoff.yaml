@@ -11,7 +11,7 @@ data:
       name: 'bottom_b'
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
       iteration: 474000
-      tau: 1.0
+      tau: 0.1
       batch_size: 4096
   z_range: [0, 60]
   iterations: 10000
@@ -20,7 +20,7 @@ data:
 model:
   type: magneto_static
   dim: 256
-  encoding_config: {type: "gaussian", scale: 1}
+#  encoding_config: {type: "gaussian", scale: 1}
   cutoff: True
 training:
   epochs: 20
