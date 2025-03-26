@@ -514,7 +514,7 @@ class PressureScaledModel(nn.Module):
 
 class PressureModel(GenericModel):
 
-    def __init__(self, Mm_per_ds, domain_range=5, overlap=2, cutoff=False, **kwargs):
+    def __init__(self, Mm_per_ds, domain_range=5, overlap=0.1, cutoff=False, **kwargs):
         super().__init__(3, 1, **kwargs)
 
         self.domain_range = domain_range / Mm_per_ds
@@ -550,15 +550,17 @@ class PressureModel(GenericModel):
 
 class MagnetoStaticModel(nn.Module):
 
-    def __init__(self, Mm_per_ds, b_model_config=None, cutoff=False, **kwargs):
+    def __init__(self, Mm_per_ds, b_model_config=None, p_model_config=None, **kwargs):
         super().__init__()
         if b_model_config is not None:
             self.b_model = torch.load(b_model_config['path'])['model']
-            if b_model_config.get('freeze', False):
-                self.b_model.requires_grad = False
+            freeze_model = b_model_config.get('freeze', False)
+            if freeze_model:
+                for param in self.b_model.parameters():
+                    param.requires_grad = False
         else:
             self.b_model = BModel(**kwargs)
-        self.p_model = PressureModel(Mm_per_ds=Mm_per_ds, cutoff=cutoff, **kwargs)
+        self.p_model = PressureModel(Mm_per_ds=Mm_per_ds, **p_model_config)
 
     def forward(self, coords, compute_jacobian=True):
         b_dict = self.b_model(coords)

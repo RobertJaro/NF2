@@ -25,15 +25,15 @@ training:
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      lambda: 0.0
       ds_id: boundary_01
     - type: boundary
       name: potential
-      lambda: 10.0
+      lambda: 0.0
       ds_id: potential
     - type: divergence
-      lambda: 1.0e-2
+      lambda: 0.0
     - type: magneto_static
-      lambda: 1.0e-2
+      lambda: 1.0
     - type: force_free
       lambda: 0.0

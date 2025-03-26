@@ -26,7 +26,7 @@ if __name__ == '__main__':
     Mm_per_pixel = args.Mm_per_pixel
 
     snapshot = MURaMSnapshot(args.muram_source_path, args.muram_iteration)
-    muram_out = snapshot.load_cube(resolution=args.Mm_per_pixel * u.Mm / u.pix, target_tau=1.0, height=20 * u.Mm)
+    muram_out = snapshot.load_cube(resolution=args.Mm_per_pixel * u.Mm / u.pix, target_tau=0.1, height=20 * u.Mm)
     muram_B = muram_out['B']
     muram_P = muram_out['P']
     muram_dx_Mm_per_pixel = args.Mm_per_pixel  # snapshot.ds[0].to_value(u.Mm / u.pix)
