@@ -57,10 +57,11 @@ class ForceFreeLoss(BaseLoss):
 
 class MagnetoStaticLoss(BaseLoss):
 
-    def __init__(self, height_scaling=True, **kwargs):
+    def __init__(self, use_scale_height=False, **kwargs):
         super().__init__(**kwargs)
-        self.scale_height = nn.Parameter(torch.tensor(0.0, dtype=torch.float32), requires_grad=True)
-        self.height_scaling = height_scaling
+        if use_scale_height:
+            self.scale_height = nn.Parameter(torch.tensor(0.0, dtype=torch.float32), requires_grad=True)
+        self.use_scale_height = use_scale_height
 
     def forward(self, b, p, jac_matrix, coords, *args, **kwargs):
         wandb.log({'scale_height': self.scale_height})
@@ -84,13 +85,16 @@ class MagnetoStaticLoss(BaseLoss):
         j = torch.stack([rot_x, rot_y, rot_z], -1)
         jxb = torch.cross(j, b, -1)
         grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
-        rho_g = torch.cat([torch.zeros_like(p), torch.zeros_like(p), p * 10 ** self.scale_height], -1)
         #
         # jxb - grad*P + rho*g = 0 --> j= curl(b) / 4pi
         # H = R*T / M*g
         # rho = M*P / R*T
         # rho*g  = M*P*g / R*T = P / H
-        equation = jxb - (4 * torch.pi) * (grad_P + rho_g)
+        if self.use_scale_height:
+            rho_g = torch.cat([torch.zeros_like(p), torch.zeros_like(p), p * 10 ** self.scale_height], -1)
+            equation = jxb - (4 * torch.pi) * (grad_P + rho_g)
+        else:
+            equation = jxb - (4 * torch.pi) * grad_P
         loss = equation.pow(2).sum(-1) / (b.pow(2).sum(-1) + 1e-6)
         # [B^2] + [P]
 
@@ -477,8 +481,8 @@ class PressureBoundaryLoss(BaseLoss):
 
     def forward(self, p, p_true, *args, **kwargs):
         # apply transforms
-        # p_diff = (torch.log10(p) - torch.log10(p_true)).pow(2).sum(-1)
-        p_diff = (p - p_true).pow(2).sum(-1)
+        p_diff = (torch.log10(p) - torch.log10(p_true)).pow(2).sum(-1)
+        # p_diff = (p - p_true).pow(2).sum(-1)
 
         return p_diff.mean()
 

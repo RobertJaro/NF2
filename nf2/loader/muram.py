@@ -63,7 +63,7 @@ class MURaMCubeDataset(MapDataset):
 
 class MURaMPressureDataset(TensorsDataset):
     def __init__(self, data_path, iteration, G_per_dB, Mm_per_ds, slice_config=None, wcs=None, **kwargs):
-        slice_config = slice_config if slice_config is not None else {'type': 'full', 'tau': 1}
+        slice_config = slice_config if slice_config is not None else {'type': 'full', 'tau': 0.1}
         assert 'base_height' in slice_config or 'tau' in slice_config, 'Either base_height or tau must be provided in slice_config'
 
 

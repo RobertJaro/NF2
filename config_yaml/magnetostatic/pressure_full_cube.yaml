@@ -16,6 +16,7 @@ data:
       name: 'pressure'
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D"
       iteration: 474000
+      slice_config: {type: 'full', tau: 0.1}
       batch_size: 4096
   z_range: [0, 60]
   iterations: 10000

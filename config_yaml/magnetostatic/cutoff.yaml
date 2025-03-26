@@ -21,7 +21,7 @@ model:
   type: magneto_static
   dim: 256
 #  encoding_config: {type: "gaussian", scale: 1}
-  cutoff: True
+  p_model_config: {cutoff: True, encoding_config: {type: "gaussian"}}
 training:
   epochs: 20
   loss_config:
