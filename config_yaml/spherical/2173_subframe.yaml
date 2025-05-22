@@ -19,14 +19,14 @@ data:
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
       mask_configs:
         type: heliographic_carrington
-        longitude_range: [ 2.336, 3.384 ]
-        latitude_range: [  1.157, 2.205 ]
+        longitude_range: [133.84294094, 193.88891787]
+        latitude_range: [-23.7087831 ,  36.33719383]
         invert: true
     - type: random_spherical
       ds_id: random
       batch_size: 8192
-      longitude_range: [ 2.336, 3.384 ]
-      latitude_range: [  1.157, 2.205 ]
+      longitude_range: [133.84294094, 193.88891787]
+      latitude_range: [-23.7087831 ,  36.33719383]
   validation_configs:
     - type: map
       ds_id: AR_valid
@@ -42,19 +42,19 @@ data:
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
       mask_configs:
         type: heliographic_carrington
-        longitude_range: [ 2.336, 3.384 ]
-        latitude_range: [  1.157, 2.205 ]
+        longitude_range: [133.84294094, 193.88891787]
+        latitude_range: [-23.7087831 ,  36.33719383]
         invert: true
     - type: spherical_slices
       ds_id: slices
       n_slices: 10
       plot_currents: true
-      longitude_range: [ 2.336, 3.384 ]
-      latitude_range: [  1.157, 2.205 ]
+      longitude_range: [133.84294094, 193.88891787]
+      latitude_range: [-23.7087831 ,  36.33719383]
     - type: sphere
       ds_id: sphere
-      longitude_range: [ 2.336, 3.384 ]
-      latitude_range: [  1.157, 2.205 ]
+      longitude_range: [133.84294094, 193.88891787]
+      latitude_range: [-23.7087831 ,  36.33719383]
   max_radius: 1.3
   G_per_dB: 2000
   num_workers: 8

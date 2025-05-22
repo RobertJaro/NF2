@@ -21,25 +21,41 @@ class NF2Module(LightningModule):
                  transforms=[], meta_path=None, **kwargs):
         """
         The main module for training the neural field model.
-
+    
         Args:
             validation_mapping (dict): Dictionary mapping validation dataset indices to data loader indices.
-            dim (int): Dimension of the neural field model.
-            loss_config (list): List of dictionaries containing the loss type and lambda value.
-            lr_params (dict): Dictionary containing the start, end and iterations for the learning rate scheduler.
-            meta_path (str): Path to a meta state file.
-            use_positional_encoding (bool): Whether to use positional encoding.
-            model (str): Model type, one of ['b', 'vector_potential', 'flux'].
-            **kwargs: Additional keyword arguments.
+            data_config (dict): Configuration dictionary containing data parameters like coordinate ranges,
+                              dataset-specific parameters, and data preprocessing settings.
+            model_kwargs (dict, optional): Model configuration dictionary containing:
+                - type (str): Model type, one of ['b', 'vector_potential', 'magneto_static', 
+                            'vector_potential_domain', 'b_domain', 'multi_domain', 'b_scaled', 
+                            'vector_potential_scaled']
+                - dim (int): Hidden dimension size of the neural network
+                - encoding_config (dict): Configuration for coordinate encoding
+                Additional model-specific parameters
+            loss_config (list, optional): List of dictionaries containing loss configurations:
+                - type (str): Loss type (e.g., 'boundary', 'force_free', 'divergence')
+                - lambda (float or dict): Loss weight value or schedule configuration
+                - ds_id (str or list): Dataset ID(s) to apply the loss to
+                - Additional loss-specific parameters
+            lr_params (dict): Learning rate scheduler configuration containing:
+                - start (float): Initial learning rate
+                - end (float): Final learning rate
+                - iterations (int): Number of iterations for the schedule
+            transforms (list): List of coordinate transform configurations
+            meta_path (str, optional): Path to a pretrained model state file
+            **kwargs: Additional keyword arguments
         """
         super().__init__()
-        coord_ranges = np.array(data_config['coord_range'])
-        coord_range = np.stack([coord_ranges[:, :, 0].min(0),
-                                coord_ranges[:, :, 1].max(0),
-                                ], -1)
+        if 'coord_range' in data_config:
+            coord_ranges = np.array(data_config['coord_range'])
+            coord_range = np.stack([coord_ranges[:, :, 0].min(0),
+                                    coord_ranges[:, :, 1].max(0)], -1)
+        else:
+            coord_range = None
         model_kwargs = model_kwargs if model_kwargs is not None else {'type': 'b', 'dim': 256}
         model_kwargs['coord_range'] = coord_range
-        model_kwargs['ds_per_pixel'] = max(data_config['ds_per_pixel'])
+        model_kwargs['ds_per_pixel'] = max(data_config['ds_per_pixel']) if 'ds_per_pixel' in data_config else 1
         # init model
         model_kwargs = copy.deepcopy(model_kwargs)
         model_type = model_kwargs.pop('type')

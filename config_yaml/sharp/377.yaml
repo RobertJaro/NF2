@@ -5,9 +5,10 @@ logging:
   project: nf2-cartesian
   name: vector potential
 data:
-  type: fits
+  type: cartesian
   slices:
-    - fits_path:
+    - type: fits
+      fits_path:
         Br: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
         Bt: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
         Bp: "/glade/work/rjarolim/data/nf2/377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
@@ -28,4 +29,4 @@ training:
       lambda: 1.0 #{start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
       ds_id: [boundary_01, potential]
     - type: force_free
-      lambda: 1.0e-1
+      lambda: 1.0e-3

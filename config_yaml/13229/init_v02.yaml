@@ -1,0 +1,40 @@
+---
+base_path: "/glade/work/rjarolim/nf2/sharp/13229/VP_weighting_0_3"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13229_init_VP"
+logging:
+  project: AR 13229
+  name: VP weighting 0.3
+data:
+  type: cartesian
+  slices:
+    - type: fits
+      fits_path:
+        Br: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Br.fits"
+        Bt: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Bt.fits"
+        Bp: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Bp.fits"
+      error_path:
+        Br_err: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Br_err.fits"
+        Bt_err: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Bt_err.fits"
+        Bp_err: "/glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/20230224_193600_TAI.Bp_err.fits"
+  num_workers: 8
+  iterations: 10000
+  z_range: [0, 300]
+  validation_ds_per_pixel: 0.02
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 20
+  loss_config:
+    - type: boundary
+      name: boundary
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
+      ds_id: boundary_01
+    - type: boundary
+      name: potential
+      lambda: 1
+      ds_id: potential
+    - type: force_free
+      lambda: 0.3
+    - type: divergence
+      lambda: 0.0

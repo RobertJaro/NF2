@@ -268,12 +268,9 @@ class PotentialLoss(BaseLoss):
 
 class EnergyGradientLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, height_scaling=False, **kwargs):
+    def __init__(self, base_radius, Mm_per_ds, **kwargs):
         super().__init__(**kwargs)
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.height_scaling = height_scaling
-        # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -293,20 +290,19 @@ class EnergyGradientLoss(BaseLoss):
         dE_dy = 2 * (b[:, 0] * dBx_dy + b[:, 1] * dBy_dy + b[:, 2] * dBz_dy)
         dE_dz = 2 * (b[:, 0] * dBx_dz + b[:, 1] * dBy_dz + b[:, 2] * dBz_dz)
 
+        # dE/dr = dE/dx * dx/dr + dE/dy * dy/dr + dE/dz * dz/dr
+        # dx/dr = cos(t) * cos(p)
+        # dy/dr = cos(t) * sin(p)
+        # dz/dr = sin(p)
         coords_spherical = cartesian_to_spherical(coords, f=torch)
         t = coords_spherical[:, 1]
         p = coords_spherical[:, 2]
         dE_dr = (torch.cos(t) * torch.cos(p)) * dE_dx + \
                 (torch.cos(t) * torch.sin(p)) * dE_dy + \
-                torch.cos(p) * dE_dz
+                torch.sin(p) * dE_dz
 
         radius_mask = torch.norm(coords, dim=-1) > self.base_radius
         energy_gradient_regularization = torch.relu(dE_dr) * radius_mask
-
-        if self.height_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            energy_gradient_regularization = energy_gradient_regularization / (b_height_scaling[..., 0] + 1e-8)
         energy_gradient_regularization = energy_gradient_regularization.mean()
 
         return energy_gradient_regularization

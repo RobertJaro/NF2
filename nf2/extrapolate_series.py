@@ -64,7 +64,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
     error_paths = error_paths[len(ckpts):] if error_paths is not None else None
 
     # initialize data module
-    if data["type"] == 'sharp':
+    if data["type"] == 'cartesian':
         data_module = CartesianSeriesDataModule(fits_paths, error_paths=error_paths, **data)
     elif data["type"] == 'spherical':
         data_module = SphericalSeriesDataModule(fits_paths, **data)

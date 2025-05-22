@@ -23,7 +23,7 @@ class SphericalSliceDataset(TensorsDataset):
                  b_err=None, transform=None,
                  plot_overview=True, strides=1, **kwargs):
         if plot_overview:
-            self._plot(b, coords, spherical_coords)
+            self._plot(b, coords, spherical_coords, transform)
         if strides > 1:
             b = b[::strides, ::strides]
             coords = coords[::strides, ::strides]
@@ -52,25 +52,47 @@ class SphericalSliceDataset(TensorsDataset):
 
         super().__init__(tensors, **kwargs)
 
-    def _plot(self, b, coords, spherical_coords):
-        b_min_max = np.nanmax(np.abs(b))
-        fig, axs = plt.subplots(3, 1, figsize=(8, 8))
+    def _plot(self, b, coords, spherical_coords, transform):
+        b_min_max = 200
 
-        ax = axs[0]
+        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+        ax = axs[0, 0]
+        im = ax.imshow(spherical_coords[..., 0].transpose(), origin='lower')
+        ax.set_title('$r$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[1, 0]
+        im = ax.imshow(spherical_coords[..., 1].transpose(), origin='lower')
+        ax.set_title(r'$\theta$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[2, 0]
+        im = ax.imshow(spherical_coords[..., 2].transpose(), origin='lower')
+        ax.set_title('$\phi$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[0, 1]
         im = ax.imshow(b[..., 0].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
         ax.set_title('B_r')
 
-        ax = axs[1]
+        ax = axs[1, 1]
         im = ax.imshow(b[..., 1].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
         ax.set_title('B_t')
 
-        ax = axs[2]
+        ax = axs[2, 1]
         im = ax.imshow(b[..., 2].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
@@ -79,27 +101,58 @@ class SphericalSliceDataset(TensorsDataset):
 
         fig.tight_layout()
 
-        wandb.log({"Overview - B": fig})
+        wandb.log({"Spherical": wandb.Image(fig)})
         plt.close('all')
 
-        fig, axs = plt.subplots(3, 1, figsize=(8, 8))
-        im = axs[0].imshow(coords[..., 0].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[0])
-        im = axs[1].imshow(coords[..., 1].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[1])
-        im = axs[2].imshow(coords[..., 2].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[2])
-        wandb.log({"Coordinates": fig})
-        plt.close('all')
+        b_cartesian = np.einsum('...jk,...k->...j', transform, b) if transform is not None else b
 
-        fig, axs = plt.subplots(3, 1, figsize=(8, 8))
-        im = axs[0].imshow(spherical_coords[..., 0].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[0])
-        im = axs[1].imshow(spherical_coords[..., 1].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[1])
-        im = axs[2].imshow(spherical_coords[..., 2].transpose(), origin='lower')
-        fig.colorbar(im, ax=axs[2])
-        wandb.log({"Spherical Coordinates": fig})
+        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+
+        ax = axs[0, 0]
+        im = ax.imshow(coords[..., 0].transpose(), origin='lower')
+        ax.set_title('$x$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[1, 0]
+        im = ax.imshow(coords[..., 1].transpose(), origin='lower')
+        ax.set_title('$y$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[2, 0]
+        im = ax.imshow(coords[..., 2].transpose(), origin='lower')
+        ax.set_title('$z$')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+
+        ax = axs[0, 1]
+        im = ax.imshow(b_cartesian[..., 0].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+        ax.set_title('B_x')
+
+        ax = axs[1, 1]
+        im = ax.imshow(b_cartesian[..., 1].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+        ax.set_title('B_y')
+
+        ax = axs[2, 1]
+        im = ax.imshow(b_cartesian[..., 2].transpose(), vmin=-b_min_max, vmax=b_min_max, cmap='gray', origin='lower')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax)
+        ax.set_title('B_z')
+
+        fig.tight_layout()
+
+        wandb.log({"Cartesian": wandb.Image(fig)})
         plt.close('all')
 
 
@@ -287,18 +340,23 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
             spherical_coords.lon.to(u.rad).value]).T
 
         if mask is not None:
-            condition = (spherical_coords[..., 1] < mask['latitude_range'][0]) | \
-                        (spherical_coords[..., 1] > mask['latitude_range'][1]) | \
-                        (spherical_coords[..., 2] < mask['longitude_range'][0]) | \
-                        (spherical_coords[..., 2] > mask['longitude_range'][1])
-            spherical_b[condition] = np.nan
-            spherical_coords[condition] = np.nan
+            slice_lat = (mask['latitude_range'] * u.deg).to_value(u.rad)
+            slice_lon = (mask['longitude_range'] * u.deg).to_value(u.rad)
+            lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
+                       (spherical_coords[..., 1] < slice_lat[1])
+            lon_mask = (spherical_coords[..., 2] > slice_lon[0]) & \
+                       (spherical_coords[..., 2] < slice_lon[1])
+            if slice_lon[1] > 2 * np.pi:
+                lon_mask = lon_mask | \
+                           ((spherical_coords[..., 2] > 0) & (spherical_coords[..., 2] < slice_lon[1] - 2 * np.pi))
+            mask = lat_mask & lon_mask
+            spherical_b[mask] = np.nan
+            spherical_coords[mask] = np.nan
 
         # convert to spherical coordinates
         coords = spherical_to_cartesian(spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
-
-
+        #
         super().__init__(b=spherical_b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
 
 
@@ -306,7 +364,7 @@ class SphericalDataModule(BaseDataModule):
 
     def __init__(self, train_configs, validation_configs,
                  max_radius=1.3,
-                 Mm_per_ds= (1 * u.solRad).to_value(u.Mm),
+                 Mm_per_ds=(1 * u.solRad).to_value(u.Mm),
                  G_per_dB=None, work_directory=None,
                  batch_size=4096, **kwargs):
 

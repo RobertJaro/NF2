@@ -19,7 +19,7 @@ class CartesianDataModule(BaseDataModule):
     def __init__(self, slices, work_directory, boundary_config=None,
                  random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 15, log_shape=False,
-                 batch_size=int(2 ** 12), random_batch_size=None,
+                 batch_size=int(2 ** 12), random_batch_size=None, validation_ds_per_pixel = 1 / 128,
                  **kwargs):
         # wrap data if only one slice is provided
         slices = slices if isinstance(slices, list) else [slices]
@@ -95,7 +95,7 @@ class CartesianDataModule(BaseDataModule):
             raise ValueError(f'Unknown boundary type: {boundary_config["type"]}')
 
         # validation datasets
-        cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size)
+        cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size, ds_per_pixel=validation_ds_per_pixel) # 8x downsampled
         validation_slice_datasets = []
         for slice_config in slices:
             slice_config = deepcopy(slice_config)
@@ -339,16 +339,19 @@ class FldIncAziFITSDataset(MapDataset):
 
 class CartesianSeriesDataModule(CartesianDataModule):
 
-    def __init__(self, fits_paths, error_paths=None, *args, **kwargs):
+    def __init__(self, fits_paths, error_paths=None, slice_type='fits', *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
+        self.slice_type = slice_type
         self.fits_paths = copy(fits_paths)
         self.error_paths = copy(error_paths) if error_paths is not None else [None] * len(fits_paths)
 
         self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
 
         self.initialized = True  # only required for first iteration
-        super().__init__({'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]}, *args, **kwargs)
+        super().__init__({'type': self.slice_type,
+                          'fits_path': self.fits_paths[0],
+                          'error_path': self.error_paths[0]}, *args, **kwargs)
 
     def train_dataloader(self):
         # skip reload if already initialized - for initial epoch
@@ -359,7 +362,7 @@ class CartesianSeriesDataModule(CartesianDataModule):
         # update ID
         self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
         # re-initialize
-        super().__init__(slices={'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]},
+        super().__init__(slices={'type': self.slice_type, 'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]},
                          *self.args, **self.kwargs)
         # continue with next file in list
         del self.fits_paths[0]

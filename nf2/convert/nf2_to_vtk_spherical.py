@@ -15,7 +15,7 @@ if __name__ == '__main__':
     parser.add_argument('--overwrite', action='store_true', help='overwrite existing files')
 
     parser.add_argument('--radius_range', nargs='+', type=float, default=(0.999, 1.3), required=False)
-    parser.add_argument('--latitude_range', nargs='+', type=float, default=(0, 180), required=False)
+    parser.add_argument('--latitude_range', nargs='+', type=float, default=(-90, 90), required=False)
     parser.add_argument('--longitude_range', nargs='+', type=float, default=(0, 360), required=False)
     parser.add_argument('--radians', action='store_true', help='latitude and longitude in radians', required=False,
                         default=False)
