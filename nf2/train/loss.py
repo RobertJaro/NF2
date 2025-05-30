@@ -17,10 +17,8 @@ class BaseLoss(nn.Module):
 
 class ForceFreeLoss(BaseLoss):
 
-    def __init__(self, height_scaling=False, b_scaling=False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.height_scaling = height_scaling
-        self.b_scaling = b_scaling
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -41,16 +39,6 @@ class ForceFreeLoss(BaseLoss):
         normalization = b.pow(2).sum(-1) + 1e-7
         jxb = torch.cross(j, b, -1)
         force_free_loss = jxb.pow(2).sum(-1) / normalization
-
-        if self.b_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            force_free_loss = force_free_loss / (b_height_scaling.pow(2).sum(-1) + 1e-8)
-
-        if self.height_scaling:
-            z = coords[:, 2]
-            b_profile = torch.exp(- z * 7)
-            force_free_loss = force_free_loss / (b_profile + 1e-6)
 
         return force_free_loss.mean()
 
@@ -98,19 +86,6 @@ class MagnetoStaticLoss(BaseLoss):
         loss = equation.pow(2).sum(-1) / (b.pow(2).sum(-1) + 1e-6)
         # [B^2] + [P]
 
-        # if self.height_scaling:
-        #     # apply height scaling
-        #     p_height_scaling = kwargs['p_height_scaling'].detach()
-        #     b_height_scaling = kwargs['b_height_scaling'].detach()
-        #     normalization = (b_height_scaling + p_height_scaling).pow(2).sum(-1) + 1e-6
-        #     loss = equation.pow(2).sum(-1) / normalization
-        # else:
-        #     p_height_scaling = kwargs['p_height_scaling'].detach()
-        #     # normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-        #     # loss = equation.pow(2).sum(-1) / normalization
-        #     normalization = (torch.sum(b ** 2, dim=-1) + p_height_scaling + 1e-7)
-        #     loss = equation.pow(2).sum(-1) / normalization
-
         loss = loss.mean()
         #
         return loss
@@ -118,10 +93,9 @@ class MagnetoStaticLoss(BaseLoss):
 
 class ImplicitMagnetoStaticLoss(BaseLoss):
 
-    def __init__(self, divergence_regularization=False, height_scaling=True, **kwargs):
+    def __init__(self, divergence_regularization=False, **kwargs):
         super().__init__(**kwargs)
         self.divergence_regularization = divergence_regularization
-        self.height_scaling = height_scaling
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -166,22 +140,15 @@ class ImplicitMagnetoStaticLoss(BaseLoss):
         else:
             loss = curl_JxB_loss
 
-        if self.height_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            loss = loss / (b_height_scaling[..., 0].pow(2) + 1e-6)
-        else:
-            loss = loss / normalization
+        loss = loss / normalization
         #
         return loss.mean()
 
 
 class DivergenceLoss(BaseLoss):
 
-    def __init__(self, height_scaling=False, b_scaling=False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.height_scaling = height_scaling
-        self.b_scaling = b_scaling
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -189,16 +156,6 @@ class DivergenceLoss(BaseLoss):
         dBz_dz = jac_matrix[:, 2, 2]
 
         divergence_loss = (dBx_dx + dBy_dy + dBz_dz) ** 2
-
-        if self.b_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            divergence_loss = divergence_loss / (b_height_scaling.pow(2).sum(-1) + 1e-8)
-
-        if self.height_scaling:
-            z = coords[:, 2]
-            b_profile = torch.exp(- z * 7)
-            divergence_loss = divergence_loss / (b_profile + 1e-6)
 
         return divergence_loss.mean()
 
@@ -225,14 +182,13 @@ class RadialLoss(BaseLoss):
 
 class PotentialLoss(BaseLoss):
 
-    def __init__(self, base_radius=None, Mm_per_ds=None, height_scaling=False, **kwargs):
+    def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
         super().__init__(**kwargs)
         if base_radius is not None:
             self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
             self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
         else:
             self.base_radius = None
-        self.height_scaling = height_scaling
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -257,11 +213,6 @@ class PotentialLoss(BaseLoss):
             radius_weight = torch.clip(radius - self.base_radius,
                                        min=0) / self.solar_radius  # normalize to solar radius
             potential_loss *= radius_weight ** 2
-
-        if self.height_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            potential_loss = potential_loss / (b_height_scaling.pow(2).sum(-1) + 1e-8)
 
         return potential_loss.mean()
 
@@ -374,13 +325,11 @@ class AziBoundaryLoss(BaseLoss):
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
-    def __init__(self, height_scaling=False, b_scaling=False, ambiguous=False, **kwargs):
+    def __init__(self, ambiguous=False, **kwargs):
         super().__init__(**kwargs)
-        self.height_scaling = height_scaling
-        self.b_scaling = b_scaling
         self.ambiguous = ambiguous
 
-    def forward(self, b, b_true, coords, flip=None, transform=None, *args, **kwargs):
+    def forward(self, b, b_true, flip=None, transform=None, *args, **kwargs):
         # apply transforms
         bxyz_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         bxyz_true = los_trv_azi_to_img(b_true, f=torch, ambiguous=self.ambiguous)
@@ -390,33 +339,23 @@ class LosTrvAziBoundaryLoss(BaseLoss):
 
         loss = (bxyz_pred - bxyz_true).pow(2).sum(-1)
 
-        # if flip is not None:
-        #     # compute flipped B_xyz
-        #     flipped_azi = (b_true[..., 2:3] + torch.pi)
-        #     blta_flipped_true = torch.cat([b_true[..., :2], flipped_azi], dim=-1)
-        #     bxyz_flipped_true = los_trv_azi_to_img(blta_flipped_true, f=torch)
-        #
-        #     # compute diff for both cases
-        #     b_diff = (bxyz_pred - bxyz_true).pow(2).sum(-1)
-        #     b_diff_flipped = (bxyz_pred - bxyz_flipped_true).pow(2).sum(-1)
-        #
-        #     # weighted loss
-        #     flip = flip[..., 0]
-        #     loss = b_diff * (1 - flip) + b_diff_flipped * flip
-        # else:
-        #     # compute diff
-        #     b_diff = bxyz_pred - bxyz_true
-        #     loss = b_diff.pow(2).sum(-1)
+        if flip is not None:
+            # compute flipped B_xyz
+            flipped_azi = (b_true[..., 2:3] + torch.pi)
+            blta_flipped_true = torch.cat([b_true[..., :2], flipped_azi], dim=-1)
+            bxyz_flipped_true = los_trv_azi_to_img(blta_flipped_true, f=torch)
 
-        if self.height_scaling:
-            z = coords[:, 2]
-            b_profile = torch.exp(- z * 7)
-            loss = loss / (b_profile + 1e-6)
+            # compute diff for both cases
+            b_diff = (bxyz_pred - bxyz_true).pow(2).sum(-1)
+            b_diff_flipped = (bxyz_pred - bxyz_flipped_true).pow(2).sum(-1)
 
-        if self.b_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            loss = loss / (b_height_scaling.pow(2).sum(-1) + 1e-6)
+            # weighted loss
+            flip = flip[..., 0]
+            loss = b_diff * (1 - flip) + b_diff_flipped * flip
+        else:
+            # compute diff
+            b_diff = bxyz_pred - bxyz_true
+            loss = b_diff.pow(2).sum(-1)
 
         return loss.mean()
 
@@ -440,28 +379,16 @@ class LosBoundaryLoss(BaseLoss):
 
 class BoundaryLoss(BaseLoss):
 
-    def __init__(self, b_scaling=False, height_scaling=False, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.b_scaling = b_scaling
-        self.height_scaling = height_scaling
 
-    def forward(self, b, b_true, coords, transform=None, b_err=None, *args, **kwargs):
+    def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
         # apply transforms
         transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         # compute diff
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
         b_diff = torch.nansum(b_diff.pow(2), -1)
-
-        if self.b_scaling:
-            assert 'b_height_scaling' in kwargs, 'b_height_scaling not provided'
-            b_height_scaling = kwargs['b_height_scaling'].detach()
-            b_diff = b_diff / (b_height_scaling.pow(2).sum(-1) + 1e-8)
-
-        if self.height_scaling:
-            z = coords[:, 2]
-            b_profile = torch.exp(- z * 7)
-            b_diff = b_diff / (b_profile + 1e-6)
 
         b_diff = b_diff.mean()
 
@@ -471,9 +398,8 @@ class BoundaryLoss(BaseLoss):
 
 class PressureBoundaryLoss(BaseLoss):
 
-    def __init__(self, height_scaling=True, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.height_scaling = height_scaling
 
     def forward(self, p, p_true, *args, **kwargs):
         # apply transforms

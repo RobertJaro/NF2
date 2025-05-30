@@ -101,6 +101,11 @@ def los_trv_azi(b, **kwargs):
     b_los_trv_azi = np.stack([b_los, b_trv, azimuth], -1)
     return {'b_los_trv_azi': b_los_trv_azi}
 
+def energy(b, **kwargs):
+    # E = 0.5 * b^2
+    energy = (b ** 2).sum(-1) / (8 * np.pi)
+    energy = energy.to_value(u.G**2) * u.erg * u.cm ** -3  # convert to erg/cm^3
+    return {'energy': energy}
 
 def free_energy(b, **kwargs):
     free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
@@ -324,5 +329,6 @@ metric_mapping = {
     'magnetic_helicity': magnetic_helicity,
     'los_trv_azi': los_trv_azi,
     'free_energy': free_energy,
+    'energy': energy,
     'squashing_factor': squashing_factor
 }

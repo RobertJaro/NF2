@@ -1,0 +1,69 @@
+---
+base_path: "/glade/work/rjarolim/nf2/topology/sharp_13392_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v01"
+logging:
+  project: topology
+  name: "13392 SHARP 09:12"
+data:
+  type: cartesian
+  train_configs:
+    - type: fld_inc_azi
+      ds_id: 9875
+      fits_path:
+        B_fld: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.field.fits"
+        B_inc: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.inclination.fits"
+        B_azi: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.azimuth.fits"
+#        B_amb: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.disambig.fits"
+      slice: [380, 840, 0, 1000]
+  valid_configs:
+    - type: fld_inc_azi
+      ds_id: 9875
+      fits_path:
+        B_fld: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.field.fits"
+        B_inc: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.inclination.fits"
+        B_azi: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.azimuth.fits"
+#        B_amb: "/glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.disambig.fits"
+      slice: [380, 840, 0, 1000]
+    - type: cube
+      ds_id: cube
+    - type: slices
+      ds_id: slices
+  num_workers: 8
+  iterations: 10000
+  batch_size: 8192
+  random_config:
+    batch_size: 16384
+  z_range: [ 0, 100 ]
+  boundary_config:
+    type: potential
+    batch_size: 1024
+    strides: 4
+model:
+  type: vector_potential
+  dim: 256
+training:
+  epochs: 15
+
+loss:
+  - type: boundary_los_trv_azi
+    name: boundary
+    lambda: 1.0
+    ds_id: [ 9875 ]
+  - type: boundary
+    name: potential_boundary
+    lambda: 1.0e+1
+    ds_id: potential
+  - type: force_free
+    lambda: 1.0e-3
+
+callbacks:
+    # Boundary callbacks
+  - type: los_trv_azi_boundary
+    name: boundary-9875
+    ds_id: 9875
+  # Cube evaluation
+  - type: metrics
+    name: metrics-9875
+    ds_id: cube
+  - type: slices
+    ds_id: slices

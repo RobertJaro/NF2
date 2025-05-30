@@ -7,7 +7,6 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
 from pytorch_lightning.loggers import WandbLogger
 
-from nf2.loader.analytical import AnalyticDataModule
 from nf2.loader.cartesian import CartesianDataModule
 from nf2.loader.spherical import SphericalDataModule
 from nf2.train.mapping import load_callbacks
@@ -15,7 +14,7 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, config=None):
+def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, loss=[], transforms=[], config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -43,7 +42,8 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
     # init logging
     wandb_logger = WandbLogger(**logging, save_dir=work_directory)
     config_dict = {'base_path': base_path, 'work_directory': work_directory, 'logging': logging,
-                   'model': model, 'training': training, 'config': config, 'data': data}
+                   'model': model, 'training': training, 'config': config, 'data': data,
+                   'loss': loss, 'transforms': transforms}
     wandb_logger.experiment.config.update(config_dict, allow_val_change=True)
 
     # restore model checkpoint from wandb
@@ -54,20 +54,20 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
         shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
         data['plot_overview'] = False  # skip overview plot for restored model
 
-    elif data["type"] == 'cartesian':
+    # initialize data module
+    data_module_type = data.pop('type')
+    if data_module_type == 'cartesian':
         data_module = CartesianDataModule(**data)
-    elif data["type"] == 'analytical':
-        data_module = AnalyticDataModule(**data)
-    elif data["type"] == 'spherical':
+    elif data_module_type == 'spherical':
         data_module = SphericalDataModule(**data)
     else:
-        raise NotImplementedError(f'Unknown data loader {data["type"]}')
+        raise NotImplementedError(f'Unknown data loader {data_module_type}')
 
     # initialize callbacks
-    callback_modules = load_callbacks(data_module, additional_callbacks=callbacks)
+    callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
-                    model_kwargs=model, **training)
+                    model_kwargs=model, loss_config=loss, transforms=transforms)
 
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None

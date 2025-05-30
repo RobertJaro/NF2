@@ -16,24 +16,22 @@ from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDatase
 
 class CartesianDataModule(BaseDataModule):
 
-    def __init__(self, slices, work_directory, boundary_config=None,
-                 random_config=None,
+    def __init__(self, train_configs, work_directory, valid_configs=None,
+                 boundary_config=None, random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 15, log_shape=False,
-                 batch_size=int(2 ** 12), random_batch_size=None, validation_ds_per_pixel = 1 / 128,
-                 **kwargs):
+                 batch_size=int(2 ** 12), validation_ds_per_pixel=1 / 128, **kwargs):
         # wrap data if only one slice is provided
-        slices = slices if isinstance(slices, list) else [slices]
+        train_configs = train_configs if isinstance(train_configs, list) else [train_configs]
         # boundary dataset
         training_datasets = {}
-        for i, config in enumerate(slices):
+        for i, config in enumerate(train_configs):
             config = deepcopy(config)
-            name = config.pop('name', f'boundary_{i + 1:02d}')
-            if 'batch_size' not in config:
-                config['batch_size'] = batch_size
-            dataset = self.init_boundary_dataset(**config,
-                                                          Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
-                                                          work_directory=work_directory)
-            training_datasets[name] = dataset
+            ds_id = config.pop('ds_id', f'train_{i + 1:02d}')
+            config['batch_size'] = config.pop('batch_size', batch_size) # default batch size
+            dataset = self.init_dataset(**config,
+                                        Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
+                                        work_directory=work_directory)
+            training_datasets[ds_id] = dataset
 
         bottom_boundary_dataset = list(training_datasets.values())[0]
 
@@ -43,9 +41,8 @@ class CartesianDataModule(BaseDataModule):
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
         random_config = random_config if random_config is not None else {}
-        if 'batch_size' not in random_config:
-            random_config['batch_size'] = random_batch_size if random_batch_size is not None else batch_size
-        random_dataset = RandomCoordinateDataset(coord_range, **random_config)
+        random_batch_size = random_config.pop('batch_size', batch_size)
+        random_dataset = RandomCoordinateDataset(coord_range, batch_size=random_batch_size, **random_config)
 
         ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
 
@@ -95,40 +92,38 @@ class CartesianDataModule(BaseDataModule):
             raise ValueError(f'Unknown boundary type: {boundary_config["type"]}')
 
         # validation datasets
-        cube_dataset = CubeDataset(coord_range, batch_size=validation_batch_size, ds_per_pixel=validation_ds_per_pixel) # 8x downsampled
-        validation_slice_datasets = []
-        for slice_config in slices:
-            slice_config = deepcopy(slice_config)
-            valid_slice_config = {k: v for k, v in slice_config.items() if k != 'batch_size'}
-            validation_boundary_dataset = self.init_boundary_dataset(**valid_slice_config,
-                                                                     Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
-                                                                     shuffle=False, filter_nans=False,
-                                                                     work_directory=work_directory,
-                                                                     batch_size=validation_batch_size, plot=False, )
-            validation_slice_datasets.append(validation_boundary_dataset)
-        validation_slices_dataset = SlicesDataset(coord_range, ds_per_pixel, n_slices=10,
-                                                  batch_size=validation_batch_size)
-
-        validation_datasets = {'cube': cube_dataset, 'slices': validation_slices_dataset}
-        for i, dataset in enumerate(validation_slice_datasets):
-            validation_datasets[f'validation_boundary_{i + 1:02d}'] = dataset
+        validation_datasets = {}
+        if valid_configs is None:
+            valid_configs = train_configs
+            valid_configs.append({'type': "cube", 'ds_id': 'cube',})
+            valid_configs.append({'type': "slices", 'ds_id': 'slices',})
+        for i, config in enumerate(valid_configs):
+            config = deepcopy(config)
+            ds_id = config.pop('ds_id', f'valid_{i + 1:02d}')
+            config['batch_size'] = config.pop('batch_size', validation_batch_size)
+            dataset = self.init_dataset(**config,
+                                        Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
+                                        shuffle=False, filter_nans=False,
+                                        work_directory=work_directory, plot=False,
+                                        ds_per_pixel=validation_ds_per_pixel, coord_range=coord_range)
+            validation_datasets[ds_id] = dataset
 
         config = {'type': 'cartesian', 'max_height': z_range[1],
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': [],
                   'cube_shape': []}
-        for ds in training_datasets.values():
-            if not isinstance(ds, MapDataset):
+        for dataset in training_datasets.values():
+            if not isinstance(dataset, MapDataset):
                 continue
-            config['coord_range'].append(ds.coord_range)
-            config['cube_shape'].append(ds.cube_shape)
-            config['ds_per_pixel'].append(ds.ds_per_pixel)
-            config['height_mapping'].append(ds.height_mapping)
-            config['wcs'].append(ds.wcs)
+            config['coord_range'].append(dataset.coord_range)
+            config['cube_shape'].append(dataset.cube_shape)
+            config['ds_per_pixel'].append(dataset.ds_per_pixel)
+            config['height_mapping'].append(dataset.height_mapping)
+            config['wcs'].append(dataset.wcs)
 
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
-    def init_boundary_dataset(self, type, **kwargs):
+    def init_dataset(self, type, **kwargs):
         if type == 'fits':
             return FITSDataset(**kwargs)
         elif type == 'los_trv_azi':
@@ -147,6 +142,10 @@ class CartesianDataModule(BaseDataModule):
             return MURaMCubeDataset(**kwargs)
         elif type == 'muram_pressure':
             return MURaMPressureDataset(**kwargs)
+        elif type == 'slices':
+            return SlicesDataset(**kwargs)
+        elif type == 'cube':
+            return CubeDataset(**kwargs)
         else:
             raise ValueError(f'Unknown boundary type: {type}. Supported types: '
                              f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
@@ -362,7 +361,8 @@ class CartesianSeriesDataModule(CartesianDataModule):
         # update ID
         self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
         # re-initialize
-        super().__init__(slices={'type': self.slice_type, 'fits_path': self.fits_paths[0], 'error_path': self.error_paths[0]},
+        super().__init__(train_configs={'type': self.slice_type, 'fits_path': self.fits_paths[0],
+                                        'error_path': self.error_paths[0]},
                          *self.args, **self.kwargs)
         # continue with next file in list
         del self.fits_paths[0]
@@ -380,8 +380,20 @@ class SHARPDataset(FITSDataset):
 class NumpyDataset(MapDataset):
 
     def __init__(self, data_path, **kwargs):
-        b = np.load(data_path)
-        super().__init__(b, **kwargs)
+        data = np.load(data_path)
+        bx = data['bx']
+        by = data['by']
+        bz = data['bz']
+        bx_err = data.get('b_err', None)
+        by_err = data.get('by_err', None)
+        bz_err = data.get('bz_err', None)
+        b = np.stack([bx, by, bz], axis=-1)
+        if bx_err is not None and by_err is not None and bz_err is not None:
+            b_err = np.stack([bx_err, by_err, bz_err], axis=-1)
+        else:
+            b_err = None
+
+        super().__init__(b=b, b_err=b_err, **kwargs)
 
 
 class PotentialBoundaryDataset(TensorsDataset):

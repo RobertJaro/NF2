@@ -54,7 +54,7 @@ class ImageDataset(Dataset):
 
 class CubeDataset(Dataset):
 
-    def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13):
+    def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13, **kwargs):
         x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
         y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
         z_resolution = int((coord_range[2, 1] - coord_range[2, 0]) / ds_per_pixel)

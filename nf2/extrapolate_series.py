@@ -16,7 +16,7 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, training={}, config=None):
+def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, training={}, callbacks=[], config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -71,7 +71,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
     else:
         raise NotImplementedError(f'Unknown data loader {data["type"]}')
 
-    callbacks = load_callbacks(data_module)
+    callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config, model_kwargs=model, **training)
 
@@ -99,7 +99,7 @@ def run(base_path, data, meta_path, work_directory=None, logging={}, model={}, t
                       devices=n_gpus,
                       accelerator='gpu' if n_gpus >= 1 else None,
                       strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                      num_sanity_val_steps=0, callbacks=[save_callback, checkpoint_callback, *callbacks],
+                      num_sanity_val_steps=0, callbacks=[save_callback, checkpoint_callback, *callback_modules],
                       gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=reload_dataloaders_interval,
                       check_val_every_n_epoch=val_check_interval)
     trainer.fit(nf2, data_module, ckpt_path=ckpt_path)
