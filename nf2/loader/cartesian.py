@@ -1,6 +1,7 @@
 import glob
 import os
 from copy import copy, deepcopy
+from multiprocessing import Pool
 
 import numpy as np
 from astropy import units as u
@@ -19,19 +20,20 @@ class CartesianDataModule(BaseDataModule):
     def __init__(self, train_configs, work_directory, valid_configs=None,
                  boundary_config=None, random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 15, log_shape=False,
-                 batch_size=int(2 ** 12), validation_ds_per_pixel=1 / 128, **kwargs):
+                 batch_size=int(2 ** 12), validation_ds_per_pixel=1 / 128,
+                 num_workers=None, **kwargs):
+        self.Mm_per_ds = Mm_per_ds
+        self.G_per_dB = G_per_dB
+        self.work_directory = work_directory
+        self.batch_size = batch_size
+        self.validation_batch_size = validation_batch_size
+        self.validation_ds_per_pixel = validation_ds_per_pixel
         # wrap data if only one slice is provided
         train_configs = train_configs if isinstance(train_configs, list) else [train_configs]
         # boundary dataset
-        training_datasets = {}
-        for i, config in enumerate(train_configs):
-            config = deepcopy(config)
-            ds_id = config.pop('ds_id', f'train_{i + 1:02d}')
-            config['batch_size'] = config.pop('batch_size', batch_size) # default batch size
-            dataset = self.init_dataset(**config,
-                                        Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
-                                        work_directory=work_directory)
-            training_datasets[ds_id] = dataset
+        num_workers = num_workers if num_workers is not None else os.cpu_count()
+        with Pool(num_workers) as p:
+            training_datasets = {ds_id: dataset for ds_id, dataset in p.imap(self._load_ds_config, train_configs)}
 
         bottom_boundary_dataset = list(training_datasets.values())[0]
 
@@ -61,6 +63,7 @@ class CartesianDataModule(BaseDataModule):
             print(f'y: {coord_range[1, 0]:.2f} - {coord_range[1, 1]:.2f} ds')
             print(f'z: {coord_range[2, 0]:.2f} - {coord_range[2, 1]:.2f} ds')
 
+        self.coord_range = coord_range
         training_datasets['random'] = random_dataset
 
         # top and side boundaries
@@ -97,16 +100,9 @@ class CartesianDataModule(BaseDataModule):
             valid_configs = train_configs
             valid_configs.append({'type': "cube", 'ds_id': 'cube',})
             valid_configs.append({'type': "slices", 'ds_id': 'slices',})
-        for i, config in enumerate(valid_configs):
-            config = deepcopy(config)
-            ds_id = config.pop('ds_id', f'valid_{i + 1:02d}')
-            config['batch_size'] = config.pop('batch_size', validation_batch_size)
-            dataset = self.init_dataset(**config,
-                                        Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB,
-                                        shuffle=False, filter_nans=False,
-                                        work_directory=work_directory, plot=False,
-                                        ds_per_pixel=validation_ds_per_pixel, coord_range=coord_range)
-            validation_datasets[ds_id] = dataset
+
+        with Pool(num_workers) as p:
+            validation_datasets = {ds_id: dataset for ds_id, dataset in p.imap(self._load_valid_ds_config, valid_configs)}
 
         config = {'type': 'cartesian', 'max_height': z_range[1],
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
@@ -121,7 +117,7 @@ class CartesianDataModule(BaseDataModule):
             config['height_mapping'].append(dataset.height_mapping)
             config['wcs'].append(dataset.wcs)
 
-        super().__init__(training_datasets, validation_datasets, config, **kwargs)
+        super().__init__(training_datasets, validation_datasets, config, num_workers=num_workers, **kwargs)
 
     def init_dataset(self, type, **kwargs):
         if type == 'fits':
@@ -149,6 +145,38 @@ class CartesianDataModule(BaseDataModule):
         else:
             raise ValueError(f'Unknown boundary type: {type}. Supported types: '
                              f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
+
+    def _load_ds_config(self, config):
+        """
+        Load dataset from configuration.
+        :param config: dataset configuration
+        :return: dataset instance
+        """
+        config = deepcopy(config)
+        ds_type = config['type']
+        ds_id = config.pop('ds_id', f'train_{ds_type}')
+        config['batch_size'] = config.pop('batch_size', self.batch_size)  # default batch size
+        dataset = self.init_dataset(**config, Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
+                                    work_directory=self.work_directory)
+        return ds_id, dataset
+
+    def _load_valid_ds_config(self, config):
+        """
+        Load validation dataset from configuration.
+        :param config: dataset configuration
+        :return: dataset instance
+        """
+        config = deepcopy(config)
+        ds_type = config['type']
+        ds_id = config.pop('ds_id', f'valid_{ds_type}')
+        config['batch_size'] = config.pop('batch_size', self.validation_batch_size)
+        plot = config.pop('plot', False)
+        dataset = self.init_dataset(**config,
+                                    Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
+                                    shuffle=False, filter_nans=False,
+                                    work_directory=self.work_directory, plot=plot,
+                                    ds_per_pixel=self.validation_ds_per_pixel, coord_range=self.coord_range)
+        return ds_id, dataset
 
 
 class FITSDataset(MapDataset):
@@ -215,10 +243,11 @@ class FITSDataset(MapDataset):
 class LosTrvAziFITSDataset(MapDataset):
 
     def __init__(self, fits_path, mask_path=None,
-                 bin=1, slice=None, load_map=True, **kwargs):
+                 bin=1, slice=None, load_map=True, Mm_per_pixel=0.36, **kwargs):
         file_los = fits_path['B_los']
         file_trv = fits_path['B_trv']
         file_azi = fits_path['B_azi']
+        file_z = fits_path.get('Z', None)
 
         if load_map:
             los_map, trv_map, azi_map = Map(file_los), Map(file_trv), Map(file_azi)
@@ -240,25 +269,38 @@ class LosTrvAziFITSDataset(MapDataset):
             los_data = fits.getdata(file_los)
             trv_data = fits.getdata(file_trv)
             azi_data = fits.getdata(file_azi)
+            if file_z is not None:
+                bunit = fits.getheader(file_z)['BUNIT']
+                z_data = fits.getdata(file_z) * u.Quantity(1, bunit)
             if mask_path is not None:
                 mask = fits.getdata(mask_path)
                 mask = np.array(mask, dtype=bool)
                 los_data[mask] = 0  # np.nan
                 trv_data[mask] = 0  # np.nan
                 azi_data[mask] = 0  # np.nan
+                z_data[mask] = 0  # np.nan
             if slice:
                 los_data = los_data[slice[0]:slice[1], slice[2]:slice[3]]
                 trv_data = trv_data[slice[0]:slice[1], slice[2]:slice[3]]
                 azi_data = azi_data[slice[0]:slice[1], slice[2]:slice[3]]
+                z_data = z_data[slice[0]:slice[1], slice[2]:slice[3]]
             if bin > 1:
                 los_data = block_reduce(los_data, (bin, bin), func=np.mean)
                 trv_data = block_reduce(trv_data, (bin, bin), func=np.mean)
                 azi_data = block_reduce(azi_data, (bin, bin), func=np.mean)
+                z_data = block_reduce(z_data, (bin, bin), func=np.mean)
             wcs = None
 
         b = np.stack([los_data, trv_data, np.pi - azi_data]).transpose()
 
-        super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
+        coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * Mm_per_pixel
+        coords = coords[:, :, 0, :]
+        if file_z is not None:
+            coords[..., 2] = z_data.T.to_value(u.Mm)
+        else:
+            coords = None
+
+        super().__init__(b=b, wcs=wcs, los_trv_azi=True, coords=coords, **kwargs)
 
 
 class LosFITSDataset(MapDataset):
@@ -384,7 +426,7 @@ class NumpyDataset(MapDataset):
         bx = data['bx']
         by = data['by']
         bz = data['bz']
-        bx_err = data.get('b_err', None)
+        bx_err = data.get('bx_err', None)
         by_err = data.get('by_err', None)
         bz_err = data.get('bz_err', None)
         b = np.stack([bx, by, bz], axis=-1)

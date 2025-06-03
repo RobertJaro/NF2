@@ -59,9 +59,11 @@ loss:
     ds_id: potential
   - type: force_free
     lambda: 1.0e-3
+  - type: potential
+    lambda: 1.0e-4
   - type: azimuth_disambiguation
     name: disambiguation
-    lambda: { start: 1.0, end: 1.0e-3, iterations: 1.0e+5 }
+    lambda: { start: 1.0, end: 1.0e-2, iterations: 1.0e+5 }
     ds_id: [ 6173 ]
 
 transforms:

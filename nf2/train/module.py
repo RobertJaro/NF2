@@ -10,8 +10,8 @@ from torch.optim.lr_scheduler import ExponentialLR
 from nf2.train.loss import loss_module_mapping
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
-    VectorPotentialScaledModel
-from nf2.train.transform import HeightTransformModel, AzimuthTransformModel
+    VectorPotentialScaledModel, GaugedVectorPotentialModel
+from nf2.train.transform import HeightTransformModel, AzimuthTransformModel, OpticalDepthTransformModel
 
 
 class NF2Module(LightningModule):
@@ -47,6 +47,9 @@ class NF2Module(LightningModule):
             **kwargs: Additional keyword arguments
         """
         super().__init__()
+        Mm_per_ds = data_config['Mm_per_ds']
+        self.Mm_per_ds = Mm_per_ds
+
         if 'coord_range' in data_config:
             coord_ranges = np.array(data_config['coord_range'])
             coord_range = np.stack([coord_ranges[:, :, 0].min(0),
@@ -63,21 +66,23 @@ class NF2Module(LightningModule):
             model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
+        elif model_type == 'gauged_vector_potential':
+            model = GaugedVectorPotentialModel(**model_kwargs)
         elif model_type == 'magneto_static':
-            model = MagnetoStaticModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+            model = MagnetoStaticModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
         elif model_type == 'vector_potential_domain':
-            model = VectorPotentialDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+            model = VectorPotentialDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
         elif model_type == 'b_domain':
-            model = BDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+            model = BDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
         elif model_type == 'multi_domain':
-            model = MultiDomainModel(Mm_per_ds=data_config['Mm_per_ds'], **model_kwargs)
+            model = MultiDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
         elif model_type == 'b_scaled':
             model = BScaledModel(**model_kwargs)
         elif model_type == 'vector_potential_scaled':
             model = VectorPotentialScaledModel(**model_kwargs)
         else:
             valid_options = ['b', 'vector_potential', 'flux', 'magneto_static', 'vector_potential_domain', 'b_domain',
-                             'multi_domain', 'b_scaled', 'vector_potential_scaled']
+                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -123,6 +128,8 @@ class NF2Module(LightningModule):
             ds_ids = transform_config.pop('ds_id')
             if transform_type == 'height':
                 transform_module = HeightTransformModel(**transform_config, ds_id=ds_ids)
+            elif transform_type == 'optical_depth':
+                transform_module = OpticalDepthTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'azimuth':
                 transform_module = AzimuthTransformModel(**transform_config, ds_id=ds_ids)
             else:

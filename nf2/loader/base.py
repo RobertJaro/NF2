@@ -59,7 +59,7 @@ class BaseDataModule(LightningDataModule):
             for i, (name, dataset) in enumerate(datasets.items()):
                 sampler = RandomSampler(dataset, replacement=True, num_samples=int(self.iterations))
                 loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
-                                           pin_memory=True, sampler=sampler)
+                                           pin_memory=True, sampler=sampler, persistent_workers=True, prefetch_factor=5)
             return loaders
 
         # data loader with iterations based on the largest dataset
@@ -89,7 +89,8 @@ class MapDataset(TensorsDataset):
 
     def __init__(self, b, b_err=None, coords=None,
                  G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
-                 bin=1, height_mapping=None, plot=True, los_trv_azi=False, ambiguous_azimuth=False,
+                 bin=1, height_mapping=None, log_tau=None,
+                 plot=True, los_trv_azi=False, ambiguous_azimuth=False,
                  wcs=None, **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
 
@@ -133,6 +134,9 @@ class MapDataset(TensorsDataset):
             ranges[..., 0] = z_min / Mm_per_ds
             ranges[..., 1] = z_max / Mm_per_ds
             tensors['height_range'] = ranges
+
+        if log_tau is not None:
+            coords[..., 2] = log_tau
 
         tensors['coords'] = coords
 

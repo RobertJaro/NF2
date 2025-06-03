@@ -246,6 +246,12 @@ class MURaMSnapshot():
 
         return self.load_slice(**kwargs, height=height)
 
+    def load_tau_height(self, target_tau, base_tau=1.0):
+        tau = self.tau
+        base_pix_height = np.argmin(np.abs(tau - base_tau), axis=2).mean()
+        pix_height = np.argmin(np.abs(tau - target_tau), axis=2)
+        return (pix_height - base_pix_height) * u.pix * self.ds[2]  # height in physical units
+
     def load_slice(self, height, resolution=0.192 * u.Mm / u.pix):
         b = self.B[:, :, height]
         p = self.P[:, :, height]

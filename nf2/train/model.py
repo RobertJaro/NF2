@@ -241,6 +241,8 @@ class MultiDomainModel(nn.Module):
         # create models and parameters
         if model_type == 'vector_potential':
             model_class = VectorPotentialModel
+        elif model_type == 'gauged_vector_potential':
+            model_class = GaugedVectorPotentialModel
         elif model_type == 'b':
             model_class = BModel
         elif model_type == 'b_scaled':
@@ -432,6 +434,34 @@ class VectorPotentialModel(GenericModel):
         #
         return out_dict
 
+
+class GaugedVectorPotentialModel(GenericModel):
+
+    def __init__(self, **kwargs):
+        # A_z = 0; enforces gauge condition
+        super().__init__(3, 2, **kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        a = super().forward(coords)
+        #
+        jac_matrix = jacobian(a, coords)
+        dAy_dx = jac_matrix[:, 1, 0]
+        dAz_dx = 0
+        dAx_dy = jac_matrix[:, 0, 1]
+        dAz_dy = 0
+        dAx_dz = jac_matrix[:, 0, 2]
+        dAy_dz = jac_matrix[:, 1, 2]
+        rot_x = dAz_dy - dAy_dz
+        rot_y = dAx_dz - dAz_dx
+        rot_z = dAy_dx - dAx_dy
+        b = torch.stack([rot_x, rot_y, rot_z], -1)
+        out_dict = {'b': b, 'a': a}
+        #
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
+        return out_dict
 
 class PotentialModel(GenericModel):
 

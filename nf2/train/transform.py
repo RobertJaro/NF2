@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from nf2.train.model import GenericModel
+from nf2.train.model import GenericModel, jacobian
 
 
 class BaseTransformModel(nn.Module):
@@ -17,7 +17,7 @@ class AzimuthTransformModel(BaseTransformModel):
     def __init__(self, **kwargs):
         super().__init__(tensor_ids=['coords', 'b_true'], **kwargs)
         encoding_config = {'type': 'gaussian' }
-        self.model = GenericModel(in_coords=3, out_coords=1, n_layers=8, dim=128,
+        self.model = GenericModel(in_coords=3, out_coords=1, n_layers=4, dim=64,
                                   encoding_config=encoding_config)
 
     def forward(self, batch, **kwargs):
@@ -34,7 +34,7 @@ class HeightTransformModel(BaseTransformModel):
     def __init__(self, **kwargs):
         super().__init__(tensor_ids=['coords', 'height_range', 'b_true'], **kwargs)
         encoding_config = {'type': 'gaussian'}
-        self.mapping_module = GenericModel(in_coords=3, out_coords=1, n_layers=4, dim=128,
+        self.mapping_module = GenericModel(in_coords=3, out_coords=1, n_layers=4, dim=64,
                                            encoding_config=encoding_config)
 
     def forward(self, batch):
@@ -46,3 +46,27 @@ class HeightTransformModel(BaseTransformModel):
         transformed_coords = torch.cat([coords[:, :2], z_coords], -1)
 
         return {'coords': transformed_coords, 'original_coords': coords}
+
+class OpticalDepthTransformModel(BaseTransformModel):
+
+    def __init__(self, Mm_per_ds, max_height, max_log_optical_depth=-5,  **kwargs):
+        assert max_log_optical_depth <= 0, "max_log_optical_depth must be negative"
+        super().__init__(tensor_ids=['coords', 'b_true'], **kwargs)
+        encoding_config = {'type': 'gaussian'}
+        self.model = GenericModel(in_coords=3, out_coords=1, n_layers=8, dim=128,
+                                  encoding_config=encoding_config)
+        max_scaling = max_height / Mm_per_ds
+        self.max_scaling = nn.Parameter(torch.tensor(max_scaling, dtype=torch.float32), requires_grad=False)
+
+    def forward(self, batch):
+        coords = batch['coords']
+
+        z = torch.sigmoid(self.model(coords)) * self.max_scaling
+
+        xy_coords = coords[:, :2]
+        transformed_coords = torch.cat([xy_coords, z], dim=-1)
+
+        z_jacobian = jacobian(z, coords)
+        dz_dtau = z_jacobian[..., :, 2:3]
+
+        return {'coords': transformed_coords, 'original_coords': coords, 'dz_dtau': dz_dtau}

@@ -16,17 +16,17 @@ parser = argparse.ArgumentParser(description='Evaluate SST extrapolation.')
 parser.add_argument('--output', type=str, help='output path.')
 args = parser.parse_args()
 
-out_path = '/glade/work/rjarolim/nf2/sst/evaluation'
+out_path = '/glade/work/rjarolim/nf2/topology/results'
 os.makedirs(out_path, exist_ok=True)
 
 # select intensity data in wings
 sst_data = fits.getdata('/glade/work/rjarolim/data/SST/panorama_8542_StkI.fits')[10]
 
-config1_file = '/glade/work/rjarolim/nf2/sst/13392_1slices_0851_v01/extrapolation_result.nf2'
-config2_file = '/glade/work/rjarolim/nf2/sst/13392_7699_0851_v01/extrapolation_result.nf2'
-config3_file = '/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2'
-config4_file = '/glade/work/rjarolim/nf2/sst/13392_3slices_0851_v04/extrapolation_result.nf2'
-config5_file = '/glade/work/rjarolim/nf2/sst/13392_4slices_0851_v01/extrapolation_result.nf2'
+config1_file = '/glade/work/rjarolim/nf2/topology/13392_0851_1slices_v01/extrapolation_result.nf2'
+config2_file = '/glade/work/rjarolim/nf2/topology/13392_0851_2slices_v01/extrapolation_result.nf2'
+config3_file = '/glade/work/rjarolim/nf2/topology/13392_0851_3slices_v01/extrapolation_result.nf2'
+config4_file = '/glade/work/rjarolim/nf2/topology/13392_1050_1slices_v01/extrapolation_result.nf2'
+config5_file = '/glade/work/rjarolim/nf2/topology/13392_1050_2slices_v01/extrapolation_result.nf2'
 
 config1_model = CartesianOutput(config1_file)
 

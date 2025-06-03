@@ -54,6 +54,8 @@ loss:
     lambda: 1.0e+1
     ds_id: potential
   - type: force_free
+    lambda: 1.0e-2
+  - type: potential
     lambda: 1.0e-3
 
 callbacks:

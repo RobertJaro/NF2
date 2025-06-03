@@ -337,8 +337,6 @@ class LosTrvAziBoundaryLoss(BaseLoss):
         blta_pred = img_to_los_trv_azi(bxyz_pred, f=torch)
         bxyz_pred = los_trv_azi_to_img(blta_pred, f=torch, ambiguous=self.ambiguous)
 
-        loss = (bxyz_pred - bxyz_true).pow(2).sum(-1)
-
         if flip is not None:
             # compute flipped B_xyz
             flipped_azi = (b_true[..., 2:3] + torch.pi)
@@ -353,9 +351,7 @@ class LosTrvAziBoundaryLoss(BaseLoss):
             flip = flip[..., 0]
             loss = b_diff * (1 - flip) + b_diff_flipped * flip
         else:
-            # compute diff
-            b_diff = bxyz_pred - bxyz_true
-            loss = b_diff.pow(2).sum(-1)
+            loss = (bxyz_pred - bxyz_true).pow(2).sum(-1)
 
         return loss.mean()
 
@@ -466,6 +462,11 @@ class PHeightScalingLoss(BaseLoss):
         diff = (target_p - p_height_scaling).pow(2).sum(-1)
         return diff.mean()
 
+class OpticalDepthGradientLoss(BaseLoss):
+
+    def forward(self, dz_dtau, *args, **kwargs):
+        loss = torch.clip(dz_dtau, min=0).pow(2)
+        return loss.mean()
 
 # mapping
 loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
@@ -477,5 +478,6 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
                        'azimuth_disambiguation': AzimuthDisambiguationLoss,
                        'pressure_boundary': PressureBoundaryLoss, 'min_pressure': MinPressureLoss,
-                       'b_height_scaling': BHeightScalingLoss, 'p_height_scaling': PHeightScalingLoss
+                       'b_height_scaling': BHeightScalingLoss, 'p_height_scaling': PHeightScalingLoss,
+                       'optical_depth_gradient': OpticalDepthGradientLoss
                        }

@@ -15,16 +15,16 @@ parser = argparse.ArgumentParser(description='Evaluate SST extrapolation.')
 parser.add_argument('--output', type=str, help='output path.')
 args = parser.parse_args()
 
-out_path = '/glade/work/rjarolim/nf2/sst/evaluation'
+out_path = '/glade/work/rjarolim/nf2/topology/results'
 os.makedirs(out_path, exist_ok=True)
 
 # select intensity data in wings
 sst_data = fits.getdata('/glade/work/rjarolim/data/SST/panorama_8542_StkI.fits')[10]
 
 mfr_1slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/sst/13392_1slices_0851_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/topology/13392_0851_1slices_v01/extrapolation_result.nf2')
 mfr_2slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/topology/13392_0851_2slices_v01/extrapolation_result.nf2')
 
 x_min, x_max = mfr_1slice_model.coord_range[0]
 y_min, y_max = mfr_1slice_model.coord_range[1]
@@ -41,7 +41,7 @@ coords = np.stack(
 mfr_1slice_out = mfr_1slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
 mfr_2slice_out = mfr_2slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
 
-height_model = HeightTransformOutput('/glade/work/rjarolim/nf2/sst/13392_2slices_0851_v02/extrapolation_result.nf2')
+height_model = HeightTransformOutput('/glade/work/rjarolim/nf2/topology/13392_0851_2slices_v01/extrapolation_result.nf2')
 height_out = height_model.load_height_mapping()
 
 ########################################################################################################################

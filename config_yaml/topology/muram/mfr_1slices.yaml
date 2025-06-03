@@ -46,6 +46,8 @@ loss:
     ds_id: potential
   - type: force_free
     lambda: 1.0e-3
+  - type: potential
+    lambda: 1.0e-4
 
 callbacks:
   - type: los_trv_azi_boundary

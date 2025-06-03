@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/hinode/ar_10978_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/topology/ar_10978_v01"
+base_path: "/glade/work/rjarolim/nf2/hinode/ar_10978_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/topology/ar_10978_v02"
 logging:
   project: nf2
   name: "10978 Hinode"

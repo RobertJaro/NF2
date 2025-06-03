@@ -37,6 +37,10 @@ def main():
     out_path = args.out_path
     height_range = args.height_range
 
+    dirname = os.path.dirname(out_path)
+    if not os.path.exists(dirname):
+        os.makedirs(dirname, exist_ok=True)
+
     convert(nf2_path, out_path, Mm_per_pixel,
             height_range=height_range,
             metrics=args.metrics,

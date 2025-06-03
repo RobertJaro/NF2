@@ -16,24 +16,25 @@ parser = argparse.ArgumentParser(description='Evaluate SHARP snapshot.')
 parser.add_argument('--output', type=str, help='output path.')
 args = parser.parse_args()
 
-out_path = '/glade/work/rjarolim/nf2/disambiguation/evaluation'
+out_path = '/glade/work/rjarolim/nf2/topology/results'
 os.makedirs(out_path, exist_ok=True)
 
 Mm_per_pixel = 0.192
+height = 50
 
 sma_muram_snapshot = MURaMSnapshot('/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_A/3D', iteration=399000)
-sma_muram_cube = sma_muram_snapshot.load_cube(resolution=Mm_per_pixel * u.Mm / u.pix, height=50 * u.Mm)
+sma_muram_cube = sma_muram_snapshot.load_cube(resolution=Mm_per_pixel * u.Mm / u.pix, height=height * u.Mm)
 sma_muram_b = sma_muram_cube['B']
 sma_muram_BnablaBz = b_nabla_bz(sma_muram_b) / Mm_per_pixel
 sma_muram_j = (curl(sma_muram_b) / Mm_per_pixel * u.G / u.Mm) * constants.c / (4 * np.pi)
 sma_muram_j = sma_muram_j.to_value(u.G / u.s)
 
 sma_1slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_sma_1slices_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/topology/muram_sma_1slices_ambiguous_v01/extrapolation_result.nf2')
 sma_2slice_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_sma_2slices_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/topology/muram_sma_2slices_v01/extrapolation_result.nf2')
 sma_2slices_amb_model = CartesianOutput(
-    '/glade/work/rjarolim/nf2/disambiguation/muram_sma_2slices_ambiguous_v01/extrapolation_result.nf2')
+    '/glade/work/rjarolim/nf2/topology/muram_sma_2slices_ambiguous_v01/extrapolation_result.nf2')
 
 x_min, x_max = sma_1slice_model.coord_range[0]
 y_min, y_max = sma_1slice_model.coord_range[1]
@@ -44,7 +45,7 @@ ds_per_pixel = Mm_per_pixel / Mm_per_ds
 coords = np.stack(
     np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)),
                 np.linspace(y_min, y_max, np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)),
-                np.linspace(0, 50 / Mm_per_ds, np.round(50 / Mm_per_pixel + 1).astype(int)),
+                np.linspace(0, height / Mm_per_ds, np.round(height / Mm_per_pixel + 1).astype(int)),
                 indexing='ij'), -1)
 sma_1slice_out = sma_1slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
 sma_2slice_out = sma_2slice_model.load_coords(coords, metrics=['j', 'b_nabla_bz'], progress=True)
@@ -69,7 +70,7 @@ ax.axvline(y_slice * Mm_per_pixel, color='red', linestyle='--')
 plt.savefig(os.path.join(out_path, 'muram_sma_bz.png'))
 plt.close()
 
-extent = [x_min * Mm_per_ds, x_max * Mm_per_ds, 0, 70]
+extent = [x_min * Mm_per_ds, x_max * Mm_per_ds, 0, height]
 
 fig, axs = plt.subplots(1, 4, figsize=(15, 2.7))
 
@@ -107,7 +108,7 @@ plt.close()
 
 ##############################################################################
 
-extent = [x_min * Mm_per_ds, x_max * Mm_per_ds, 0, 70]
+extent = [x_min * Mm_per_ds, x_max * Mm_per_ds, 0, height]
 b_norm = LogNorm(vmin=1e-1, vmax=1e3)
 
 fig, axs = plt.subplots(1, 4, figsize=(15, 2.7))

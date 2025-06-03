@@ -2,10 +2,11 @@ import os
 
 import numpy as np
 import torch
+from astropy import units as u
 from torch.utils.data import Dataset
 
 from nf2.data.util import spherical_to_cartesian
-from astropy import units as u
+
 
 class BatchesDataset(Dataset):
 
@@ -30,6 +31,7 @@ class BatchesDataset(Dataset):
 
     def clear(self):
         [os.remove(f) for f in self.batches_file_paths.values()]
+
 
 class ImageDataset(Dataset):
 
@@ -153,10 +155,11 @@ class SphereDataset(Dataset):
         coord = self.coords[idx]
         return {'coords': coord}
 
+
 class SphereSlicesDataset(Dataset):
 
     def __init__(self, radius_range, Mm_per_ds,
-                 latitude_range=(-90, 90),  longitude_range=(0, 360), unit='deg',
+                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
                  longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
@@ -184,6 +187,7 @@ class SphereSlicesDataset(Dataset):
         coord = self.coords[idx]
         return {'coords': coord}
 
+
 class SlicesDataset(Dataset):
 
     def __init__(self, coord_range, ds_per_pixel, n_slices=10, batch_size=4096, **kwargs):
@@ -195,9 +199,9 @@ class SlicesDataset(Dataset):
             z_range = np.linspace(0, coord_range[2, 1], n_slices - 1, dtype=np.float32)
             z_range = np.concatenate([np.array([coord_range[2, 0]]), z_range])
         coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
-                                        np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
-                                        z_range,
-                                        indexing='ij'), -1)
+                                      np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
+                                      z_range,
+                                      indexing='ij'), -1)
         self.cube_shape = coords.shape[:-1]
         #
         coords = coords.reshape((-1, 3))
@@ -212,6 +216,7 @@ class SlicesDataset(Dataset):
         coord = self.coords[idx]
         coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
+
 
 class RandomCoordinateDataset(Dataset):
 
@@ -235,10 +240,10 @@ class RandomCoordinateDataset(Dataset):
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
         random_coords[:, 0] = (
-                    random_coords[:, 0] * (self.coord_range[0, 1] - self.coord_range[0, 0]) + self.coord_range[0, 0])
+                random_coords[:, 0] * (self.coord_range[0, 1] - self.coord_range[0, 0]) + self.coord_range[0, 0])
         random_coords[:, 1] = (
-                    random_coords[:, 1] * (self.coord_range[1, 1] - self.coord_range[1, 0]) + self.coord_range[1, 0])
+                random_coords[:, 1] * (self.coord_range[1, 1] - self.coord_range[1, 0]) + self.coord_range[1, 0])
         random_coords[:, 2] = random_coords[:, 2] ** self.z_sampling_exponent
         random_coords[:, 2] = (
-                    random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
+                random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         return {'coords': random_coords}

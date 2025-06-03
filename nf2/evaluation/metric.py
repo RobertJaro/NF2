@@ -135,12 +135,12 @@ def b_nabla_bz(b):
 
     norm_B = np.linalg.norm(b, axis=-1)
 
-    dnormB_dx = - norm_B ** -3 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
-    dnormB_dy = - norm_B ** -3 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
-    dnormB_dz = - norm_B ** -3 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
+    dnormB_dx = norm_B ** -1 * (bx * dBx_dx + by * dBy_dx + bz * dBz_dx)
+    dnormB_dy = norm_B ** -1 * (bx * dBx_dy + by * dBy_dy + bz * dBz_dy)
+    dnormB_dz = norm_B ** -1 * (bx * dBx_dz + by * dBy_dz + bz * dBz_dz)
 
-    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 + \
-                 (bz / norm_B) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
+    b_nabla_bz = (bx * dBz_dx + by * dBz_dy + bz * dBz_dz) / norm_B ** 2 - \
+                 (bz / norm_B ** 3) * (bx * dnormB_dx + by * dnormB_dy + bz * dnormB_dz)
     return b_nabla_bz
 
 def b_nabla_bz_v2(b):
