@@ -1,7 +1,6 @@
 import glob
 import os
-from copy import copy, deepcopy
-from multiprocessing import Pool
+from copy import deepcopy
 
 import numpy as np
 from astropy import units as u
@@ -32,8 +31,8 @@ class CartesianDataModule(BaseDataModule):
         train_configs = train_configs if isinstance(train_configs, list) else [train_configs]
         # boundary dataset
         num_workers = num_workers if num_workers is not None else os.cpu_count()
-        with Pool(num_workers) as p:
-            training_datasets = {ds_id: dataset for ds_id, dataset in p.imap(self._load_ds_config, train_configs)}
+        training_datasets = [self._load_ds_config(config) for config in train_configs]
+        training_datasets = dict(training_datasets)  # convert to dict
 
         bottom_boundary_dataset = list(training_datasets.values())[0]
 
@@ -68,6 +67,7 @@ class CartesianDataModule(BaseDataModule):
         # top and side boundaries
         boundary_config = boundary_config if boundary_config is not None else \
             {'type': 'potential', 'strides': 4}
+        boundary_config = deepcopy(boundary_config)
         boundary_batch_size = boundary_config.pop('batch_size', batch_size)
         boundary_type = boundary_config.pop('type')
         if boundary_type == 'none':
@@ -97,11 +97,11 @@ class CartesianDataModule(BaseDataModule):
         validation_datasets = {}
         if valid_configs is None:
             valid_configs = train_configs
-            valid_configs.append({'type': "cube", 'ds_id': 'cube',})
-            valid_configs.append({'type': "slices", 'ds_id': 'slices',})
+            valid_configs.append({'type': "cube", 'ds_id': 'cube', })
+            valid_configs.append({'type': "slices", 'ds_id': 'slices', })
 
-        with Pool(num_workers) as p:
-            validation_datasets = {ds_id: dataset for ds_id, dataset in p.imap(self._load_valid_ds_config, valid_configs)}
+        validation_datasets = [self._load_valid_ds_config(config) for config in valid_configs]
+        validation_datasets = dict(validation_datasets)  # convert to dict
 
         config = {'type': 'cartesian', 'max_height': z_range[1],
                   'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
@@ -174,7 +174,7 @@ class CartesianDataModule(BaseDataModule):
                                     Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
                                     shuffle=False, filter_nans=False,
                                     work_directory=self.work_directory, plot=plot,
-                                    ds_per_pixel=1/self.validation_pixel_per_ds, coord_range=self.coord_range)
+                                    ds_per_pixel=1 / self.validation_pixel_per_ds, coord_range=self.coord_range)
         return ds_id, dataset
 
 
@@ -381,37 +381,114 @@ class FldIncAziFITSDataset(MapDataset):
 
 class CartesianSeriesDataModule(CartesianDataModule):
 
-    def __init__(self, fits_paths, error_paths=None, slice_type='fits', *args, **kwargs):
+    def __init__(self, train_configs, current_step, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-        self.slice_type = slice_type
-        self.fits_paths = copy(fits_paths)
-        self.error_paths = copy(error_paths) if error_paths is not None else [None] * len(fits_paths)
+        train_configs = [_load_config(c) for c in train_configs]
+        assert all([len(c) == len(train_configs[0]) for c in train_configs]), \
+            'Inconsistent number of training files in configurations. Check your configurations.'
+        train_configs = list(zip(*train_configs))
 
-        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
+        # remove already extrapolated files
+        assert current_step < len(train_configs), \
+            'Not enough data files found to continue training. Training completed or configuration is incorrect.'
+
+        self.step = current_step
+        self.current_id = train_configs[self.step][0]['id']
+        self.train_configs = train_configs
 
         self.initialized = True  # only required for first iteration
-        super().__init__({'type': self.slice_type,
-                          'fits_path': self.fits_paths[0],
-                          'error_path': self.error_paths[0]}, *args, **kwargs)
+        super().__init__(list(train_configs[self.step]), *args, **kwargs)
 
     def train_dataloader(self):
         # skip reload if already initialized - for initial epoch
         if self.initialized:
             self.initialized = False
-            print('Currently loaded:', self.current_id)
+            # no step increase to account for skip of initial epoch (due to loading of checkpoint)
             return super().train_dataloader()
+        # end training if all configs are processed
+        if self.step >= len(self.train_configs):
+            print('All training files processed. Exiting...')
+            return None
         # update ID
-        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
+        self.current_id = self.train_configs[self.step][0]['id']
         # re-initialize
-        super().__init__(train_configs={'type': self.slice_type, 'fits_path': self.fits_paths[0],
-                                        'error_path': self.error_paths[0]},
-                         *self.args, **self.kwargs)
+        super().__init__(train_configs=list(self.train_configs[self.step]), *self.args, **self.kwargs)
+        print(f'\nStep {self.step + 1:03d}/{len(self.train_configs):03d}; ID: {self.current_id}')
         # continue with next file in list
-        del self.fits_paths[0]
-        del self.error_paths[0]
-        print('Currently loaded:', self.current_id)
+        self.step += 1
         return super().train_dataloader()
+
+
+def _load_config(config):
+    config = deepcopy(config)
+    c_type = config['type']
+    if c_type == 'fits':
+        data_path = config.pop('data_path')
+        fits_paths, error_paths = _load_paths(data_path)
+        ids = [os.path.basename(fp['Br']).split('.')[-3] for fp in fits_paths]
+        configs = [{**config, 'id': i, 'data_path': {**fp, **ep}}
+                   for i, fp, ep in zip(ids, fits_paths, error_paths)]
+    elif c_type == 'muram_slice':
+        data_path = config.pop('data_path')
+        slices = sorted(glob.glob(data_path))
+        ids = [os.path.basename(s).split('.')[-1] for s in slices]
+        configs = [{**config, 'id': i, 'data_path': s} for i, s in zip(ids, slices)]
+    else:
+        raise NotImplementedError(f'Unknown data loader {c_type}')
+    return configs
+
+
+def _load_paths(data_path):
+    if isinstance(data_path, list):
+        results = [_load_paths(d) for d in data_path]
+        fits_paths = [f for r in results for f in r[0]]
+        error_paths = [f for r in results for f in r[1]] if all([r[1] is not None for r in results]) else None
+    elif isinstance(data_path, str):
+        p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
+        t_files = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))  # y
+        r_files = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))  # z
+        err_p_files = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))  # x
+        err_t_files = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))  # y
+        err_r_files = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))  # z
+
+        assert len(p_files) == len(t_files) == len(r_files), f'Number of files in data path {data_path} does not match'
+        fits_paths = list(zip(p_files, t_files, r_files))
+        fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
+
+        if len(err_p_files) > 0 or len(err_t_files) > 0 or len(err_r_files) > 0:
+            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
+                err_r_files), \
+                f'Number of files in data path {data_path} does not match'
+            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
+            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2]} for d in error_paths]
+        else:
+            error_paths = None
+    elif isinstance(data_path, dict):
+        p_files = sorted(glob.glob(data_path['Bp']))  # x
+        t_files = sorted(glob.glob(data_path['Bt']))  # y
+        r_files = sorted(glob.glob(data_path['Br']))  # z
+        err_p_files = sorted(glob.glob(data_path['Bp_err'])) if 'Bp_err' in data_path else None  # x
+        err_t_files = sorted(glob.glob(data_path['Bt_err'])) if 'Bt_err' in data_path else None  # y
+        err_r_files = sorted(glob.glob(data_path['Br_err'])) if 'Br_err' in data_path else None  # z
+
+        if err_p_files is not None and err_t_files is not None and err_r_files is not None:
+            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
+                err_r_files), \
+                f'Number of files in data path {data_path} does not match'
+            fits_paths = list(zip(p_files, t_files, r_files))
+            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2], } for d in fits_paths]
+            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
+            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2], } for d in error_paths]
+        else:
+            assert len(p_files) == len(t_files) == len(r_files), \
+                f'Number of files in data path {data_path} does not match'
+            fits_paths = list(zip(p_files, t_files, r_files))
+            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
+            error_paths = None
+    else:
+        raise NotImplementedError(f'Unknown data path type {type(data_path)}')
+    return fits_paths, error_paths
 
 
 class SHARPDataset(FITSDataset):

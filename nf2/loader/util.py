@@ -39,7 +39,8 @@ def _plot_B(b, coords):
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(im, cax=cax, orientation='vertical')
     axs[2, 1].set_title('Coordinate z [Mm]')
-    wandb.log({'FITS data': wandb.Image(plt)})
+    fig.tight_layout()
+    wandb.log({'FITS data': wandb.Image(fig)})
     plt.close(fig)
 
 def _plot_los_trv_azi(b, coords):
@@ -76,7 +77,8 @@ def _plot_los_trv_azi(b, coords):
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(im, cax=cax, orientation='vertical')
     axs[2, 1].set_title('Coordinate z [Mm]')
-    wandb.log({'FITS data': wandb.Image(plt)})
+    fig.tight_layout()
+    wandb.log({'FITS data': wandb.Image(fig)})
     plt.close(fig)
 
 
@@ -129,5 +131,6 @@ def _plot_B_error(b, b_err, coords):
     cax = divider.append_axes('right', size='5%', pad=0.05)
     plt.colorbar(im, cax=cax, orientation='vertical')
     axs[2, 2].set_title('Coordinate z [Mm]')
-    wandb.log({'FITS data': wandb.Image(plt)})
+    fig.tight_layout()
+    wandb.log({'FITS data': wandb.Image(fig)})
     plt.close(fig)
