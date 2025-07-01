@@ -30,6 +30,7 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, metri
     out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.vtk')
 
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
     nf2_out = CartesianOutput(nf2_path)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, metrics=metrics,
                                height_range=height_range, x_range=x_range, y_range=y_range, **kwargs)

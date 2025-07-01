@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_3slices_v01"
+base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_mfr_3slices_v01"
+work_directory: "/trinity/home/robert.jarolim/nf2/muram_mfr_3slices_v01"
 logging:
   project: topology
   name: MURAM MFR - tau1 + tau1e-4 + tau1e-6
@@ -9,16 +9,16 @@ data:
   train_configs:
     - type: muram_slice
       ds_id: tau_1.0
-      data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
+      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_mfr/tau_slice_1.000.474000"
       los_trv_azi_transform: True
     - type: muram_slice
       ds_id: tau_1.0e-4
-      data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_0.010.474000"
+      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_mfr/tau_slice_0.000100.474000"
       height_mapping: { z: 0.6, z_min: 0, z_max: 5 }
       los_trv_azi_transform: True
     - type: muram_slice
       ds_id: tau_1.0e-6
-      data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_0.000001.474000"
+      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_mfr/tau_slice_0.000001.474000"
       height_mapping: { z: 2.0, z_min: 0, z_max: 8 }
       los_trv_azi_transform: True
   num_workers: 8
@@ -31,10 +31,10 @@ data:
     type: potential
     batch_size: 1024
 model:
-  type: vector_potential
+  type: gauged_vector_potential
   dim: 256
 training:
-  epochs: 15
+  epochs: 10
 
 loss:
   - type: boundary_los_trv_azi
@@ -46,9 +46,7 @@ loss:
     lambda: 1.0e+1
     ds_id: potential
   - type: force_free
-    lambda: 1.0e-3
-  - type: potential
-    lambda: 1.0e-4
+    lambda: 1.0e-2
   - type: height
     name: height
     lambda: 1.0e-4

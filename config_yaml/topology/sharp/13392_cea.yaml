@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/sharp_13392_cea_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/topology/sharp_13392_cea_v01"
+base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/sharp_13392_cea_v01"
+work_directory: "/trinity/home/robert.jarolim/topology/sharp_13392_cea_v01"
 logging:
   project: topology
   name: "13392 SHARP CEA 09:12"
@@ -37,10 +37,10 @@ data:
     batch_size: 1024
     strides: 4
 model:
-  type: vector_potential
+  type: gauged_vector_potential
   dim: 256
 training:
-  epochs: 15
+  epochs: 10
 
 loss:
 - type: boundary

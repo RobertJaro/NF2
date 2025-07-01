@@ -19,15 +19,15 @@ class CartesianDataModule(BaseDataModule):
 
     def __init__(self, train_configs, work_directory, valid_configs=None,
                  boundary_config=None, random_config=None,
-                 Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 15, log_shape=False,
-                 batch_size=int(2 ** 12), validation_ds_per_pixel=1 / 128,
+                 Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 14, log_shape=False,
+                 batch_size=2 ** 13, validation_pixel_per_ds=128,
                  num_workers=None, **kwargs):
         self.Mm_per_ds = Mm_per_ds
         self.G_per_dB = G_per_dB
         self.work_directory = work_directory
         self.batch_size = batch_size
         self.validation_batch_size = validation_batch_size
-        self.validation_ds_per_pixel = validation_ds_per_pixel
+        self.validation_pixel_per_ds = validation_pixel_per_ds
         # wrap data if only one slice is provided
         train_configs = train_configs if isinstance(train_configs, list) else [train_configs]
         # boundary dataset
@@ -42,9 +42,8 @@ class CartesianDataModule(BaseDataModule):
         z_range = [0, 100] if z_range is None else z_range
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
-        random_config = random_config if random_config is not None else {}
-        random_batch_size = random_config.pop('batch_size', batch_size)
-        random_dataset = RandomCoordinateDataset(coord_range, batch_size=random_batch_size, **random_config)
+        random_config = random_config if random_config is not None else {'batch_size': 2 ** 14}
+        random_dataset = RandomCoordinateDataset(coord_range, **random_config)
 
         ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
 
@@ -175,7 +174,7 @@ class CartesianDataModule(BaseDataModule):
                                     Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
                                     shuffle=False, filter_nans=False,
                                     work_directory=self.work_directory, plot=plot,
-                                    ds_per_pixel=self.validation_ds_per_pixel, coord_range=self.coord_range)
+                                    ds_per_pixel=1/self.validation_pixel_per_ds, coord_range=self.coord_range)
         return ds_id, dataset
 
 
@@ -272,6 +271,8 @@ class LosTrvAziFITSDataset(MapDataset):
             if file_z is not None:
                 bunit = fits.getheader(file_z)['BUNIT']
                 z_data = fits.getdata(file_z) * u.Quantity(1, bunit)
+            else:
+                z_data = np.zeros_like(los_data)
             if mask_path is not None:
                 mask = fits.getdata(mask_path)
                 mask = np.array(mask, dtype=bool)
@@ -300,7 +301,7 @@ class LosTrvAziFITSDataset(MapDataset):
         else:
             coords = None
 
-        super().__init__(b=b, wcs=wcs, los_trv_azi=True, coords=coords, **kwargs)
+        super().__init__(b=b, wcs=wcs, los_trv_azi=True, coords=coords, Mm_per_pixel=Mm_per_pixel, **kwargs)
 
 
 class LosFITSDataset(MapDataset):

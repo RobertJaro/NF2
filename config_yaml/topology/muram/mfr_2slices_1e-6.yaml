@@ -1,28 +1,24 @@
 ---
-base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_sma_1slices_v01"
-work_directory: "/trinity/home/robert.jarolim/nf2/muram_sma_1slices_v01"
+base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_mfr_2slices_v02"
+work_directory: "/trinity/home/robert.jarolim/nf2/muram_mfr_2slices_v02"
 logging:
   project: topology
-  name: MURAM SMA - tau1
+  name: MURAM MFR - tau1 + tau1e-6
 data:
   type: cartesian
   train_configs:
     - type: muram_slice
       ds_id: tau_1.0
-      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_sma/tau_slice_1.000.399000"
+      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_mfr/tau_slice_1.000.474000"
       los_trv_azi_transform: True
-  valid_configs:
     - type: muram_slice
-      ds_id: tau_1.0
-      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_sma/tau_slice_1.000.399000"
+      ds_id: tau_1.0e-6
+      data_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/muram_mfr/tau_slice_0.000001.474000"
+      height_mapping: { z: 2.0, z_min: 0, z_max: 8 }
       los_trv_azi_transform: True
-    - type: cube
-      ds_id: cube
-    - type: slices
-      ds_id: slices
   num_workers: 8
   iterations: 10000
-  batch_size: 8192
+  batch_size: 4096
   random_config:
     batch_size: 16384
   z_range: [ 0, 50 ]
@@ -39,18 +35,31 @@ loss:
   - type: boundary_los_trv_azi
     name: boundary
     lambda: 1.0
-    ds_id: tau_1.0
+    ds_id: [ tau_1.0, tau_1.0e-6 ]
   - type: boundary
     name: potential_boundary
     lambda: 1.0e+1
     ds_id: potential
   - type: force_free
     lambda: 1.0e-2
+  - type: height
+    name: height
+    lambda: 1.0e-4
+    ds_id: [ tau_1.0e-6 ]
+
+transforms:
+  - type: height
+    ds_id: [ tau_1.0e-6 ]
 
 callbacks:
+    # Boundary callbacks
   - type: los_trv_azi_boundary
     name: boundary-tau_1.0
     ds_id: tau_1.0
+  - type: los_trv_azi_boundary
+    name: boundary-tau_1.0e-6
+    ds_id: tau_1.0e-6
+  # Cube evaluation
   - type: metrics
     name: metrics-tau_1.0
     ds_id: cube

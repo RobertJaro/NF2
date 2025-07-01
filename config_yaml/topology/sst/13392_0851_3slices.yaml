@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/13392_0851_3slices_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_0851_3slices_v01"
+base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/13392_0851_3slices_v01"
+work_directory: "/trinity/home/robert.jarolim/nf2/13392_0851_3slices_v01"
 logging:
   project: topology
   name: "13392 SST 08:51 - - 6173+7699+8542"
@@ -11,20 +11,20 @@ data:
       ds_id: 6173
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
       load_map: False
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: 7699
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
       height_mapping: { z: 0.5, z_min: 0, z_max: 20 }
       load_map: False
       ambiguous_azimuth: True
@@ -32,10 +32,10 @@ data:
       ds_id: 8542
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
       height_mapping: { z: 2.0, z_min: 0, z_max: 50 }
       load_map: False
       ambiguous_azimuth: True
@@ -44,32 +44,32 @@ data:
       ds_id: 6173
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
       load_map: False
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: 7699
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
-      height_mapping: { z: 0.5, z_min: 0, z_max: 20 }
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_7699_StkIQUV_rebin_v2.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_7699_StkIQUV_rebin_v2.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
+      height_mapping: { z: 0.5, z_min: 0, z_max: 15 }
       load_map: False
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: 8542
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
-        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
-        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
-      height_mapping: { z: 2.0, z_min: 0, z_max: 50 }
+        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
+        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
+        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
+      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_v2/mask.fits"
+      height_mapping: { z: 2.0, z_min: 0, z_max: 20 }
       load_map: False
       ambiguous_azimuth: True
     - type: cube
@@ -87,10 +87,10 @@ data:
     batch_size: 1024
     strides: 4
 model:
-  type: vector_potential
+  type: gauged_vector_potential
   dim: 256
 training:
-  epochs: 15
+  epochs: 10
 
 loss:
   - type: boundary_los_trv_azi
@@ -103,8 +103,6 @@ loss:
     ds_id: potential
   - type: force_free
     lambda: 1.0e-2
-  - type: potential
-    lambda: 1.0e-3
   - type: azimuth_disambiguation
     name: disambiguation
     lambda: { start: 1.0, end: 1.0e-2, iterations: 1.0e+5 }
