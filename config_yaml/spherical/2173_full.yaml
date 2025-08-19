@@ -14,9 +14,9 @@ data:
         Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br.fits"
         Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt.fits"
         Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp.fits"
-#        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits"
-#        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
-#        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
+        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
     - type: map
       ds_id: synoptic
       batch_size: 4096
@@ -67,26 +67,28 @@ data:
   num_workers: 8
   batch_size: 16384
   iterations: 5000
+
 model:
-  type: vector_potential
-#  activation: swish
+  type: gauged_vector_potential
   dim: 512
+
 training:
   epochs: 1000
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 10.0, iterations: 5.0e+4}
-      ds_id: [full_disk, synoptic]
-    - type: energy_gradient
-      lambda: 10.0
-      ds_id: random
-      base_radius: 1.04
-    - type: potential
-      lambda: 1.0e-2
-      ds_id: random
-      base_radius: 1.04
-    - type: force_free
-      lambda: 0.1
-    - type: divergence
-      lambda: 0.0
+
+loss:
+  - type: boundary
+    name: boundary
+    lambda: {start: 1.0e+3, end: 10.0, iterations: 5.0e+4}
+    ds_id: [full_disk, synoptic]
+  - type: energy_gradient
+    lambda: 10.0
+    ds_id: random
+    base_radius: 1.04
+  - type: potential
+    lambda: 1.0e-2
+    ds_id: random
+    base_radius: 1.04
+  - type: force_free
+    lambda: 0.1
+  - type: divergence
+    lambda: 0.0

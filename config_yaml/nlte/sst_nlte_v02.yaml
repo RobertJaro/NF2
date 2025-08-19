@@ -3,7 +3,7 @@ base_path: "/glade/work/rjarolim/nf2/nlte/sst_nlte_v05"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/sst_nlte_v05"
 logging:
   project: NLTE
-  name: "SST v01"
+  name: "SST v02"
 data:
   type: cartesian
   train_configs:

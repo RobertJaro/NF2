@@ -5,6 +5,7 @@ from torch import nn
 from torch.distributions import Normal
 
 from nf2.data.util import cartesian_to_spherical, spherical_to_cartesian
+from nf2.train.siren import SirenModel
 
 
 class Swish(nn.Module):
@@ -435,7 +436,7 @@ class VectorPotentialModel(GenericModel):
         return out_dict
 
 
-class GaugedVectorPotentialModel(GenericModel):
+class GaugedVectorPotentialModel(SirenModel):
 
     def __init__(self, **kwargs):
         # A_z = 0; enforces gauge condition

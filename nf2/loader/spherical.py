@@ -13,7 +13,8 @@ from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
 from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset
-from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
+from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix, \
+    vector_cartesian_to_spherical, spherical_to_cartesian_matrix
 from nf2.loader.base import BaseDataModule, TensorsDataset
 
 
@@ -104,7 +105,7 @@ class SphericalSliceDataset(TensorsDataset):
         wandb.log({"Spherical": wandb.Image(fig)})
         plt.close('all')
 
-        b_cartesian = np.einsum('...jk,...k->...j', transform, b) if transform is not None else b
+        b_cartesian = np.einsum('...ij,...j->...i', transform, b) if transform is not None else b
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
 
@@ -170,13 +171,13 @@ class SphericalMapDataset(SphericalSliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            spherical_coords.lat.to_value(u.rad),
+            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
 
         # load data and transform matrix
-        b_spherical = np.stack([r_map.data, -t_map.data, p_map.data]).transpose()
+        b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
 
@@ -261,7 +262,8 @@ class SphericalMapDataset(SphericalSliceDataset):
             bottom_left = bottom_left.transform_to(frames.HeliographicCarrington)
             top_right = top_right.transform_to(frames.HeliographicCarrington)
             slice_lon = np.array([bottom_left.lon.to(u.rad).value, top_right.lon.to(u.rad).value])
-            slice_lat = np.array([bottom_left.lat.to(u.rad).value, top_right.lat.to(u.rad).value]) + np.pi / 2
+            slice_lat = np.array([bottom_left.lat.to(u.rad).value, top_right.lat.to(u.rad).value])
+            slice_lat = sorted(np.pi / 2 - slice_lat) # convert to spherical coordinates
 
             mask = (spherical_coords[..., 1] > slice_lat[0]) & \
                    (spherical_coords[..., 1] < slice_lat[1]) & \
@@ -271,6 +273,7 @@ class SphericalMapDataset(SphericalSliceDataset):
             unit = mask_config['unit'] if 'unit' in mask_config else 'deg'
             slice_lon = u.Quantity(mask_config['longitude_range'], unit).to_value(u.rad)
             slice_lat = u.Quantity(mask_config['latitude_range'], unit).to_value(u.rad)
+            slice_lat = sorted(np.pi / 2 - slice_lat)  # convert to spherical coordinates
 
             lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
                        (spherical_coords[..., 1] < slice_lat[1])

@@ -242,15 +242,18 @@ class EnergyGradientLoss(BaseLoss):
         dE_dz = 2 * (b[:, 0] * dBx_dz + b[:, 1] * dBy_dz + b[:, 2] * dBz_dz)
 
         # dE/dr = dE/dx * dx/dr + dE/dy * dy/dr + dE/dz * dz/dr
+        # x = r * cos(t) * cos(p)
+        # y = r * cos(t) * sin(p)
+        # z = r * sin(t)
         # dx/dr = cos(t) * cos(p)
         # dy/dr = cos(t) * sin(p)
-        # dz/dr = sin(p)
+        # dz/dr = sin(t)
         coords_spherical = cartesian_to_spherical(coords, f=torch)
         t = coords_spherical[:, 1]
         p = coords_spherical[:, 2]
-        dE_dr = (torch.cos(t) * torch.cos(p)) * dE_dx + \
-                (torch.cos(t) * torch.sin(p)) * dE_dy + \
-                torch.sin(p) * dE_dz
+        dE_dr = (torch.sin(t) * torch.cos(p)) * dE_dx + \
+                (torch.sin(t) * torch.sin(p)) * dE_dy + \
+                torch.cos(t) * dE_dz
 
         radius_mask = torch.norm(coords, dim=-1) > self.base_radius
         energy_gradient_regularization = torch.relu(dE_dr) * radius_mask
@@ -417,7 +420,7 @@ class MinPressureLoss(BaseLoss):
         return (p * height_weight).sum() / height_weight.sum()
 
 
-class HeightLoss(BaseLoss):
+class WeightedHeightLoss(BaseLoss):
 
     def forward(self, coords, original_coords, height_range, *args, **kwargs):
         height_diff = torch.abs(coords[:, 2] - original_coords[:, 2])
@@ -425,6 +428,15 @@ class HeightLoss(BaseLoss):
         height_regularization = torch.true_divide(height_diff, normalization).mean()
 
         return height_regularization
+
+class HeightLoss(BaseLoss):
+
+    def forward(self, coords, original_coords, *args, **kwargs):
+        height_diff = torch.abs(coords[:, 2] - original_coords[:, 2])
+        height_regularization = height_diff.mean()
+
+        return height_regularization
+
 
 
 class AzimuthDisambiguationLoss(BaseLoss):
@@ -473,7 +485,8 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'boundary_azi': AziBoundaryLoss,
                        'boundary_los_trv_azi': LosTrvAziBoundaryLoss, 'boundary_los': LosBoundaryLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                       'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                       'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
+                       'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
                        'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
                        'azimuth_disambiguation': AzimuthDisambiguationLoss,

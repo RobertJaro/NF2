@@ -11,7 +11,8 @@ from nf2.train.loss import loss_module_mapping
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
     VectorPotentialScaledModel, GaugedVectorPotentialModel
-from nf2.train.transform import HeightTransformModel, AzimuthTransformModel, OpticalDepthTransformModel
+from nf2.train.transform import HeightTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
+    NLTEHeightTransformModel
 
 
 class NF2Module(LightningModule):
@@ -128,6 +129,8 @@ class NF2Module(LightningModule):
             ds_ids = transform_config.pop('ds_id')
             if transform_type == 'height':
                 transform_module = HeightTransformModel(**transform_config, ds_id=ds_ids)
+            elif transform_type == 'nlte_height':
+                transform_module = NLTEHeightTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'optical_depth':
                 transform_module = OpticalDepthTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'azimuth':

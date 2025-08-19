@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from nf2.train.model import GenericModel, jacobian
+from nf2.train.siren import SirenModel
 
 
 class BaseTransformModel(nn.Module):
@@ -44,6 +45,26 @@ class HeightTransformModel(BaseTransformModel):
         z_coords = self.mapping_module(coords)
         z_coords = torch.sigmoid(z_coords) * (height_range[:, 1:2] - height_range[:, 0:1]) + height_range[:, 0:1]
         transformed_coords = torch.cat([coords[:, :2], z_coords], -1)
+
+        return {'coords': transformed_coords, 'original_coords': coords}
+
+class NLTEHeightTransformModel(BaseTransformModel):
+
+    def __init__(self, height_range, Mm_per_ds, **kwargs):
+        super().__init__(tensor_ids=['coords'], **kwargs)
+        self.mapping_module = SirenModel(in_dim=2, out_dim=1, n_layers=4, dim=64)
+        self.height_range = nn.Parameter(torch.tensor(height_range, dtype=torch.float32) / Mm_per_ds, requires_grad=False)
+
+    def forward(self, batch):
+        coords = batch['coords']
+        z_coords = coords[..., 2:3]  # Extract z-coordinates
+        xy_coords = coords[:, :2]  # Extract x and y coordinates
+        scaling = self.mapping_module(xy_coords)
+        z_coords = z_coords * 10 ** scaling
+        # min_height = self.height_range[None, 0:1]
+        # max_height = self.height_range[None, 1:2]
+        # z_coords = torch.sigmoid(z_coords) * (max_height - min_height) + min_height
+        transformed_coords = torch.cat([xy_coords, z_coords], -1)
 
         return {'coords': transformed_coords, 'original_coords': coords}
 

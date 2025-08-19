@@ -85,9 +85,11 @@ class RandomSphericalCoordinateDataset(Dataset):
                  radial_weighted_sampling=False, latitude_weighted_sampling=False, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to colatitude
+
         self.radius_range = radius_range
         self.Mm_per_ds = Mm_per_ds
-        self.latitude_range = latitude_range
+        self.colatitude_range = colatitude_range
         self.longitude_range = longitude_range
         self.batch_size = batch_size
         self.float_tensor = torch.FloatTensor
@@ -109,12 +111,12 @@ class RandomSphericalCoordinateDataset(Dataset):
             random_coords[:, 0] = h_r[0] + random_coords[:, 0] * (h_r[1] - h_r[0])
         # theta [0, pi]
         if self.latitude_weighted_sampling:
-            lat_r = self.latitude_range
+            lat_r = self.colatitude_range
             v_min, v_max = np.min(np.sin(lat_r)), np.max(np.sin(lat_r))
             random_coords[:, 1] = v_min + random_coords[:, 1] * (v_max - v_min)
             random_coords[:, 1] = torch.arcsin(random_coords[:, 1])
         else:
-            lat_r = self.latitude_range
+            lat_r = self.colatitude_range
             random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
         # phi [0, 2pi]
         lon_r = self.longitude_range
@@ -132,12 +134,13 @@ class SphereDataset(Dataset):
                  **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to spherical coordinates
         #
-        ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
+        ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(resolution * ratio)
         coords = np.stack(
             np.meshgrid(np.linspace(radius_range[0], radius_range[1], resolution),
-                        np.linspace(latitude_range[0], latitude_range[1], resolution_lat),
+                        np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat),
                         np.linspace(longitude_range[0], longitude_range[1], resolution),
                         indexing='ij')).T
         self.coords_shape = coords.shape[:-1]
@@ -163,12 +166,13 @@ class SphereSlicesDataset(Dataset):
                  longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        colatitude_range = sorted(np.pi / 2 - latitude_range) # convert to spherical coordinates
         #
-        ratio = (latitude_range[1] - latitude_range[0]) / (longitude_range[1] - longitude_range[0])
+        ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
         coords = np.stack(
             np.meshgrid(np.linspace(radius_range[0], radius_range[1], n_slices),
-                        np.linspace(latitude_range[0], latitude_range[1], resolution_lat),
+                        np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat),
                         np.linspace(longitude_range[0], longitude_range[1], longitude_resolution),
                         indexing='ij'), -1)
 

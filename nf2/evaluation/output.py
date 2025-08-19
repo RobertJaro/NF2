@@ -107,7 +107,7 @@ class CartesianOutput(BaseOutput):
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
         self.wcs = self.state['data']['wcs'] if 'wcs' in self.state['data'] else None
-        self.time = None if self.wcs is None or len(self.wcs) >= 1 else parse(self.wcs[0].wcs.dateobs)
+        self.time = None if self.wcs is None or len(self.wcs) == 0 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
     def load_cube(self, height_range=None, x_range=None, y_range=None, Mm_per_pixel=None, **kwargs):
@@ -405,6 +405,10 @@ class SphericalOutput(BaseOutput):
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, nan_value=0, **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
+
+        # convert latitude to colatitude
+        latitude_range = sorted(np.pi / 2 * u.rad - latitude_range)
+
         spherical_bounds = np.stack(
             np.meshgrid(np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), 50),
                         np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), 50),
@@ -423,7 +427,7 @@ class SphericalOutput(BaseOutput):
                         np.linspace(z_min, z_max, int((z_max - z_min) * res)), indexing='ij'), -1)
         # flipped z axis
         spherical_coords = cartesian_to_spherical(coords)
-        lat_coord = (spherical_coords[..., 1] % np.pi)
+        lat_coord = spherical_coords[..., 1]
         lon_coord = (spherical_coords[..., 2] % (2 * np.pi))
         rad_coord = spherical_coords[..., 0]
 

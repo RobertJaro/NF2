@@ -241,7 +241,7 @@ class FITSDataset(MapDataset):
 
 class LosTrvAziFITSDataset(MapDataset):
 
-    def __init__(self, fits_path, mask_path=None,
+    def __init__(self, fits_path, mask_config=None,
                  bin=1, slice=None, load_map=True, Mm_per_pixel=0.36, **kwargs):
         file_los = fits_path['B_los']
         file_trv = fits_path['B_trv']
@@ -257,8 +257,8 @@ class LosTrvAziFITSDataset(MapDataset):
             trv_data = trv_map.data
             azi_data = azi_map.data
             wcs = los_map.wcs
-            if mask_path is not None:
-                mask_map = Map(mask_path)
+            if mask_config is not None:
+                mask_map = Map(mask_config['path'])
                 mask_map = process_map(mask_map, slice, bin)
                 mask = mask_map.data
                 los_data[mask] = 0  # np.nan
@@ -273,13 +273,13 @@ class LosTrvAziFITSDataset(MapDataset):
                 z_data = fits.getdata(file_z) * u.Quantity(1, bunit)
             else:
                 z_data = np.zeros_like(los_data)
-            if mask_path is not None:
-                mask = fits.getdata(mask_path)
+            if mask_config is not None:
+                mask = fits.getdata(mask_config['path'])
                 mask = np.array(mask, dtype=bool)
-                los_data[mask] = 0  # np.nan
-                trv_data[mask] = 0  # np.nan
-                azi_data[mask] = 0  # np.nan
-                z_data[mask] = 0  # np.nan
+                los_data[mask] = mask_config.get('value', np.nan)
+                trv_data[mask] = mask_config.get('value', np.nan)
+                azi_data[mask] = mask_config.get('value', np.nan)
+                z_data[mask] = mask_config.get('value', np.nan)
             if slice:
                 los_data = los_data[slice[0]:slice[1], slice[2]:slice[3]]
                 trv_data = trv_data[slice[0]:slice[1], slice[2]:slice[3]]
