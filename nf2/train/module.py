@@ -8,6 +8,7 @@ from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import loss_module_mapping
+from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
     VectorPotentialScaledModel, GaugedVectorPotentialModel
@@ -19,7 +20,7 @@ class NF2Module(LightningModule):
 
     def __init__(self, validation_mapping, data_config, model_kwargs=None, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
-                 transforms=[], meta_path=None, **kwargs):
+                 transforms=[], loss_scaling=[], meta_path=None, **kwargs):
         """
         The main module for training the neural field model.
     
@@ -49,6 +50,7 @@ class NF2Module(LightningModule):
         """
         super().__init__()
         Mm_per_ds = data_config['Mm_per_ds']
+        G_per_dB = data_config['G_per_dB']
         self.Mm_per_ds = Mm_per_ds
 
         if 'coord_range' in data_config:
@@ -106,7 +108,6 @@ class NF2Module(LightningModule):
                 {"type": "force_free", "lambda": 1e-1},
                 {"type": "divergence", "lambda": 1e-1},
             ]
-
         # init lambdas and loss modules
         loss_modules, lambdas, scheduled_lambdas = self.load_loss_config(data_config, loss_config)
         self.loss_modules = nn.ModuleDict(loss_modules)
@@ -117,7 +118,25 @@ class NF2Module(LightningModule):
         self.validation_mapping = validation_mapping
         self.lr_params = lr_params
 
+        loss_scaling_modules = {}
+        for scaling_config in loss_scaling:
+            scaling_config = copy.deepcopy(scaling_config)
+            scaling_type = scaling_config.pop('type')
+            if scaling_type == 'exponential':
+                name = 'exponential_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
+                loss_scaling_modules[name] = ExponentialLossScalingModule(**scaling_config, name=name)
+            elif scaling_type == 'potential_fit':
+                name = 'potential_fit_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
+                loss_scaling_modules[name] = PotentialFitLossScalingModule(**scaling_config, name=name,
+                                                                           Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB)
+            else:
+                raise ValueError(f"Invalid loss scaling type: {scaling_type}")
+        self.loss_scaling_modules = nn.ModuleDict(loss_scaling_modules)
         #
+        for module in self.loss_scaling_modules.values():
+            for loss_id in module.loss_ids:
+                assert loss_id in self.loss_modules.keys(), f"Loss id {loss_id} in loss scaling module " \
+                                                            f"not found in loss modules."
         self.validation_outputs = {}
 
     def load_transfrom_config(self, transforms):
@@ -132,7 +151,8 @@ class NF2Module(LightningModule):
             elif transform_type == 'nlte_height':
                 transform_module = NLTEHeightTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'optical_depth':
-                transform_module = OpticalDepthTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
+                transform_module = OpticalDepthTransformModel(**transform_config, ds_id=ds_ids,
+                                                              Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'azimuth':
                 transform_module = AzimuthTransformModel(**transform_config, ds_id=ds_ids)
             else:
@@ -181,6 +201,7 @@ class NF2Module(LightningModule):
         parameters = list(self.model.parameters())
         parameters += list(self.transform_modules.parameters())
         parameters += list(self.loss_modules.parameters())
+        parameters += list(self.loss_scaling_modules.parameters())
         if isinstance(self.lr_params, dict):
             lr_start = self.lr_params['start']
             lr_end = self.lr_params['end']
@@ -237,8 +258,11 @@ class NF2Module(LightningModule):
                     state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
                 else:
                     state = state_dict[ds_id]
-                loss = {name: loss_module(**state)}
-                loss_dict.update(loss)
+                loss = loss_module(**state)
+                for scaling_module in self.loss_scaling_modules.values():
+                    if name in scaling_module.loss_ids:
+                        loss = scaling_module(loss, state)
+                loss_dict.update({name: loss.mean()})
             except Exception as e:
                 logging.error(f"Error in loss module: {name}")
                 raise e

@@ -81,7 +81,7 @@ class GenericModel(nn.Module):
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         elif encoding_type == 'gaussian':
-            posenc = GaussianPositionalEncoding(in_coords)
+            posenc = GaussianPositionalEncoding(in_coords, scale=encoding_config.get('scale', 4.0))
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         elif encoding_type == 'periodic':
@@ -408,7 +408,7 @@ class VectorPotentialScaledModel(nn.Module):
         return out_dict
 
 
-class VectorPotentialModel(GenericModel):
+class VectorPotentialModel(SirenModel):
 
     def __init__(self, **kwargs):
         super().__init__(3, 3, **kwargs)

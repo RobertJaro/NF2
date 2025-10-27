@@ -28,7 +28,9 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
     cube_shape = (*b_n.shape, height)
     strides = (strides, strides, strides) if isinstance(strides, int) else strides
     b_n = b_n.reshape((-1,)).astype(np.float32)
-    coords = np.stack(np.mgrid[:cube_shape[0]:strides[0], :cube_shape[1]:strides[1], :cube_shape[2]:strides[2]], -1).reshape((-1, 3))
+    coords = np.stack(np.mgrid[:cube_shape[0]:strides[0], :cube_shape[1]:strides[1], :cube_shape[2]:strides[2]], -1)
+    coords_shape = coords.shape
+    coords = coords.reshape((-1, 3))
     r_p = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :1], -1).reshape((-1, 3))
 
     # torch code
@@ -50,7 +52,7 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
             p_batch = model(coord)
             potential += [p_batch.detach().cpu()]
 
-    potential = torch.cat(potential).view(cube_shape).numpy()
+    potential = torch.cat(potential).view(coords_shape[:-1]).numpy()
     if strides != (1, 1, 1):
         potential = block_replicate(potential, strides, conserve_sum=False)
     return potential
@@ -71,7 +73,7 @@ def get_potential_boundary(b_n, height, batch_size=2048, **kwargs):
               np.stack(np.mgrid[:cube_shape[0], cube_shape[1] - 2:cube_shape[1] + 1, :cube_shape[2]], -1),
               np.stack(np.mgrid[-1:2, :cube_shape[1], :cube_shape[2]], -1),
               np.stack(np.mgrid[cube_shape[0] - 2:cube_shape[0] + 1, :cube_shape[1], :cube_shape[2]], -1), ]
-    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
+    fields = compute_potential(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
 
     fields = [fields[0][:, :, 1].reshape((-1, 3)),
               fields[1][:, 1, :].reshape((-1, 3)), fields[2][:, 1, :].reshape((-1, 3)),
@@ -89,13 +91,13 @@ def get_potential_top(b_n, height, batch_size=2048, **kwargs):
 
     b_n = b_n.reshape((-1)).astype(np.float32)
     coords = [np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], cube_shape[2] - 2:cube_shape[2] + 1], -1)]
-    fields = _compute_fields(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
+    fields = compute_potential(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
 
     fields = [fields[0][:, :, 1].reshape((-1, 3)),]
     coords = [coords[0][:, :, 1].reshape((-1, 3)),]
     return np.concatenate(coords), np.concatenate(fields)
 
-def _compute_fields(coords, cube_shape, b_n, batch_size=2048, progress=False):
+def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
     coords_shape = [c.shape[:-1] for c in coords]
     flat_coords = np.concatenate([c.reshape(((-1, 3))) for c in coords])
 
@@ -130,3 +132,55 @@ def _compute_fields(coords, cube_shape, b_n, batch_size=2048, progress=False):
         idx += np.prod(s)
 
     return fields
+
+def get_fft_potential_field(Bz0, Nz, scale=1, alpha=0):
+    Nx = Bz0.shape[0]
+    Ny = Bz0.shape[1]
+    z = np.linspace(0, Nz - 1, Nz)
+
+    fftBz0 = np.fft.fft2(Bz0)
+
+    kx = np.zeros([Nx])
+    ky = np.zeros([Ny])
+
+    kx[0:Nx // 2] = np.arange(Nx // 2) / Nx
+    kx[Nx // 2:Nx] = np.arange(Nx // 2) / Nx - 0.5
+
+    kx = np.array([kx[:], ] * Ny).transpose()
+    kx *= 2 * np.pi
+
+    ky[0:Ny // 2] = np.arange(Ny // 2) / Ny
+    ky[Ny // 2:] = np.arange(Ny // 2) / Ny - 0.5
+
+    ky = np.array([ky[:], ] * Nx)
+    ky *= 2 * np.pi
+
+    k2 = kx * kx + ky * ky
+    w2 = k2 - alpha ** 2
+    wabs = np.zeros([Nx, Ny], dtype=complex)
+    wabs = np.sqrt(w2.clip(0, None)) + 1j * np.sqrt(-w2.clip(None, 0))
+
+    HxB = np.zeros([Nx, Ny], dtype=complex)
+    HyB = np.zeros([Nx, Ny], dtype=complex)
+    HzB = np.ones([Nx, Ny], dtype=complex)
+
+    HxB[np.where(k2 != 0)] = -1j * kx[np.where(k2 != 0)] * wabs[np.where(k2 != 0)] / k2[
+        np.where(k2 != 0)] + 1j * alpha * ky[np.where(k2 != 0)] / k2[np.where(k2 != 0)]
+    HxB[0, 0] = -1j
+
+    HyB[np.where(k2 != 0)] = -1j * ky[np.where(k2 != 0)] * wabs[np.where(k2 != 0)] / k2[
+        np.where(k2 != 0)] - 1j * alpha * kx[np.where(k2 != 0)] / k2[np.where(k2 != 0)]
+    HyB[0, 0] = -1j
+
+    Bx_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
+    By_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
+    Bz_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
+
+    for i in range(0, Nz):
+        z_exp = z[i] * scale
+        Bx_ext[i, :, :] = np.fft.ifft2(fftBz0 * HxB * np.exp(-wabs * z_exp)).real
+        By_ext[i, :, :] = np.fft.ifft2(fftBz0 * HyB * np.exp(-wabs * z_exp)).real
+        Bz_ext[i, :, :] = np.fft.ifft2(fftBz0 * HzB * np.exp(-wabs * z_exp)).real
+
+    b = np.stack([Bx_ext, By_ext, Bz_ext], axis=-1).transpose((1, 2, 0, 3))
+    return b

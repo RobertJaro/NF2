@@ -35,7 +35,7 @@ class SirenLayer(nn.Module):
 
 # siren network
 class SirenModel(nn.Module):
-    def __init__(self, in_dim, out_dim, dim=512, n_layers=8,
+    def __init__(self, in_dim, out_dim, dim=256, n_layers=8,
                  w0=1., w0_initial=30., **kwargs):
         super().__init__()
         self.num_layers = n_layers

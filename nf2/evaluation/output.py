@@ -106,7 +106,7 @@ class CartesianOutput(BaseOutput):
         self.ds_per_pixel = self.ds_per_pixel[0] if isinstance(self.ds_per_pixel, list) else self.ds_per_pixel
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
-        self.wcs = self.state['data']['wcs'] if 'wcs' in self.state['data'] else None
+        self.wcs = [wcs for wcs in self.state['data']['wcs'] if wcs is not None] if 'wcs' in self.state['data'] else None
         self.time = None if self.wcs is None or len(self.wcs) == 0 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 

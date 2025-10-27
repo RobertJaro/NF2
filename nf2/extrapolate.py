@@ -14,7 +14,7 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, loss=[], transforms=[], config=None):
+def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, loss=[], transforms=[], loss_scaling=[], config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -67,7 +67,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
     callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
-                    model_kwargs=model, loss_config=loss, transforms=transforms)
+                    model_kwargs=model, loss_config=loss, transforms=transforms, loss_scaling=loss_scaling)
 
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None

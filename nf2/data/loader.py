@@ -4,7 +4,7 @@ import numpy as np
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 
-from nf2.potential.potential_field import get_potential_boundary, get_potential_top
+from nf2.potential.potential_field import get_potential_boundary, get_potential_top, get_fft_potential_field
 
 
 def prep_b_data(b_cube, error_cube, height,
@@ -48,6 +48,28 @@ def load_potential_field_boundary(bz, height, reduce, only_top=False, pf_error=0
     pf_err = np.ones_like(pf_values) * pf_error
     return pf_coords, pf_err, pf_values
 
+def load_fft_potential_field_boundary(bz, height, strides=1, pf_error=0.0):
+    bz = block_reduce(bz, (strides, strides), func=np.mean)
+    height = height // strides
+    # load potential field
+    pf = get_fft_potential_field(bz, int(height))
+
+    boundaries = [pf[0, :, :, :], pf[-1, :, :, :],
+                  pf[:, 0, :, :], pf[:, -1, :, :],
+                  pf[:, :, 0, :], pf[:, :, -1, :]]
+    coords = [np.stack(np.mgrid[0:1, :pf.shape[1], :pf.shape[2]], -1),
+              np.stack(np.mgrid[pf.shape[0]-1:pf.shape[0], :pf.shape[1], :pf.shape[2]], -1),
+              np.stack(np.mgrid[:pf.shape[0], 0:1, :pf.shape[2]], -1),
+              np.stack(np.mgrid[:pf.shape[0], pf.shape[1] - 1:pf.shape[1], :pf.shape[2]], -1),
+              np.stack(np.mgrid[:pf.shape[0], :pf.shape[1], 0:1], -1),
+              np.stack(np.mgrid[:pf.shape[0], :pf.shape[1], pf.shape[2]-1:pf.shape[2]], -1),]
+
+    pf_boundaries = np.concatenate([b.reshape((-1, 3)) for b in boundaries])
+    coords = np.concatenate([c.reshape((-1, 3)) for c in coords])
+    coords *= strides
+
+    pf_err = np.ones_like(pf_boundaries) * pf_error
+    return coords, pf_err, pf_boundaries
 
 def _plot_data(error_cube, n_hmi_cube, plot_path, b_norm):
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))

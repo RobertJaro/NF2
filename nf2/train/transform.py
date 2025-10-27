@@ -52,19 +52,19 @@ class NLTEHeightTransformModel(BaseTransformModel):
 
     def __init__(self, height_range, Mm_per_ds, **kwargs):
         super().__init__(tensor_ids=['coords'], **kwargs)
-        self.mapping_module = SirenModel(in_dim=2, out_dim=1, n_layers=4, dim=64)
+        self.mapping_module = SirenModel(in_dim=3, out_dim=1, n_layers=4, dim=64)
         self.height_range = nn.Parameter(torch.tensor(height_range, dtype=torch.float32) / Mm_per_ds, requires_grad=False)
 
     def forward(self, batch):
         coords = batch['coords']
-        z_coords = coords[..., 2:3]  # Extract z-coordinates
-        xy_coords = coords[:, :2]  # Extract x and y coordinates
-        scaling = self.mapping_module(xy_coords)
-        z_coords = z_coords * 10 ** scaling
-        # min_height = self.height_range[None, 0:1]
-        # max_height = self.height_range[None, 1:2]
-        # z_coords = torch.sigmoid(z_coords) * (max_height - min_height) + min_height
-        transformed_coords = torch.cat([xy_coords, z_coords], -1)
+        # z_coords = coords[..., 2:3]  # Extract z-coordinates
+        # xy_coords = coords[:, :2]  # Extract x and y coordinates
+        scaling = self.mapping_module(coords)
+        # z_coords = z_coords * 10 ** scaling
+        min_height = self.height_range[None, 0:1]
+        max_height = self.height_range[None, 1:2]
+        z_coords = torch.sigmoid(scaling) * (max_height - min_height) + min_height
+        transformed_coords = torch.cat([coords[..., :2], z_coords], -1)
 
         return {'coords': transformed_coords, 'original_coords': coords}
 

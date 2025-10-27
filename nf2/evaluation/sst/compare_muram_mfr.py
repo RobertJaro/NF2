@@ -15,7 +15,7 @@ from nf2.loader.muram import MURaMSnapshot
 # parser.add_argument('--output', type=str, help='output path.')
 # args = parser.parse_args()
 
-out_path = '/gpfs/gpfs0/robert.jarolim/nf2/topology/results/sma'
+out_path = '/glade/work/rjarolim/nf2/topology/results/sma'
 os.makedirs(out_path, exist_ok=True)
 
 Mm_per_pixel = 0.192  # 0.192
@@ -29,9 +29,9 @@ mfr_muram_BnablaBz = b_nabla_bz(mfr_muram_b) / Mm_per_pixel
 mfr_muram_j = (curl(mfr_muram_b) / Mm_per_pixel * u.G / u.Mm) * constants.c / (4 * np.pi)
 mfr_muram_j = mfr_muram_j.to_value(u.G / u.s)
 
-mfr_1slices_nf2 = '/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_sma_1slices_v01/extrapolation_result.nf2'
-mfr_2slices_nf2 = '/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_sma_2slices_v01/extrapolation_result.nf2'
-mfr_2slices_amb_nf2 = '/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_sma_2slices_ambiguous_v01/extrapolation_result.nf2'
+mfr_1slices_nf2 = '/glade/work/rjarolim/nf2/topology/muram_sma_1slices_v01/extrapolation_result.nf2'
+mfr_2slices_nf2 = '/glade/work/rjarolim/nf2/topology/muram_sma_2slices_v01/extrapolation_result.nf2'
+mfr_2slices_amb_nf2 = '/glade/work/rjarolim/nf2/topology/muram_sma_2slices_ambiguous_v01/extrapolation_result.nf2'
 
 mfr_1slice_model = CartesianOutput(mfr_1slices_nf2)
 mfr_2slice_model = CartesianOutput(mfr_2slices_nf2)

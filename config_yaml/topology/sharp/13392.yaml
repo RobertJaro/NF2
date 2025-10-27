@@ -1,6 +1,6 @@
 ---
-base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/sharp_13392_v01"
-work_directory: "/trinity/home/robert.jarolim/nf2/sharp_13392_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/sharp_13392_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sharp_13392_v01"
 logging:
   project: topology
   name: "13392 SHARP 09:12"

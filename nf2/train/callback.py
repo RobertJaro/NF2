@@ -635,10 +635,10 @@ class LosTrvAziBoundaryCallback(Callback):
         else:
             original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
             self.plot_b(b_los_trv_azi, b_true, original_coords)
-            #
-            self.plot_bxyz(b_xyz, b_true_xyz, original_coords)
 
-    def plot_bxyz(self, b, b_true, original_coords):
+        self.plot_bxyz(b_xyz, b_true_xyz)
+
+    def plot_bxyz(self, b, b_true):
         extent = None
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
@@ -761,50 +761,62 @@ class LosTrvAziBoundaryCallback(Callback):
         im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('B\_los')
+        plt.colorbar(im, cax=cax, label='B$_{los}$ [G]')
+        ax.set_title(r'$B_\text{LOS}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[0, 1]
         im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('B\_los\_true')
+        plt.colorbar(im, cax=cax, label='B$_{los,true}$ [G]')
+        ax.set_title(r'$B_\text{LOS,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[1, 0]
         im = ax.imshow(b[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('B\_trv')
+        plt.colorbar(im, cax=cax, label='B$_{trv}$ [G]')
+        ax.set_title(r'$B_\text{TRV}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[1, 1]
         im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('B\_trv\_true')
+        plt.colorbar(im, cax=cax, label='B$_{trv,true}$ [G]')
+        ax.set_title(r'$B_\text{TRV,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[2, 0]
         im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[deg]')
-        ax.set_title('B\_azi')
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        ax.set_title(r'$B_\text{AZI}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[2, 1]
         im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[deg]')
-        ax.set_title('B\_azi\_true')
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        ax.set_title(r'$B_\text{AZI,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         ax = axs[3, 0]
         im = ax.imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Z [Mm]')
-        ax.set_title('Transformed z')
+        ax.set_title('Transformed $z$')
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
 
@@ -813,18 +825,9 @@ class LosTrvAziBoundaryCallback(Callback):
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Z [Mm]')
-        ax.set_title('Original z')
+        ax.set_title('Original $z$')
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
-
-        axs[0, 0].set_title('B\_los')
-        axs[0, 1].set_title('B\_los\_true')
-        axs[1, 0].set_title('B\_trv')
-        axs[1, 1].set_title('B\_trv\_true')
-        axs[2, 0].set_title('B\_azi')
-        axs[2, 1].set_title('B\_azi\_true')
-        axs[3, 0].set_title('Transformed z')
-        axs[3, 1].set_title('Original z')
 
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})

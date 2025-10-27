@@ -25,6 +25,7 @@ class CartesianDataModule(BaseDataModule):
         self.G_per_dB = G_per_dB
         self.work_directory = work_directory
         self.batch_size = batch_size
+        self.ds_batch_size = batch_size // len(train_configs)
         self.validation_batch_size = validation_batch_size
         self.validation_pixel_per_ds = validation_pixel_per_ds
         # wrap data if only one slice is provided
@@ -68,7 +69,7 @@ class CartesianDataModule(BaseDataModule):
         boundary_config = boundary_config if boundary_config is not None else \
             {'type': 'potential', 'strides': 4}
         boundary_config = deepcopy(boundary_config)
-        boundary_batch_size = boundary_config.pop('batch_size', batch_size)
+        boundary_batch_size = boundary_config.pop('batch_size', batch_size // 4)
         boundary_type = boundary_config.pop('type')
         if boundary_type == 'none':
             pass
@@ -77,6 +78,7 @@ class CartesianDataModule(BaseDataModule):
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
             boundary_ds = PotentialBoundaryDataset(bz=bz,
                                                    height_pixel=coord_range[2, -1] / ds_per_pixel,
+                                                   coord_range=coord_range,
                                                    ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
                                                    work_directory=work_directory,
                                                    batch_size=boundary_batch_size, **boundary_config)
@@ -86,6 +88,7 @@ class CartesianDataModule(BaseDataModule):
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
             boundary_ds = PotentialTopBoundaryDataset(bz=bz,
                                                       height_pixel=coord_range[2, -1] / ds_per_pixel,
+                                                      coord_range=coord_range,
                                                       ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
                                                       work_directory=work_directory,
                                                       batch_size=boundary_batch_size, **boundary_config)
@@ -154,7 +157,7 @@ class CartesianDataModule(BaseDataModule):
         config = deepcopy(config)
         ds_type = config['type']
         ds_id = config.pop('ds_id', f'train_{ds_type}')
-        config['batch_size'] = config.pop('batch_size', self.batch_size)  # default batch size
+        config['batch_size'] = config.pop('batch_size', self.ds_batch_size)  # default batch size
         dataset = self.init_dataset(**config, Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
                                     work_directory=self.work_directory)
         return ds_id, dataset
@@ -518,24 +521,39 @@ class NumpyDataset(MapDataset):
 
 class PotentialBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
-        coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
-                                                         progress=False)
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, G_per_dB, strides=1, batch_size=2 ** 12, **kwargs):
+        coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides)
         coords = coords * ds_per_pixel
         b_err = b_err / G_per_dB
         b = b / G_per_dB
+
+        # adjust coordinates in xy plane
+        c_x_min, c_x_max = coords[..., 0].min(), coords[..., 0].max()
+        c_y_min, c_y_max = coords[..., 1].min(), coords[..., 1].max()
+        target_x_min, target_x_max = coord_range[0]
+        target_y_min, target_y_max = coord_range[1]
+        coords[..., 0] = (coords[..., 0] - c_x_min) / (c_x_max - c_x_min) * (target_x_max - target_x_min) + target_x_min
+        coords[..., 1] = (coords[..., 1] - c_y_min) / (c_y_max - c_y_min) * (target_y_max - target_y_min) + target_y_min
 
         super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
 
 
 class PotentialTopBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
         coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
                                                          only_top=True, progress=False)
         coords = coords * ds_per_pixel
         b_err = b_err / G_per_dB
         b = b / G_per_dB
+
+        # adjust coordinates in xy plane
+        c_x_min, c_x_max = coords[..., 0].min(), coords[..., 0].max()
+        c_y_min, c_y_max = coords[..., 1].min(), coords[..., 1].max()
+        target_x_min, target_x_max = coord_range[0]
+        target_y_min, target_y_max = coord_range[1]
+        coords[..., 0] = (coords[..., 0] - c_x_min) / (c_x_max - c_x_min) * (target_x_max - target_x_min) + target_x_min
+        coords[..., 1] = (coords[..., 1] - c_y_min) / (c_y_max - c_y_min) * (target_y_max - target_y_min) + target_y_min
 
         super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
 

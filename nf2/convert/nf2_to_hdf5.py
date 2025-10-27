@@ -21,8 +21,8 @@ class _SaveFileTask(Thread):
         f.attrs['INFO'] = f'Magnetic vector field (B_x, B_y, B_z): {self.output["b"].shape} (x, y, z, 3)'
         f.attrs['Mm_per_pixel'] = self.output['Mm_per_pixel']
         f.attrs['type'] = self.nf2_out.data_config['type']
-        f.attrs['wcs'] = self.nf2_out.wcs[0].to_header_string()
-        f.attrs['time'] = self.nf2_out.time.isoformat('T', timespec='seconds')
+        f.attrs['wcs'] = self.nf2_out.wcs[0].to_header_string() if len(self.nf2_out.wcs) > 0 else 'None'
+        f.attrs['time'] = self.nf2_out.time.isoformat('T', timespec='seconds') if self.nf2_out.time is not None else 'None'
         f.close()
         print('File saved:', self.out_path)
 

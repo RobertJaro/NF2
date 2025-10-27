@@ -106,7 +106,11 @@ class MapDataset(TensorsDataset):
 
         if coords is None:
             coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
-            coords = coords[:, :, 0, :]
+            coords = coords[:, :, 0, :] # flatten z dimension
+            # shift coordinate system to center
+            x_max, y_max = coords[..., 0].max(), coords[..., 1].max()
+            coords[..., 0] -= x_max / 2
+            coords[..., 1] -= y_max / 2
         else:
             coords = coords / Mm_per_ds
 

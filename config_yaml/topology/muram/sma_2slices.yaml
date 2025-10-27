@@ -1,6 +1,6 @@
 ---
-base_path: "/gpfs/gpfs0/robert.jarolim/nf2/topology/muram_sma_2slices_v01"
-work_directory: "/trinity/home/robert.jarolim/nf2/muram_sma_2slices_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/muram_sma_2slices_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_2slices_v01"
 logging:
   project: topology
   name: MURAM SMA - tau1 + tau1e-4
