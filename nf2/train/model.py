@@ -252,6 +252,8 @@ class MultiDomainModel(nn.Module):
             model_class = PotentialModel
         elif model_type == 'radial':
             model_class = RadialModel
+        elif model_type == 'cicci':
+            model_class = CICCIModel
         else:
             raise NotImplementedError(f'Unknown model {model_type}')
         return model_class(**model_config)
@@ -365,6 +367,28 @@ class BScaledModel(nn.Module):
         b_height_scaling = self.b_height_scaling_model(z)
 
         out_dict = {'b': b, 'b_height_scaling': b_height_scaling}
+        #
+        if compute_jacobian:
+            jac_matrix = jacobian(b, coords)
+            out_dict['jac_matrix'] = jac_matrix
+        #
+        return out_dict
+
+class CICCIModel(GenericModel):
+
+    def __init__(self, **model_kwargs):
+        super().__init__(3, 3 * 3, **model_kwargs)
+
+    def forward(self, coords, compute_jacobian=True):
+        out = super().forward(coords)
+
+        bpg = out[..., 0:3]
+        bpl = out[..., 3:6]
+        bt = out[..., 6:9]
+
+        b = bpg + bpl + bt
+
+        out_dict = {'b': b, 'bpg': bpg, 'bpl': bpl, 'bt': bt}
         #
         if compute_jacobian:
             jac_matrix = jacobian(b, coords)

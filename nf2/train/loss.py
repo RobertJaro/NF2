@@ -320,6 +320,51 @@ class BoundaryLoss(BaseLoss):
         return b_diff
 
 
+class CICCIBoundaryLoss(BaseLoss):
+
+    def __init__(self, weights=None, **kwargs):
+        super().__init__(**kwargs)
+        weights = weights if weights is not None else [1.0, 1.0, 1.0]
+        assert len(weights) == 3, 'weights must be a list of 3 elements for Bpg, Bpl, Bt'
+        weights = torch.tensor(weights, dtype=torch.float32)
+        self.register_buffer('weights_buffer', weights)
+
+    def forward(self, bpg, bpl, bt, bpg_true, bpl_true, bt_true, *args, **kwargs):
+        bpg_diff = (bpg - bpg_true).pow(2).sum(-1)
+        bpl_diff = (bpl - bpl_true).pow(2).sum(-1)
+        bt_diff = (bt - bt_true).pow(2).sum(-1)
+
+        loss = (bpg_diff * self.weights_buffer[0] +
+                bpl_diff * self.weights_buffer[1] +
+                bt_diff * self.weights_buffer[2])
+        return loss
+
+class CICCIJzLoss(BaseLoss):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, jac_matrix, jz_true, *args, **kwargs):
+        # compute J
+        dBx_dx = jac_matrix[:, 0, 0]
+        dBy_dx = jac_matrix[:, 1, 0]
+        dBz_dx = jac_matrix[:, 2, 0]
+        dBx_dy = jac_matrix[:, 0, 1]
+        dBy_dy = jac_matrix[:, 1, 1]
+        dBz_dy = jac_matrix[:, 2, 1]
+        dBx_dz = jac_matrix[:, 0, 2]
+        dBy_dz = jac_matrix[:, 1, 2]
+        dBz_dz = jac_matrix[:, 2, 2]
+        #
+        rot_x = dBz_dy - dBy_dz
+        rot_y = dBx_dz - dBz_dx
+        rot_z = dBy_dx - dBx_dy
+        #
+        j = torch.stack([rot_x, rot_y, rot_z], -1)
+
+        jz_diff = (j[:, 2:3] - jz_true).pow(2).sum(-1)
+        return jz_diff
+
 class WeightedHeightLoss(BaseLoss):
 
     def forward(self, coords, original_coords, height_range, *args, **kwargs):
@@ -353,5 +398,5 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBound
                        'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
                        'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
-                       'sigma_j': SigmaJLoss
+                       'sigma_j': SigmaJLoss, 'cicci_boundary': CICCIBoundaryLoss, 'cicci_jz': CICCIJzLoss
                        }

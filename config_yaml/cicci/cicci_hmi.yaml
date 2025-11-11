@@ -1,0 +1,58 @@
+---
+base_path: "/glade/work/rjarolim/nf2/cicci/cicci_hmi_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/cicci_hmi_v01"
+logging:
+  project: cicci
+  name: "CICCI HMI"
+data:
+  type: cartesian
+  train_configs:
+    - type: cicci
+      ds_id: cicci
+      fits_path:
+        bpg: "/glade/work/rjarolim/data/nf2/cicci/hmi.b_720s.20170905_120000_TAI.cea.bpg.12673.fits"
+        bpl: "/glade/work/rjarolim/data/nf2/cicci/hmi.b_720s.20170905_120000_TAI.cea.bpl.12673.fits"
+        bt: "/glade/work/rjarolim/data/nf2/cicci/hmi.b_720s.20170905_120000_TAI.cea.bt.12673.fits"
+        wbr: "/glade/work/rjarolim/data/nf2/cicci/hmi.b_720s.20170905_120000_TAI.cea.wbr.12673.fits"
+  num_workers: 8
+  iterations: 10000
+
+model:
+  type: cicci
+  dim: 256
+
+training:
+  epochs: 20
+
+loss:
+  - type: cicci_boundary
+    name: boundary
+    lambda: 1.0
+    ds_id: [ cicci ]
+    weights: [ 1.0, 1.0, 1.0 ]
+  - type: boundary
+    name: potential_boundary
+    lambda: 1.0
+    ds_id: potential
+  - type: force_free
+    name: force_free
+    lambda: 1.0e-2
+  - type: divergence
+    name: divergence
+    lambda: 1.0e-2
+  - type: cicci_jz
+    name: cicci_jz
+    lambda: 0.0
+    ds_id: [ cicci ]
+
+callbacks:
+  # Boundary callbacks
+  - type: boundary
+    name: boundary
+    ds_id: cicci
+  # Cube evaluation
+  - type: metrics
+    name: metrics
+    ds_id: cube
+  - type: slices
+    ds_id: slices

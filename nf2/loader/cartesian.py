@@ -12,6 +12,7 @@ from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
 from nf2.data.loader import load_potential_field_boundary
 from nf2.loader.base import TensorsDataset, BaseDataModule, MapDataset
 from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
+from nf2.loader.util import _plot_B
 
 
 class CartesianDataModule(BaseDataModule):
@@ -117,7 +118,7 @@ class CartesianDataModule(BaseDataModule):
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': [],
                   'cube_shape': []}
         for dataset in training_datasets.values():
-            if not isinstance(dataset, MapDataset):
+            if not isinstance(dataset, MapDataset) and not isinstance(dataset, CICCIDataset):
                 continue
             config['coord_range'].append(dataset.coord_range)
             config['cube_shape'].append(dataset.cube_shape)
@@ -150,6 +151,8 @@ class CartesianDataModule(BaseDataModule):
             return SlicesDataset(**kwargs)
         elif type == 'cube':
             return CubeDataset(**kwargs)
+        elif type == 'cicci':
+            return CICCIDataset(**kwargs)
         else:
             raise ValueError(f'Unknown boundary type: {type}. Supported types: '
                              f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
@@ -562,6 +565,68 @@ class PotentialTopBoundaryDataset(TensorsDataset):
         coords[..., 1] = (coords[..., 1] - c_y_min) / (c_y_max - c_y_min) * (target_y_max - target_y_min) + target_y_min
 
         super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
+
+
+class CICCIDataset(TensorsDataset):
+
+    def __init__(self, fits_path, G_per_dB=2500, Mm_per_pixel=0.36, Mm_per_ds=.36 * 320,
+                 plot=True, **kwargs):
+        self.ds_per_pixel = Mm_per_pixel / Mm_per_ds
+
+        bpg = fits.getdata(fits_path['bpg']).T
+        bpl = fits.getdata(fits_path['bpl']).T
+        bt = fits.getdata(fits_path['bt']).T
+        wbr = fits.getdata(fits_path['wbr']).T
+
+        # adjust dimensions
+        bt = np.stack([bt[..., 1], -bt[..., 0], np.zeros_like(bt[..., 0])], axis=-1)
+        bpg = np.stack([bpg[..., 2], -bpg[..., 1], bpg[..., 0]], axis=-1)
+        bpl = np.stack([bpl[..., 2], -bpl[..., 1], bpl[..., 0]], axis=-1)
+
+        b = bpg + bpl + bt
+
+        # derive J from wbr in G/m
+        jz = wbr[..., None] / 6.96e8
+        jz = jz / G_per_dB * (Mm_per_ds * 1e6)  # convert to dB/ds
+
+        wcs = Map(fits_path['bpg']).wcs
+
+        # store Bz for potential boundary condition
+        self.bz = np.copy(b[..., 0])
+
+        bpg /= G_per_dB
+        bpl /= G_per_dB
+        bt /= G_per_dB
+        wbr /= G_per_dB
+        b /= G_per_dB
+
+        coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
+        coords = coords[:, :, 0, :]  # flatten z dimension
+        # shift coordinate system to center
+        x_max, y_max = coords[..., 0].max(), coords[..., 1].max()
+        coords[..., 0] -= x_max / 2
+        coords[..., 1] -= y_max / 2
+
+        self.coord_range = np.array([[coords[..., 0].min(), coords[..., 0].max()],
+                                     [coords[..., 1].min(), coords[..., 1].max()]])
+        self.ds = np.array([
+            np.diff(coords[:, 0, 0]).mean(),
+            np.diff(coords[0, :, 1]).mean(),
+        ])
+
+        self.cube_shape = coords.shape[:-1]
+        self.los_trv_azi = False
+        self.height_mapping = None
+        self.wcs = wcs
+
+        tensors = {'b_true': b, 'bpg_true': bpg, 'bpl_true': bpl, 'bt_true': bt, 'jz_true': jz, 'coords': coords}
+
+        if plot:
+            _plot_B(b * G_per_dB, coords * Mm_per_ds)
+
+        tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
+
+        super().__init__(tensors, **kwargs)
 
 
 def process_map(map, slice, bin):
