@@ -56,12 +56,11 @@ def load_fft_potential_field_boundary(bz, height, strides=1, pf_error=0.0):
 
     boundaries = [pf[0, :, :, :], pf[-1, :, :, :],
                   pf[:, 0, :, :], pf[:, -1, :, :],
-                  pf[:, :, 0, :], pf[:, :, -1, :]]
+                  pf[:, :, -1, :]]
     coords = [np.stack(np.mgrid[0:1, :pf.shape[1], :pf.shape[2]], -1),
               np.stack(np.mgrid[pf.shape[0]-1:pf.shape[0], :pf.shape[1], :pf.shape[2]], -1),
               np.stack(np.mgrid[:pf.shape[0], 0:1, :pf.shape[2]], -1),
               np.stack(np.mgrid[:pf.shape[0], pf.shape[1] - 1:pf.shape[1], :pf.shape[2]], -1),
-              np.stack(np.mgrid[:pf.shape[0], :pf.shape[1], 0:1], -1),
               np.stack(np.mgrid[:pf.shape[0], :pf.shape[1], pf.shape[2]-1:pf.shape[2]], -1),]
 
     pf_boundaries = np.concatenate([b.reshape((-1, 3)) for b in boundaries])

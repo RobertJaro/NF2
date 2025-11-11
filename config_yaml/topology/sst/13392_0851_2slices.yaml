@@ -29,14 +29,15 @@ data:
       load_map: False
       ambiguous_azimuth: True
   num_workers: 8
-  iterations: 1000
+  iterations: 10000
+  z_range: [ 0, 50 ]
 
 model:
   type: vector_potential
   dim: 256
 
 training:
-  epochs: 100
+  epochs: 30
 
 loss:
   - type: boundary_los_trv_azi
@@ -53,7 +54,7 @@ loss:
     lambda: 1.0e-2
   - type: height
     name: height
-    lambda: 1.0e-3
+    lambda: 1.0e-4
     ds_id: [ 8542 ]
 
 transforms:
@@ -61,15 +62,15 @@ transforms:
     height_range: [ 0, 20 ]
     ds_id: [ 8542 ]
 
-loss_scaling:
-  - type: potential_fit
-    name: potential_fit
-    loss_ids: [boundary, potential_boundary, force_free]
-    ref_file: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
-    Mm_per_pixel: 0.09
+#loss_scaling:
+#  - type: potential_fit
+#    name: potential_fit
+#    loss_ids: [boundary, potential_boundary, force_free]
+#    ref_file: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
+#    Mm_per_pixel: 0.09
 
 callbacks:
-    # Boundary callbacks
+  # Boundary callbacks
   - type: los_trv_azi_boundary
     name: boundary-6173
     ds_id: 6173

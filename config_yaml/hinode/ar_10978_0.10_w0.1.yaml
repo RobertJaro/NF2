@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/hinode_v2/ar_10978_0_010"
-work_directory: "/glade/derecho/scratch/rjarolim/topology/ar_10978_0_010"
+base_path: "/glade/work/rjarolim/nf2/hinode_v2/ar_10978_0_100_w01"
+work_directory: "/glade/derecho/scratch/rjarolim/topology/ar_10978_0_100"
 logging:
   project: nf2
-  name: "10978 Hinode 0.010"
+  name: "10978 Hinode 0.100 w0.1"
 data:
   type: cartesian
   train_configs:
@@ -41,12 +41,13 @@ loss:
   name: boundary
   lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
   ds_id: hinode
+  weights: [0.1, 0.1, 1.0]
 - type: boundary
   name: potential_boundary
   lambda: 1.0e+1
   ds_id: potential
 - type: force_free
-  lambda: 0.010
+  lambda: 0.1
 
 callbacks:
     # Boundary callbacks

@@ -127,3 +127,32 @@ class PotentialFitLossScalingModule(BaseScalingModule):
 
         return scaled_loss
 
+class BHeightLossScalingModule(BaseScalingModule):
+    """
+    Loss scaling based on magnetic field B.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def forward(self, loss, state):
+        """
+        Forward pass for the B loss scaling module.
+        This method scales the loss based on the estimated magnetic field B.
+        :param loss: The loss tensor to be scaled.
+        :param state: A dictionary containing the state information, including 'coords' and 'b
+        :return:
+        """
+        z_grouped_coords = state['z_grouped_coords']
+        b = state['b']
+
+        b = b.reshape(-1, z_grouped_coords.shape[1], b.shape[-1])
+        loss = loss.reshape(-1, z_grouped_coords.shape[1])
+
+        scaling = b.pow(2).sum(-1).mean(1, keepdim=True) # mean across height
+        scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
+
+        scaled_loss = scaled_loss.reshape(-1)
+
+        return scaled_loss
+

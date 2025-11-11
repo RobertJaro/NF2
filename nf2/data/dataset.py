@@ -30,29 +30,9 @@ class BatchesDataset(Dataset):
         return data
 
     def clear(self):
-        [os.remove(f) for f in self.batches_file_paths.values()]
-
-
-class ImageDataset(Dataset):
-
-    def __init__(self, cube_shape, norm, z=0):
-        coordinates = np.stack(np.mgrid[:cube_shape[0],
-                               :cube_shape[1]], -1)
-        self.coordinates = coordinates
-        self.coordinates_flat = coordinates.reshape((-1, 2))
-        self.norm = norm
-        self.z = z / self.norm
-
-    def __len__(self, ):
-        return self.coordinates_flat.shape[0]
-
-    def __getitem__(self, idx):
-        coord = self.coordinates_flat[idx]
-        scaled_coord = [coord[0] / self.norm,
-                        coord[1] / self.norm,
-                        self.z]
-        return np.array(scaled_coord, dtype=np.float32)
-
+        for f in self.batches_file_paths.values():
+            if os.path.exists(f):
+                os.remove(f)
 
 class CubeDataset(Dataset):
 
@@ -224,7 +204,7 @@ class SlicesDataset(Dataset):
 
 class RandomCoordinateDataset(Dataset):
 
-    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None, z_sampling_exponent=1):
+    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None, z_sampling_exponent=1, length=None):
         super().__init__()
         if buffer:
             buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
@@ -237,9 +217,10 @@ class RandomCoordinateDataset(Dataset):
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
         self.z_sampling_exponent = torch.tensor(z_sampling_exponent, dtype=torch.float32)
+        self.length = length if length is not None else 1
 
     def __len__(self):
-        return 1
+        return self.length
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
@@ -251,3 +232,62 @@ class RandomCoordinateDataset(Dataset):
         random_coords[:, 2] = (
                 random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         return {'coords': random_coords}
+
+class RandomHeightCoordinateDataset(Dataset):
+
+    def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, buffer=None, z_sampling_exponent=1, length=None):
+        super().__init__()
+        if buffer:
+            buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
+            buffer_y = (coord_range[1, 1] - coord_range[1, 0]) * buffer
+            coord_range[0, 0] -= buffer_x
+            coord_range[0, 1] += buffer_x
+            coord_range[1, 0] -= buffer_y
+            coord_range[1, 1] += buffer_y
+        self.coord_range = coord_range
+        self.batch_size = int(batch_size)
+        self.float_tensor = torch.FloatTensor
+        self.z_sampling_exponent = torch.tensor(z_sampling_exponent, dtype=torch.float32)
+        self.length = length if length is not None else 1
+        self.z_sample = z_sample
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, item):
+        # sample z coords
+        random_z_coords = self.float_tensor(self.z_sample, 1).uniform_()
+        # scale z
+        random_z_coords = (random_z_coords * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
+        # sample xy coords per z
+        random_xy_coords = self.float_tensor(self.batch_size // self.z_sample, self.z_sample, 2).uniform_()
+        random_xy_coords[..., 0] = (
+                random_xy_coords[..., 0] * (self.coord_range[0, 1] - self.coord_range[0, 0]) + self.coord_range[0, 0])
+        random_xy_coords[..., 1] = (
+                random_xy_coords[..., 1] * (self.coord_range[1, 1] - self.coord_range[1, 0]) + self.coord_range[1, 0])
+        random_z_coords = random_z_coords[None, :, :].repeat(self.batch_size // self.z_sample, 1, 1)
+
+        z_grouped_coords = torch.cat([random_xy_coords, random_z_coords], -1)
+        random_coords = z_grouped_coords.reshape(-1, 3)
+
+        return {'coords': random_coords, 'z_grouped_coords': z_grouped_coords}
+
+
+class IndexedDataset(Dataset):
+
+    def __init__(self, dataset, key='dataset_idx'):
+        """Data set wrapper to add an index to each data sample.
+
+        :param dataset: base dataset.
+        :param key: key to use for the index.
+        """
+        self.dataset = dataset
+        self.key = key
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        data = self.dataset[idx]
+        data[self.key] = torch.tensor([idx], dtype=torch.long)
+        return data

@@ -3,12 +3,13 @@ import logging
 
 import numpy as np
 import torch
+import torch.distributed as dist
 from pytorch_lightning import LightningModule
 from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import loss_module_mapping
-from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule
+from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, BHeightLossScalingModule
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
     VectorPotentialScaledModel, GaugedVectorPotentialModel
@@ -129,6 +130,9 @@ class NF2Module(LightningModule):
                 name = 'potential_fit_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
                 loss_scaling_modules[name] = PotentialFitLossScalingModule(**scaling_config, name=name,
                                                                            Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB)
+            elif scaling_type == 'b_height':
+                name = 'B_height_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
+                loss_scaling_modules[name] = BHeightLossScalingModule(**scaling_config, name=name)
             else:
                 raise ValueError(f"Invalid loss scaling type: {scaling_type}")
         self.loss_scaling_modules = nn.ModuleDict(loss_scaling_modules)
@@ -138,6 +142,7 @@ class NF2Module(LightningModule):
                 assert loss_id in self.loss_modules.keys(), f"Loss id {loss_id} in loss scaling module " \
                                                             f"not found in loss modules."
         self.validation_outputs = {}
+        self.validation_batches = {}
 
     def load_transfrom_config(self, transforms):
         transform_modules = []
@@ -317,7 +322,20 @@ class NF2Module(LightningModule):
 
         assert not torch.isnan(outputs['loss'].mean()), f"Loss is NaN. Check input data and run configuration."
         # log results to WANDB
-        self.log("train", {k: v.mean() for k, v in outputs.items()})
+        self.log_dict({f"train.{k}": v.mean() for k, v in outputs.items() if k != 'loss'})
+        self.log('train.loss', outputs['loss'].mean(), prog_bar=True)
+
+    def on_validation_epoch_start(self):
+        self.validation_batches = {}
+
+    def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx: int = 0) -> None:
+        # Only rank-0 needs to keep outputs if you're running val on rank-0 only.
+        if outputs is not None:
+            # ensure CPU to keep GPU mem low
+            cpu_out = {k: v.detach().cpu() for k, v in outputs.items()}
+            if dataloader_idx not in self.validation_batches:
+                self.validation_batches[dataloader_idx] = []
+            self.validation_batches[dataloader_idx].append(cpu_out)
 
     @torch.enable_grad()
     def validation_step(self, batch, batch_nb, dataloader_idx):
@@ -357,15 +375,47 @@ class NF2Module(LightningModule):
 
         return {k: v.detach() for k, v in {**batch, **model_out}.items()}
 
-    def validation_epoch_end(self, outputs_list):
-        self.validation_outputs = {}  # reset validation outputs
-        if len(outputs_list) == 0 or any([len(o) == 0 for o in outputs_list]):
-            return  # skip invalid validation steps
+    def on_validation_epoch_end(self):
+        outputs_list = self.validation_batches
+        if not outputs_list or len(outputs_list) == 0:
+            return
 
-        for i, outputs in enumerate(outputs_list):
+        rank = dist.get_rank()
+        world = dist.get_world_size()
+        if rank == 0:
+            obj_gather_list = [None] * world
+            dist.gather_object(self.validation_batches, obj_gather_list, dst=0)
+            # Merge dicts from all ranks
+            merged_outputs = {}
+            for rank_dict in obj_gather_list:
+                for dataloader_idx, batch_list in rank_dict.items():
+                    if dataloader_idx not in merged_outputs:
+                        merged_outputs[dataloader_idx] = []
+                    merged_outputs[dataloader_idx].extend(batch_list)
+            outputs_list = merged_outputs
+        else:
+            dist.gather_object(self.validation_batches, None, dst=0)
+            return
+
+        for dataloader_idx, outputs in outputs_list.items():
+            # ---- reorder the list itself ----
+            # get a single scalar lin_idx for each batch element
+            # (use mean or first value if it's a vector)
+            idxs = []
+            for i, out in enumerate(outputs):
+                lin_idx = out.pop('dataset_idx') # for sorting; discard for later steps
+                if any([lin_idx == li for li, _ in idxs]):
+                    continue # duplicated by DDP
+                if lin_idx.ndim > 0:
+                    lin_idx = lin_idx.view(-1)[0]  # take first sample in that batch
+                idxs.append((int(lin_idx), i))
+            # sort by the scalar lin_idx
+            outputs = [outputs[i] for _, i in sorted(idxs, key=lambda x: x[0])]
+            # ---- concatenate outputs ----
             out_keys = outputs[0].keys()
             outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
-            self.validation_outputs[self.validation_mapping[i]] = outputs
+            self.validation_outputs[self.validation_mapping[dataloader_idx]] = outputs
+
 
     def on_load_checkpoint(self, checkpoint):
         state_dict = checkpoint['state_dict']

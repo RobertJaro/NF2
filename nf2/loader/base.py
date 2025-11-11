@@ -4,9 +4,10 @@ import uuid
 import numpy as np
 from astropy.nddata import block_reduce
 from pytorch_lightning import LightningDataModule
-from torch.utils.data import DataLoader, RandomSampler
+from pytorch_lightning.utilities import CombinedLoader
+from torch.utils.data import DataLoader
 
-from nf2.data.dataset import BatchesDataset
+from nf2.data.dataset import BatchesDataset, IndexedDataset
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 
@@ -36,7 +37,7 @@ class TensorsDataset(BatchesDataset):
 
 class BaseDataModule(LightningDataModule):
 
-    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None, iterations=None):
+    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None):
         super().__init__()
         self.training_datasets = training_datasets
         self.validation_datasets = validation_datasets
@@ -45,40 +46,22 @@ class BaseDataModule(LightningDataModule):
         self.config = module_config
         self.validation_dataset_mapping = {i: name for i, name in enumerate(self.validation_datasets.keys())}
         self.num_workers = num_workers if num_workers is not None else os.cpu_count()
-        self.iterations = iterations
 
     def clear(self):
         [ds.clear() for ds in self.datasets.values() if isinstance(ds, BatchesDataset)]
 
     def train_dataloader(self):
-        datasets = self.training_datasets
-
-        # data loader with fixed number of iterations
-        if self.iterations is not None:
-            loaders = {}
-            for i, (name, dataset) in enumerate(datasets.items()):
-                sampler = RandomSampler(dataset, replacement=True, num_samples=int(self.iterations))
-                loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
-                                           pin_memory=True, sampler=sampler, persistent_workers=True, prefetch_factor=5)
-            return loaders
-
-        # data loader with iterations based on the largest dataset
-        ref_idx = np.argmax([len(ds) for ds in datasets.values()])
-        ref_dataset_name, ref_dataset = list(datasets.items())[ref_idx]
-        loaders = {ref_dataset_name: DataLoader(ref_dataset, batch_size=None, num_workers=self.num_workers,
-                                                pin_memory=True, shuffle=True)}
-        for i, (name, dataset) in enumerate(datasets.items()):
-            if i == ref_idx:
-                continue  # reference dataset already added
-            sampler = RandomSampler(dataset, replacement=True, num_samples=len(ref_dataset))
-            loaders[name] = DataLoader(dataset, batch_size=None, num_workers=self.num_workers,
-                                       pin_memory=True, sampler=sampler)
-        return loaders
+        loaders = {name: DataLoader(ds, batch_size=None, num_workers=self.num_workers,
+                                    pin_memory=True, shuffle=True, persistent_workers=True, prefetch_factor=5)
+                   for name, ds in self.training_datasets.items()}
+        return CombinedLoader(loaders, 'max_size_cycle')
 
     def val_dataloader(self):
         datasets = self.validation_datasets
         loaders = []
         for dataset in datasets.values():
+            # add dataset wrapper for indexing
+            dataset = IndexedDataset(dataset)
             loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
                                 shuffle=False)
             loaders.append(loader)
@@ -106,7 +89,7 @@ class MapDataset(TensorsDataset):
 
         if coords is None:
             coords = np.stack(np.mgrid[:b.shape[0], :b.shape[1], :1], -1).astype(np.float32) * self.ds_per_pixel
-            coords = coords[:, :, 0, :] # flatten z dimension
+            coords = coords[:, :, 0, :]  # flatten z dimension
             # shift coordinate system to center
             x_max, y_max = coords[..., 0].max(), coords[..., 1].max()
             coords[..., 0] -= x_max / 2

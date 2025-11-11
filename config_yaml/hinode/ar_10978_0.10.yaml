@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/hinode/ar_10978_0_100"
+base_path: "/glade/work/rjarolim/nf2/hinode_v2/ar_10978_0_100"
 work_directory: "/glade/derecho/scratch/rjarolim/topology/ar_10978_0_100"
 logging:
   project: nf2

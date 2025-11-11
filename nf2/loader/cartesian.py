@@ -8,7 +8,7 @@ from astropy.io import fits
 from astropy.nddata import block_reduce
 from sunpy.map import Map
 
-from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset
+from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset, RandomHeightCoordinateDataset
 from nf2.data.loader import load_potential_field_boundary
 from nf2.loader.base import TensorsDataset, BaseDataModule, MapDataset
 from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
@@ -19,7 +19,7 @@ class CartesianDataModule(BaseDataModule):
     def __init__(self, train_configs, work_directory, valid_configs=None,
                  boundary_config=None, random_config=None,
                  Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 14, log_shape=False,
-                 batch_size=2 ** 13, validation_pixel_per_ds=128,
+                 batch_size=2 ** 13, validation_pixel_per_ds=128, iterations=None,
                  num_workers=None, **kwargs):
         self.Mm_per_ds = Mm_per_ds
         self.G_per_dB = G_per_dB
@@ -43,7 +43,13 @@ class CartesianDataModule(BaseDataModule):
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
         random_config = random_config if random_config is not None else {'batch_size': 2 ** 14}
-        random_dataset = RandomCoordinateDataset(coord_range, **random_config)
+        random_type = random_config.pop('type', 'default')
+        if random_type == 'default':
+            random_dataset = RandomCoordinateDataset(coord_range, length=iterations, **random_config)
+        elif random_type == 'height':
+            random_dataset = RandomHeightCoordinateDataset(coord_range, length=iterations, **random_config)
+        else:
+            raise ValueError(f'Unknown random dataset type: {random_type}')
 
         ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
 

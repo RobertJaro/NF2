@@ -408,7 +408,7 @@ class VectorPotentialScaledModel(nn.Module):
         return out_dict
 
 
-class VectorPotentialModel(SirenModel):
+class VectorPotentialModel(GenericModel):
 
     def __init__(self, **kwargs):
         super().__init__(3, 3, **kwargs)

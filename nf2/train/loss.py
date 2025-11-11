@@ -256,7 +256,7 @@ class AziBoundaryLoss(BaseLoss):
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
-    def __init__(self, ambiguous=False, los_weight=0.5, **kwargs):
+    def __init__(self, ambiguous=False, los_weight=0.9, **kwargs):
         super().__init__(**kwargs)
         self.ambiguous = ambiguous
         assert los_weight >= 0 and los_weight <= 1, 'los_weight must be between 0 and 1'
@@ -304,10 +304,11 @@ class LosBoundaryLoss(BaseLoss):
 
 class BoundaryLoss(BaseLoss):
 
-    def __init__(self, bz_weight=0.5, **kwargs):
+    def __init__(self, weights=None, **kwargs):
         super().__init__(**kwargs)
-        assert bz_weight >= 0 and bz_weight <= 1, 'bz_weight must be between 0 and 1'
-        self.bz_weight = bz_weight
+        weights = weights if weights is not None else [1.0, 1.0, 1.0]
+        weights = torch.tensor(weights, dtype=torch.float32)
+        self.register_buffer('weights_buffer', weights)
 
     def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
         # apply transforms
@@ -315,10 +316,7 @@ class BoundaryLoss(BaseLoss):
         # compute diff
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
-        b_xy = b_diff[..., :2].pow(2).sum(-1)
-        b_z = b_diff[..., 2].pow(2)
-        b_diff = (b_z * self.bz_weight + b_xy * (1 - self.bz_weight)) * 2
-
+        b_diff = torch.einsum('...i,i->...', b_diff.pow(2), self.weights_buffer)
         return b_diff
 
 

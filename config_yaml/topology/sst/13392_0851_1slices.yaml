@@ -18,14 +18,14 @@ data:
       load_map: False
       ambiguous_azimuth: True
   num_workers: 8
-  iterations: 1000
+  iterations: 10000
 
 model:
   type: vector_potential
   dim: 256
 
 training:
-  epochs: 100
+  epochs: 20
 
 loss:
   - type: boundary_los_trv_azi

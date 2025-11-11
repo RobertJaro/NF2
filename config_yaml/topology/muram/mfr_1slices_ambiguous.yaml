@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v02"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_1slices_ambiguous_v01"
 logging:
   project: topology
@@ -13,7 +13,7 @@ data:
       los_trv_azi_transform: True
       ambiguous_azimuth: True
   num_workers: 8
-  iterations: 1000
+  iterations: 10000
   z_range: [ 0, 50 ]
 
 model:
@@ -21,7 +21,7 @@ model:
   dim: 256
 
 training:
-  epochs: 100
+  epochs: 20
 
 loss:
   - type: boundary_los_trv_azi
@@ -37,12 +37,12 @@ loss:
     name: force_free
     lambda: 1.0e-3
 
-loss_scaling:
-  - type: potential_fit
-    name: potential_fit
-    loss_ids: [boundary, potential_boundary, force_free]
-    ref_file: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
-    Mm_per_pixel: 0.192
+#loss_scaling:
+#  - type: potential_fit
+#    name: potential_fit
+#    loss_ids: [boundary, potential_boundary, force_free]
+#    ref_file: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
+#    Mm_per_pixel: 0.192
 
 callbacks:
   # Boundary callbacks

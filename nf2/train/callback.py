@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pytorch_lightning import Callback
-
+from pytorch_lightning.utilities import rank_zero_only
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
 
 
@@ -18,6 +18,7 @@ class SphericalSlicesCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
@@ -106,6 +107,7 @@ class SlicesCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
@@ -283,6 +285,7 @@ class BoundaryCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
@@ -460,6 +463,7 @@ class PressureBoundaryCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
@@ -518,6 +522,7 @@ class DisambiguationCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
         self.name = name
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
@@ -591,6 +596,7 @@ class LosTrvAziBoundaryCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
@@ -841,6 +847,7 @@ class MetricsCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
+    @rank_zero_only
     def on_validation_epoch_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
