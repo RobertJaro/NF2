@@ -12,7 +12,7 @@ from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, BHeightLossScalingModule
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
-    VectorPotentialScaledModel, GaugedVectorPotentialModel
+    VectorPotentialScaledModel, GaugedVectorPotentialModel, CICCIModel
 from nf2.train.transform import HeightTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     NLTEHeightTransformModel
 
@@ -84,9 +84,11 @@ class NF2Module(LightningModule):
             model = BScaledModel(**model_kwargs)
         elif model_type == 'vector_potential_scaled':
             model = VectorPotentialScaledModel(**model_kwargs)
+        elif model_type == 'cicci':
+            model = CICCIModel(**model_kwargs)
         else:
             valid_options = ['b', 'vector_potential', 'flux', 'magneto_static', 'vector_potential_domain', 'b_domain',
-                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential']
+                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential', 'cicci']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -327,15 +329,7 @@ class NF2Module(LightningModule):
 
     def on_validation_epoch_start(self):
         self.validation_batches = {}
-
-    def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx: int = 0) -> None:
-        # Only rank-0 needs to keep outputs if you're running val on rank-0 only.
-        if outputs is not None:
-            # ensure CPU to keep GPU mem low
-            cpu_out = {k: v.detach().cpu() for k, v in outputs.items()}
-            if dataloader_idx not in self.validation_batches:
-                self.validation_batches[dataloader_idx] = []
-            self.validation_batches[dataloader_idx].append(cpu_out)
+        self.validation_outputs = {}
 
     @torch.enable_grad()
     def validation_step(self, batch, batch_nb, dataloader_idx):
@@ -375,27 +369,37 @@ class NF2Module(LightningModule):
 
         return {k: v.detach() for k, v in {**batch, **model_out}.items()}
 
+    def on_validation_batch_end(self, outputs, batch, batch_idx, dataloader_idx: int = 0) -> None:
+        # Only rank-0 needs to keep outputs if you're running val on rank-0 only.
+        if outputs is not None:
+            # ensure CPU to keep GPU mem low
+            cpu_out = {k: v.detach().cpu() for k, v in outputs.items()}
+            if dataloader_idx not in self.validation_batches:
+                self.validation_batches[dataloader_idx] = []
+            self.validation_batches[dataloader_idx].append(cpu_out)
+
     def on_validation_epoch_end(self):
         outputs_list = self.validation_batches
         if not outputs_list or len(outputs_list) == 0:
             return
 
-        rank = dist.get_rank()
-        world = dist.get_world_size()
-        if rank == 0:
-            obj_gather_list = [None] * world
-            dist.gather_object(self.validation_batches, obj_gather_list, dst=0)
-            # Merge dicts from all ranks
-            merged_outputs = {}
-            for rank_dict in obj_gather_list:
-                for dataloader_idx, batch_list in rank_dict.items():
-                    if dataloader_idx not in merged_outputs:
-                        merged_outputs[dataloader_idx] = []
-                    merged_outputs[dataloader_idx].extend(batch_list)
-            outputs_list = merged_outputs
-        else:
-            dist.gather_object(self.validation_batches, None, dst=0)
-            return
+        if dist.is_initialized(): # gather from all ranks
+            rank = dist.get_rank()
+            world = dist.get_world_size()
+            if rank == 0:
+                obj_gather_list = [None] * world
+                dist.gather_object(self.validation_batches, obj_gather_list, dst=0)
+                # Merge dicts from all ranks
+                merged_outputs = {}
+                for rank_dict in obj_gather_list:
+                    for dataloader_idx, batch_list in rank_dict.items():
+                        if dataloader_idx not in merged_outputs:
+                            merged_outputs[dataloader_idx] = []
+                        merged_outputs[dataloader_idx].extend(batch_list)
+                outputs_list = merged_outputs
+            else:
+                dist.gather_object(self.validation_batches, None, dst=0)
+                return
 
         for dataloader_idx, outputs in outputs_list.items():
             # ---- reorder the list itself ----
