@@ -19,7 +19,7 @@ class SphericalSlicesCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -108,7 +108,7 @@ class SlicesCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -286,7 +286,7 @@ class BoundaryCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -464,7 +464,7 @@ class PressureBoundaryCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -523,7 +523,7 @@ class DisambiguationCallback(Callback):
         self.name = name
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -597,7 +597,7 @@ class LosTrvAziBoundaryCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -848,7 +848,7 @@ class MetricsCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
 
     @rank_zero_only
-    def on_validation_epoch_end(self, trainer, pl_module):
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.validation_dataset_key]
