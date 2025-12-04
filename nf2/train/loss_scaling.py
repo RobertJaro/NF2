@@ -2,12 +2,10 @@ import numpy as np
 import torch
 from astropy.io import fits
 from astropy.nddata import block_reduce
-from nf2.loader.muram import read_muram_slice
-
-from nf2.potential.potential_field import get_potential_field, get_fft_potential_field
 from torch import nn
 
-from nf2.train.siren import SirenModel
+from nf2.loader.muram import read_muram_slice
+from nf2.potential.potential_field import get_fft_potential_field
 
 
 class BaseScalingModule(nn.Module):
@@ -24,13 +22,14 @@ class BaseScalingModule(nn.Module):
     def update(self, *args, **kwargs):
         return None
 
+
 class ExponentialLossScalingModule(BaseScalingModule):
     """
     Loss scaling based on magnetic field B.
     """
 
     # Fit: B_norm(z) = 0.8920 * z^4 + -5.1084 * z^3 + 11.1580 * z^2 + -14.5714 * z + -4.7806
-    def __init__(self, coeffs= [0.8920, 5.1084, 11.1580, 14.5714, 4.7806], *args, **kwargs):
+    def __init__(self, coeffs=[0.8920, 5.1084, 11.1580, 14.5714, 4.7806], *args, **kwargs):
         super().__init__(*args, **kwargs)
         print(coeffs)
         self.a = coeffs[0]
@@ -38,7 +37,6 @@ class ExponentialLossScalingModule(BaseScalingModule):
         self.c = coeffs[2]
         self.d = coeffs[3]
         self.e = coeffs[4]
-
 
     def forward(self, loss, state):
         """
@@ -49,7 +47,7 @@ class ExponentialLossScalingModule(BaseScalingModule):
         :return:
         """
         coords = state['coords']
-        z = coords[..., 2] # alternative detach() here
+        z = coords[..., 2]  # alternative detach() here
 
         scaling = torch.exp(
             self.a * z ** 4 +
@@ -58,17 +56,18 @@ class ExponentialLossScalingModule(BaseScalingModule):
             self.d * z +
             self.e
         )
-        scaling = scaling.detach() # No gradient through scaling --> relevant for coordinate transforms
+        scaling = scaling.detach()  # No gradient through scaling --> relevant for coordinate transforms
         scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
 
         return scaled_loss
+
 
 class PotentialFitLossScalingModule(BaseScalingModule):
     """
     Loss scaling based on magnetic field B.
     """
 
-    def __init__(self, ref_file, Mm_per_pixel, Mm_per_ds, G_per_dB, binning=4, power=2, *args, **kwargs):
+    def __init__(self, ref_file, Mm_per_pixel, Mm_per_ds, G_per_dB, binning=4, power=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
         coeffs = self._fit_coeffs(ref_file, binning, Mm_per_pixel, Mm_per_ds, G_per_dB)
         print(f'Fitted coefficients from {ref_file}:', coeffs)
@@ -89,7 +88,7 @@ class PotentialFitLossScalingModule(BaseScalingModule):
 
         # Convert to Mm
         z = np.linspace(0, potential_field.shape[2] - 1, potential_field.shape[2]) * Mm_per_pixel
-        z = z / Mm_per_ds # normalize to model units
+        z = z / Mm_per_ds  # normalize to model units
         b_norm = np.linalg.norm(potential_field, axis=-1).mean((0, 1))
 
         # use log units
@@ -118,22 +117,24 @@ class PotentialFitLossScalingModule(BaseScalingModule):
         :return:
         """
         coords = state['coords']
-        z = coords[..., 2] # alternative detach() here
+        z = coords[..., 2]  # alternative detach() here
         t = torch.log(1 + z)
 
         scaling = torch.exp(self.a * t ** 2 + self.b * t + self.c)
-        scaling = scaling.pow(self.power).detach() # No gradient through scaling --> relevant for coordinate transforms
+        scaling = scaling.pow(self.power).detach()  # No gradient through scaling --> relevant for coordinate transforms
         scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
 
         return scaled_loss
+
 
 class BHeightLossScalingModule(BaseScalingModule):
     """
     Loss scaling based on magnetic field B.
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, power=2, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.power = power
 
     def forward(self, loss, state):
         """
@@ -143,16 +144,16 @@ class BHeightLossScalingModule(BaseScalingModule):
         :param state: A dictionary containing the state information, including 'coords' and 'b
         :return:
         """
-        z_grouped_coords = state['z_grouped_coords']
-        b = state['b']
+        z_grouped_coords = state['z_grouped_coords'] # (samples, heights, 3)
+        b = state['b'] # (batch_size, 3)
 
-        b = b.reshape(-1, z_grouped_coords.shape[1], b.shape[-1])
-        loss = loss.reshape(-1, z_grouped_coords.shape[1])
+        b = b.reshape(z_grouped_coords.shape[0], z_grouped_coords.shape[1], b.shape[-1])
+        loss = loss.reshape(z_grouped_coords.shape[0], z_grouped_coords.shape[1])
 
-        scaling = b.pow(2).sum(-1).mean(1, keepdim=True) # mean across height
+        b_norm = b.norm(dim=-1).pow(self.power)  # (samples, heights)
+        scaling = b_norm.mean(0, keepdim=True)  # mean across height
         scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
 
         scaled_loss = scaled_loss.reshape(-1)
 
         return scaled_loss
-

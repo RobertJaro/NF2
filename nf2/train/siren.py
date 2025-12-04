@@ -1,39 +1,9 @@
-import numpy as np
 import torch
 from torch import nn
 from torch.nn import Identity
-from torch.nn.functional import linear
 
-from nf2.train.encoding import PositionalEncoding
-
-
-class SirenLayer(nn.Module):
-    def __init__(self, in_dim, out_dim, w0=1., c=6., is_first=False, use_bias=True, activation=None):
-        super().__init__()
-        self.dim_in = in_dim
-        self.is_first = is_first
-
-        weight = torch.zeros(out_dim, in_dim)
-        bias = torch.zeros(out_dim) if use_bias else None
-        self.init_(weight, bias, c=c, w0=w0)
-
-        self.weight = nn.Parameter(weight)
-        self.bias = nn.Parameter(bias) if use_bias else None
-        self.activation = Sine(w0) if activation is None else activation
-
-    def init_(self, weight, bias, c, w0):
-        dim = self.dim_in
-
-        w_std = (1 / dim) if self.is_first else (np.sqrt(c / dim) / w0)
-        weight.uniform_(-w_std, w_std)
-
-        if bias is not None:
-            bias.uniform_(-w_std, w_std)
-
-    def forward(self, x):
-        out = linear(x, self.weight, self.bias)
-        out = self.activation(out)
-        return out
+from nf2.train.encoding import PositionalEncoding, MultispectralEncoding
+from nf2.train.layers import SirenLayer
 
 
 # siren network
@@ -42,13 +12,16 @@ class SirenModel(nn.Module):
         super().__init__()
 
         encoding_config = {'type': 'default', 'w0': 10.} if encoding_config is None else encoding_config
-        encoding_type = encoding_config.pop('type', 'default')
+        encoding_type = encoding_config.pop('type')
 
         if encoding_type == "default":
             self.posenc = SirenLayer(in_dim=in_dim, out_dim=dim, is_first=True, **encoding_config)
             posenc_dim = dim
         elif encoding_type == "positional":
             self.posenc = PositionalEncoding(in_dim=in_dim, **encoding_config)
+            posenc_dim = self.posenc.d_output
+        elif encoding_type == "multispectral":
+            self.posenc = MultispectralEncoding(in_dim=in_dim, **encoding_config)
             posenc_dim = self.posenc.d_output
         elif encoding_type == "identity":
             self.posenc = Identity()
@@ -85,9 +58,9 @@ class SirenModel(nn.Module):
         for i, layer in enumerate(self.layers):
             if i in self.skip_layers:
                 x = torch.cat([x, inp_encoded], dim=-1)
-                x = layer(x)               # layer expects dim + ref_dim
+                x = layer(x)  # layer expects dim + ref_dim
             else:
-                x = layer(x)               # standard SIREN layer
+                x = layer(x)  # standard SIREN layer
 
         x = self.out_layer(x)
         return x
@@ -95,12 +68,3 @@ class SirenModel(nn.Module):
     def step(self, global_step):
         if hasattr(self.posenc, 'step'):
             self.posenc.step(global_step)
-
-
-class Sine(nn.Module):
-    def __init__(self, w0=1.):
-        super().__init__()
-        self.w0 = w0
-
-    def forward(self, x):
-        return torch.sin(self.w0 * x)

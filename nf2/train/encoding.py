@@ -3,6 +3,8 @@ from typing import Iterable
 import torch
 from torch import nn
 
+from nf2.train.layers import SirenLayer
+
 
 class PositionalEncoding(nn.Module):
 
@@ -31,6 +33,35 @@ class PositionalEncoding(nn.Module):
             encoded = x[:, None, i:i+1] * torch.pi * frequencies
             encoded = encoded.reshape(x.shape[0], -1)
             encoded = torch.cat([torch.sin(encoded), torch.cos(encoded)], -1)
+            encoded_coordinates.append(encoded)
+
+        encoded = torch.cat(encoded_coordinates, -1)
+        return encoded
+
+
+class MultispectralEncoding(nn.Module):
+
+    def __init__(self, in_dim, num_dims=64, weights=30.0):
+        super().__init__()
+        num_dims = [num_dims] * in_dim if not isinstance(num_dims, Iterable) else num_dims
+        weights = [weights] * in_dim if not isinstance(weights, Iterable) else weights
+
+        assert len(num_dims) == in_dim, 'num_dims length must match input dimension (in_dim)'
+        assert len(weights) == in_dim, 'weights length must match input dimension (in_dim)'
+
+        layers = []
+        for nd, w in zip(num_dims, weights):
+            l = SirenLayer(in_dim=1, out_dim=nd, w0=w, is_first=True)
+            layers.append(l)
+        self.layers = nn.ModuleList(layers)
+
+        self.d_output = sum(num_dims)
+
+    def forward(self, x):
+        encoded_coordinates = []
+        for i, layer in enumerate(self.layers):
+            coord = x[:, i:i + 1]
+            encoded = layer(coord)
             encoded_coordinates.append(encoded)
 
         encoded = torch.cat(encoded_coordinates, -1)

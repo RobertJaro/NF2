@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/nlte/sst_nlte_v04"
+base_path: "/glade/work/rjarolim/nf2/nlte/sst_nlte_v02"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/sst_nlte_v01"
 logging:
   project: NLTE
@@ -16,7 +16,7 @@ data:
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
       batch_size: 1024
     - type: los_trv_azi
@@ -29,7 +29,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.1.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -42,7 +42,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.2.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -55,7 +55,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.3.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -68,7 +68,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.4.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -81,7 +81,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.5.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -94,7 +94,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.6.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -107,7 +107,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.7.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -120,7 +120,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.8.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -133,7 +133,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.9.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -146,7 +146,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-1.1
@@ -158,7 +158,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.1.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -171,7 +171,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.2.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -184,7 +184,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.3.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -197,7 +197,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.4.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -210,7 +210,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.5.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -223,7 +223,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.6.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -236,7 +236,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.7.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -249,7 +249,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.8.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -262,7 +262,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.9.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -275,7 +275,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-2.1
@@ -287,7 +287,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.1.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -300,7 +300,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.2.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -313,7 +313,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.3.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -326,7 +326,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.4.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -339,7 +339,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.5.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -352,7 +352,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.6.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -365,7 +365,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.7.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -378,7 +378,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.8.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -391,7 +391,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.9.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -404,7 +404,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-3.1
@@ -416,7 +416,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.1.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -429,7 +429,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.2.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -442,7 +442,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.3.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -455,7 +455,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.4.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -468,7 +468,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.5.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -481,7 +481,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.6.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -494,7 +494,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.7.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -507,7 +507,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.8.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -520,7 +520,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.9.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -533,7 +533,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-4.1
@@ -545,7 +545,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.1.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -558,7 +558,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.2.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -571,7 +571,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.3.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -584,7 +584,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.4.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -597,7 +597,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.5.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -610,7 +610,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.6.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -623,7 +623,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.7.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -636,7 +636,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.8.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -649,7 +649,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.9.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       plot: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -662,7 +662,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
   valid_configs:
     - type: los_trv_azi
@@ -674,7 +674,7 @@ data:
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-5.0
@@ -686,7 +686,7 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: los_trv_azi
       ds_id: ltau_-2.0
@@ -698,19 +698,21 @@ data:
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
+      slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
     - type: cube
       ds_id: cube
     - type: slices
       ds_id: slices
+  random_config: { type: height }
   num_workers: 16
-  iterations: 1000
-  z_range: [ 0, 60 ]
+  iterations: 10000
+  z_range: [ 0, 40 ]
 
 model:
   type: vector_potential
   dim: 256
+  encoding_config: { type: gaussian }
 
 training:
   epochs: 100
@@ -723,7 +725,7 @@ loss:
     ambiguous: True
   - type: boundary_los_trv_azi
     name: internal
-    lambda: {start: 1.0e-4, end: 1.0, iterations: 10000}
+    lambda: 1.0
     ds_id: [ 'ltau_-0.1', 'ltau_-0.2', 'ltau_-0.3', 'ltau_-0.4', 'ltau_-0.5', 'ltau_-0.6', 'ltau_-0.7', 'ltau_-0.8', 'ltau_-0.9', 'ltau_-1.0', 'ltau_-1.1', 'ltau_-1.2', 'ltau_-1.3', 'ltau_-1.4', 'ltau_-1.5', 'ltau_-1.6', 'ltau_-1.7', 'ltau_-1.8', 'ltau_-1.9', 'ltau_-2.0', 'ltau_-2.1', 'ltau_-2.2', 'ltau_-2.3', 'ltau_-2.4', 'ltau_-2.5', 'ltau_-2.6', 'ltau_-2.7', 'ltau_-2.8', 'ltau_-2.9', 'ltau_-3.0', 'ltau_-3.1', 'ltau_-3.2', 'ltau_-3.3', 'ltau_-3.4', 'ltau_-3.5', 'ltau_-3.6', 'ltau_-3.7', 'ltau_-3.8', 'ltau_-3.9', 'ltau_-4.0', 'ltau_-4.1', 'ltau_-4.2', 'ltau_-4.3', 'ltau_-4.4', 'ltau_-4.5', 'ltau_-4.6', 'ltau_-4.7', 'ltau_-4.8', 'ltau_-4.9', 'ltau_-5.0' ]
     ambiguous: True
   - type: boundary
@@ -732,23 +734,18 @@ loss:
     ds_id: potential
   - type: force_free
     name: force_free
-    lambda: 1.0e-2
+    lambda: 1.0e-4
+    ds_id: [ random ]
+
+transforms:
   - type: height
-    name: height
-    lambda: 1.0e-2
+    height_range: [ 0, 10 ]
     ds_id: [ 'ltau_-0.1', 'ltau_-0.2', 'ltau_-0.3', 'ltau_-0.4', 'ltau_-0.5', 'ltau_-0.6', 'ltau_-0.7', 'ltau_-0.8', 'ltau_-0.9', 'ltau_-1.0', 'ltau_-1.1', 'ltau_-1.2', 'ltau_-1.3', 'ltau_-1.4', 'ltau_-1.5', 'ltau_-1.6', 'ltau_-1.7', 'ltau_-1.8', 'ltau_-1.9', 'ltau_-2.0', 'ltau_-2.1', 'ltau_-2.2', 'ltau_-2.3', 'ltau_-2.4', 'ltau_-2.5', 'ltau_-2.6', 'ltau_-2.7', 'ltau_-2.8', 'ltau_-2.9', 'ltau_-3.0', 'ltau_-3.1', 'ltau_-3.2', 'ltau_-3.3', 'ltau_-3.4', 'ltau_-3.5', 'ltau_-3.6', 'ltau_-3.7', 'ltau_-3.8', 'ltau_-3.9', 'ltau_-4.0', 'ltau_-4.1', 'ltau_-4.2', 'ltau_-4.3', 'ltau_-4.4', 'ltau_-4.5', 'ltau_-4.6', 'ltau_-4.7', 'ltau_-4.8', 'ltau_-4.9', 'ltau_-5.0' ]
 
 loss_scaling:
-  - type: potential_fit
-    name: potential_fit
-    loss_ids: [bottom, internal, potential_boundary, force_free]
-    ref_file: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-    Mm_per_pixel: 0.09
-
-transforms:
-  - type: nlte_height
-    height_range: [ 0, 20 ]
-    ds_id: [ 'ltau_-0.1', 'ltau_-0.2', 'ltau_-0.3', 'ltau_-0.4', 'ltau_-0.5', 'ltau_-0.6', 'ltau_-0.7', 'ltau_-0.8', 'ltau_-0.9', 'ltau_-1.0', 'ltau_-1.1', 'ltau_-1.2', 'ltau_-1.3', 'ltau_-1.4', 'ltau_-1.5', 'ltau_-1.6', 'ltau_-1.7', 'ltau_-1.8', 'ltau_-1.9', 'ltau_-2.0', 'ltau_-2.1', 'ltau_-2.2', 'ltau_-2.3', 'ltau_-2.4', 'ltau_-2.5', 'ltau_-2.6', 'ltau_-2.7', 'ltau_-2.8', 'ltau_-2.9', 'ltau_-3.0', 'ltau_-3.1', 'ltau_-3.2', 'ltau_-3.3', 'ltau_-3.4', 'ltau_-3.5', 'ltau_-3.6', 'ltau_-3.7', 'ltau_-3.8', 'ltau_-3.9', 'ltau_-4.0', 'ltau_-4.1', 'ltau_-4.2', 'ltau_-4.3', 'ltau_-4.4', 'ltau_-4.5', 'ltau_-4.6', 'ltau_-4.7', 'ltau_-4.8', 'ltau_-4.9', 'ltau_-5.0' ]
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free ]
 
 callbacks:
   # Boundary callbacks

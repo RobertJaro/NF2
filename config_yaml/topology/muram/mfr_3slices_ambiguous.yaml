@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_3slices_ambiguous_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v03"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_3slices_ambiguous_v03"
 logging:
   project: topology
   name: MURAM MFR - tau1 + tau1e-4 + tau1e-6 - ambiguous
@@ -15,25 +15,27 @@ data:
     - type: muram_slice
       ds_id: tau_1.0e-4
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_0.000100.474000"
-      height_mapping: { z: 0.6, z_min: 0, z_max: 5 }
+      height_mapping: { z: 0.6 }
       los_trv_azi_transform: True
       ambiguous_azimuth: True
     - type: muram_slice
       ds_id: tau_1.0e-6
       data_path: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_0.000001.474000"
-      height_mapping: { z: 2.0, z_min: 0, z_max: 8 }
+      height_mapping: { z: 2.0}
       los_trv_azi_transform: True
       ambiguous_azimuth: True
+  random_config: { type: height }
   num_workers: 8
-  iterations: 1000
+  iterations: 10000
   z_range: [ 0, 50 ]
 
 model:
   type: vector_potential
   dim: 256
+  encoding_config: { type: gaussian }
 
 training:
-  epochs: 100
+  epochs: 30
 
 loss:
   - type: boundary_los_trv_azi
@@ -43,28 +45,29 @@ loss:
     ambiguous: True
   - type: boundary
     name: potential_boundary
-    lambda: 1.0
+    lambda: 1.0e+1
     ds_id: potential
   - type: force_free
-    lambda: 1.0e-3
+    name: force_free
+    lambda: 1.0e-4
+    ds_id: [ random ]
   - type: height
     name: height
     lambda: 1.0e-4
     ds_id: [ tau_1.0e-4, tau_1.0e-6 ]
 
-loss_scaling:
-  - type: potential_fit
-    name: potential_fit
-    loss_ids: [boundary, potential_boundary, force_free]
-    ref_file: "/glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/2D/tau_slice_1.000.474000"
-    Mm_per_pixel: 0.192
-
 transforms:
   - type: height
+    height_range: [ 0, 20 ]
     ds_id: [ tau_1.0e-4, tau_1.0e-6 ]
 
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free ]
+
 callbacks:
-    # Boundary callbacks
+  # Boundary callbacks
   - type: los_trv_azi_boundary
     name: boundary-tau_1.0
     ds_id: tau_1.0

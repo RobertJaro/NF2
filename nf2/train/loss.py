@@ -112,14 +112,6 @@ class RadialLoss(BaseLoss):
 
 class PotentialLoss(BaseLoss):
 
-    def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
-        super().__init__(**kwargs)
-        if base_radius is not None:
-            self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-            self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        else:
-            self.base_radius = None
-
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
@@ -136,13 +128,7 @@ class PotentialLoss(BaseLoss):
         rot_z = dBy_dx - dBx_dy
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
-        potential_loss = torch.sum(j ** 2, dim=-1)
-
-        if self.base_radius is not None:
-            radius = coords.pow(2).sum(-1).pow(0.5) + 1e-7
-            radius_weight = torch.clip(radius - self.base_radius,
-                                       min=0) / self.solar_radius  # normalize to solar radius
-            potential_loss *= radius_weight ** 2
+        potential_loss = j.pow(2).sum(-1)
 
         return potential_loss
 

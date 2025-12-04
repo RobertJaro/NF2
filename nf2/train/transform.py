@@ -30,7 +30,7 @@ class AzimuthTransformModel(BaseTransformModel):
         return {'flip': flip}
 
 
-class HeightTransformModel(BaseTransformModel):
+class HeightRangeTransformModel(BaseTransformModel):
 
     def __init__(self, **kwargs):
         super().__init__(tensor_ids=['coords', 'height_range'], **kwargs)
@@ -48,12 +48,12 @@ class HeightTransformModel(BaseTransformModel):
 
         return {'coords': transformed_coords, 'original_coords': coords}
 
-class NLTEHeightTransformModel(BaseTransformModel):
+class HeightTransformModel(BaseTransformModel):
 
     def __init__(self, height_range, Mm_per_ds, **kwargs):
         super().__init__(tensor_ids=['coords'], **kwargs)
-        encoding_config = {'type': 'default', 'w0': 10.}
-        self.mapping_module = SirenModel(in_dim=3, out_dim=1, n_layers=4, dim=64, encoding_config=encoding_config)
+        encoding_config = {'type': 'gaussian', 'scale': 2.}
+        self.mapping_module = GenericModel(3, 1, n_layers=4, dim=64, encoding_config=encoding_config)
         self.height_range = nn.Parameter(torch.tensor(height_range, dtype=torch.float32) / Mm_per_ds, requires_grad=False)
 
     def forward(self, batch):

@@ -235,15 +235,8 @@ class RandomCoordinateDataset(Dataset):
 
 class RandomHeightCoordinateDataset(Dataset):
 
-    def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, buffer=None, z_sampling_exponent=1, length=None):
+    def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, z_sampling_exponent=2, length=None):
         super().__init__()
-        if buffer:
-            buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
-            buffer_y = (coord_range[1, 1] - coord_range[1, 0]) * buffer
-            coord_range[0, 0] -= buffer_x
-            coord_range[0, 1] += buffer_x
-            coord_range[1, 0] -= buffer_y
-            coord_range[1, 1] += buffer_y
         self.coord_range = coord_range
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
@@ -256,7 +249,7 @@ class RandomHeightCoordinateDataset(Dataset):
 
     def __getitem__(self, item):
         # sample z coords
-        random_z_coords = self.float_tensor(self.z_sample, 1).uniform_()
+        random_z_coords = self.float_tensor(self.z_sample, 1).uniform_() ** self.z_sampling_exponent
         # scale z
         random_z_coords = (random_z_coords * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         # sample xy coords per z

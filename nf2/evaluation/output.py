@@ -13,7 +13,7 @@ from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping
 from nf2.train.model import VectorPotentialModel
-from nf2.train.transform import HeightTransformModel, AzimuthTransformModel
+from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, HeightTransformModel
 
 
 class BaseOutput:
@@ -106,7 +106,8 @@ class CartesianOutput(BaseOutput):
         self.ds_per_pixel = self.ds_per_pixel[0] if isinstance(self.ds_per_pixel, list) else self.ds_per_pixel
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
-        self.wcs = [wcs for wcs in self.state['data']['wcs'] if wcs is not None] if 'wcs' in self.state['data'] else None
+        self.wcs = [wcs for wcs in self.state['data']['wcs'] if wcs is not None] if 'wcs' in self.state[
+            'data'] else None
         self.time = None if self.wcs is None or len(self.wcs) == 0 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
@@ -241,7 +242,8 @@ class HeightTransformOutput(CartesianOutput):
         super().__init__(*args, **kwargs)
 
         self.transforms = self.state['transforms']
-        height_transforms = [t for t in self.transforms if isinstance(t, HeightTransformModel)]
+        height_transforms = [t for t in self.transforms
+                             if isinstance(t, HeightRangeTransformModel) or isinstance(t, HeightTransformModel)]
 
         assert len(height_transforms) == 1, 'Requires transform module!'
         self.transform_module = height_transforms[0]
@@ -265,51 +267,44 @@ class HeightTransformOutput(CartesianOutput):
                 np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
                             np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds)),
                             z, indexing='ij'), -1)
-            height_range = np.zeros((*coords.shape[:-1], 2), dtype=np.float32)
-            height_range[..., 0] = height_mapping['z_min'] / self.Mm_per_ds
-            height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
+            in_tensors = {'coords': coords}
+            if 'z_min' in height_mapping and 'z_max' in height_mapping:
+                height_range = np.zeros((*coords.shape[:-1], 2), dtype=np.float32)
+                height_range[..., 0] = height_mapping['z_min'] / self.Mm_per_ds
+                height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
+                in_tensors['height_range'] = height_range
 
-            model_out = self.load_transformed_coords(coords, height_range, **kwargs)
+            in_tensors = {k: torch.tensor(v, dtype=torch.float32) for k, v in in_tensors.items()}
+            model_out = self.load_transformed_coords(in_tensors, **kwargs)
             entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
                      'original_coords': coords * self.Mm_per_ds * u.Mm,
-                     'height_range': height_range * self.Mm_per_ds * u.Mm, 'Mm_per_pixel': self.Mm_per_ds / pixel_per_ds}
+                     'Mm_per_pixel': self.Mm_per_ds / pixel_per_ds}
             mapping_out.append(entry)
         return mapping_out
 
-    def load_transformed_coords(self, coords, height_range, batch_size=int(2 ** 12), progress=False):
-        def _load(coords, height_range):
-            # normalize and to tensor
-            coords = torch.tensor(coords, dtype=torch.float32)
-            coords_shape = coords.shape
-            coords = coords.reshape((-1, 3))
+    @torch.no_grad()
+    def load_transformed_coords(self, in_tensors, batch_size=int(2 ** 12), progress=False):
+        cube_shape = list(in_tensors.values())[0].shape[:-1]
+        flattened_tensors = {k: v.reshape((-1, v.shape[-1])) for k, v in in_tensors.items()}
 
-            height_range = torch.tensor(height_range, dtype=torch.float32)
-            height_range = height_range.reshape((-1, 2))
+        cube = {}
+        it = range(int(np.ceil(list(flattened_tensors.values())[0].shape[0] / batch_size)))
+        it = tqdm(it) if progress else it
+        for i in it:
+            self.transform_module.zero_grad()
+            batch = {k: v[i * batch_size: (i + 1) * batch_size].to(self.device) for k, v in flattened_tensors.items()}
 
-            cube = {}
-            it = range(int(np.ceil(coords.shape[0] / batch_size)))
-            it = tqdm(it) if progress else it
-            for k in it:
-                self.transform_module.zero_grad()
-                coord = coords[k * batch_size: (k + 1) * batch_size]
-                coord = coord.to(self.device)
+            transformed_coords = self.transform_module(batch)
 
-                height_range_batch = height_range[k * batch_size: (k + 1) * batch_size]
-                height_range_batch = height_range_batch.to(self.device)
+            for k, v in transformed_coords.items():
+                if k not in cube:
+                    cube[k] = []
+                cube[k] += [v.detach().cpu()]
 
-                transformed_coords = self.transform_module({'coords': coord, 'height_range': height_range_batch})
+        cube = {k: torch.cat(v).reshape(*cube_shape, -1).numpy() for k, v in cube.items()}
 
-                for k, v in transformed_coords.items():
-                    if k not in cube:
-                        cube[k] = []
-                    cube[k] += [v.detach().cpu()]
+        return cube
 
-            cube = {k: torch.cat(v).reshape(*coords_shape).numpy() for k, v in cube.items()}
-
-            return cube
-
-        with torch.no_grad():
-            return _load(coords, height_range)
 
 class DisambiguationOutput(CartesianOutput):
 
@@ -384,7 +379,7 @@ class SphericalOutput(BaseOutput):
         self.radius_range = self.state['data']['radius_range']
 
     def load_spherical(self, radius_range: u.Quantity = None,
-                       latitude_range: u.Quantity = (-np.pi/2, np.pi/2) * u.rad,
+                       latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
@@ -401,7 +396,7 @@ class SphericalOutput(BaseOutput):
 
     def load(self,
              radius_range: u.Quantity = None,
-             latitude_range: u.Quantity = (-np.pi/2, np.pi/2) * u.rad,
+             latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, nan_value=0, **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range

@@ -12,9 +12,9 @@ from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, BHeightLossScalingModule
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
-    VectorPotentialScaledModel, GaugedVectorPotentialModel, CICCIModel
-from nf2.train.transform import HeightTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
-    NLTEHeightTransformModel
+    VectorPotentialScaledModel, GaugedVectorPotentialModel
+from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
+    HeightTransformModel
 
 
 class NF2Module(LightningModule):
@@ -84,11 +84,9 @@ class NF2Module(LightningModule):
             model = BScaledModel(**model_kwargs)
         elif model_type == 'vector_potential_scaled':
             model = VectorPotentialScaledModel(**model_kwargs)
-        elif model_type == 'cicci':
-            model = CICCIModel(**model_kwargs)
         else:
             valid_options = ['b', 'vector_potential', 'flux', 'magneto_static', 'vector_potential_domain', 'b_domain',
-                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential', 'cicci']
+                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -153,10 +151,10 @@ class NF2Module(LightningModule):
 
             transform_type = transform_config.pop('type')
             ds_ids = transform_config.pop('ds_id')
-            if transform_type == 'height':
-                transform_module = HeightTransformModel(**transform_config, ds_id=ds_ids)
-            elif transform_type == 'nlte_height':
-                transform_module = NLTEHeightTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
+            if transform_type == 'height_range':
+                transform_module = HeightRangeTransformModel(**transform_config, ds_id=ds_ids)
+            elif transform_type == 'height':
+                transform_module = HeightTransformModel(**transform_config, ds_id=ds_ids, Mm_per_ds=self.Mm_per_ds)
             elif transform_type == 'optical_depth':
                 transform_module = OpticalDepthTransformModel(**transform_config, ds_id=ds_ids,
                                                               Mm_per_ds=self.Mm_per_ds)

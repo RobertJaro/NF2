@@ -1,3 +1,4 @@
+import glob
 import os
 
 import numpy as np
@@ -6,6 +7,7 @@ from astropy import units as u
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
+from tqdm import tqdm
 
 from nf2.data.util import img_to_los_trv_azi
 from nf2.loader.base import MapDataset, TensorsDataset
@@ -65,7 +67,6 @@ class MURaMPressureDataset(TensorsDataset):
     def __init__(self, data_path, iteration, G_per_dB, Mm_per_ds, slice_config=None, wcs=None, **kwargs):
         slice_config = slice_config if slice_config is not None else {'type': 'full', 'tau': 0.1}
         assert 'base_height' in slice_config or 'tau' in slice_config, 'Either base_height or tau must be provided in slice_config'
-
 
         # Load pressure cube from MURaM snapshot
         snapshot = MURaMSnapshot(data_path, iteration)
@@ -210,7 +211,7 @@ class MURaMSnapshot():
     def v(self):
         return np.stack([self.vx, self.vy, self.vz], axis=-1)
 
-    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1):
+    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1, method='mean'):
         b = self.B
         tau = self.tau
         p = self.P
@@ -228,7 +229,16 @@ class MURaMSnapshot():
         p = block_reduce(p, (x_binning, y_binning, z_binning), np.mean)
 
         pix_height = np.argmin(np.abs(tau - target_tau), axis=2) * u.pix
-        base_height_pix = pix_height.mean()
+        if method == 'mean':
+            base_height_pix = pix_height.mean()
+        elif method == 'median':
+            base_height_pix = np.median(pix_height)
+        elif method == 'min':
+            base_height_pix = np.min(pix_height)
+        elif method == 'max':
+            base_height_pix = np.max(pix_height)
+        else:
+            raise ValueError(f'Unknown method {method} for base height calculation')
 
         min_height = int(base_height_pix.to_value(u.pix))
         max_height = min_height + int((height / resolution).to_value(u.pix))
@@ -246,9 +256,19 @@ class MURaMSnapshot():
 
         return self.load_slice(**kwargs, height=height)
 
-    def load_tau_height(self, target_tau, base_tau=1.0):
+    def load_tau_height(self, target_tau, base_tau=1.0, method='mean'):
         tau = self.tau
-        base_pix_height = np.argmin(np.abs(tau - base_tau), axis=2).mean()
+        base_pix_height = np.argmin(np.abs(tau - base_tau), axis=2)
+        if method == 'mean':
+            base_pix_height = base_pix_height.mean()
+        elif method == 'median':
+            base_pix_height = np.median(base_pix_height)
+        elif method == 'min':
+            base_pix_height = np.min(base_pix_height)
+        elif method == 'max':
+            base_pix_height = np.max(base_pix_height)
+        else:
+            raise ValueError(f'Unknown method {method} for base height calculation')
         pix_height = np.argmin(np.abs(tau - target_tau), axis=2)
         return (pix_height - base_pix_height) * u.pix * self.ds[2]  # height in physical units
 
@@ -266,7 +286,6 @@ class MURaMSnapshot():
         p = block_reduce(p, (x_binning, y_binning), np.mean)
 
         return {'B': b, 'P': p}
-
 
     def load_base(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, base_height=180):
         b = self.B[:, :, base_height:]
@@ -300,3 +319,43 @@ def read_muram_slice(filepath):
     time = data[3]
     slice = data[4:].reshape([Nvar, shape[1], shape[0]]).swapaxes(1, 2)
     return slice, Nvar, shape, time
+
+
+class MURaMSimulation():
+
+    def __init__(self, source_path):
+        files = sorted(glob.glob(os.path.join(source_path, 'Header.*')))
+        # filter files --> check if tau files exists
+        files = [f for f in files if os.path.exists(f.replace('Header', 'tau'))]
+        iterations = [int(os.path.basename(f).split('.')[1]) for f in files]
+
+        snapshots = [MURaMSnapshot(source_path, i) for i in iterations]
+        self.snapshots = {s.time.value: s for s in snapshots}
+        self.iterations = {i: snapshots[idx] for idx, i in enumerate(iterations)}
+
+    @property
+    def times(self):
+        return sorted(list(self.snapshots.keys()))
+
+    @property
+    def ds(self):
+        return list(self.snapshots.values())[0].ds
+
+    def load_tau(self, tau=0.1, keys=('Bx', 'By', 'Bz', 'vz'), spatial_strides=1):
+        pix_height = self.get_average_height(tau)
+        data = {k: [getattr(s, k)[::spatial_strides, ::spatial_strides, pix_height]
+                    for s in self.snapshots.values()] for k in keys}
+        data = {k: np.stack(v, -1) * muram_variables[k]['unit'] for k, v in tqdm(data.items())}
+        data['time'] = np.array(list(self.snapshots.keys())) * u.s
+        return data
+
+    def get_average_height(self, tau):
+        ref_snapshot = list(self.snapshots.values())[0]
+        # find closest to tau = .1
+        tau_cube = ref_snapshot.tau[::64, ::64, :]
+        pix_height = np.argmin(np.abs(tau_cube - tau), axis=2)
+        pix_height = np.mean(pix_height, axis=(0, 1)).astype(int)
+        return pix_height
+
+    def get_snapshot(self, time):
+        return self.snapshots[time]

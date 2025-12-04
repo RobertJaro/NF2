@@ -51,7 +51,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
     def _log_hparams(cfg):
         wandb_logger.log_hyperparams(cfg)
 
-    _log_hparams(config)
+    _log_hparams(config_dict)
 
     # restore model checkpoint from wandb
     if 'id' in logging:
@@ -103,7 +103,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
                       logger=wandb_logger,
                       devices=n_gpus if n_gpus > 0 else None,
                       accelerator='gpu' if n_gpus >= 1 else None,
-                      strategy=DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else None,  # ddp breaks memory and wandb
+                      strategy=DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else 'auto',
                       num_sanity_val_steps=0,
                       val_check_interval=val_check_interval,
                       check_val_every_n_epoch=val_every_n_epochs,

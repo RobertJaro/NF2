@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import torch
 from astropy import units as u
@@ -70,18 +72,16 @@ class GenericModel(nn.Module):
     def __init__(self, in_coords, out_coords, coord_range=None, ds_per_pixel=None, dim=256, n_layers=8,
                  encoding_config=None, activation='sine'):
         super().__init__()
-        encoding_type = encoding_config['type'] if encoding_config is not None else 'none'
+        encoding_config = copy.deepcopy(encoding_config) if encoding_config is not None else {}
+        encoding_type = encoding_config.pop('type', 'none')
         if encoding_type == 'none':
             self.d_in = nn.Linear(in_coords, dim)
         elif encoding_type == 'positional':
-            num_freqs = encoding_config['num_freqs'] if 'num_freqs' in encoding_config else 128
-            min_freq = encoding_config['min_freq'] if 'min_freq' in encoding_config else -2
-            max_freq = encoding_config['max_freq'] if 'max_freq' in encoding_config else 8
-            posenc = PositionalEncoding(in_coords, num_freqs=num_freqs, min_freq=min_freq, max_freq=max_freq)
+            posenc = PositionalEncoding(in_coords, **encoding_config)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         elif encoding_type == 'gaussian':
-            posenc = GaussianPositionalEncoding(in_coords, scale=encoding_config.get('scale', 4.0))
+            posenc = GaussianPositionalEncoding(in_coords, **encoding_config)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         elif encoding_type == 'periodic':
@@ -89,9 +89,8 @@ class GenericModel(nn.Module):
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(posenc, d_in)
         elif encoding_type == 'periodic_gaussian':
-            scale = encoding_config.pop('scale', 4.0)
             periodic_enc = PeriodicEncoding(in_coords, coord_range=coord_range, ds_per_pixel=ds_per_pixel)
-            posenc = GaussianPositionalEncoding(periodic_enc.d_output, scale=scale)
+            posenc = GaussianPositionalEncoding(periodic_enc.d_output, **encoding_config)
             d_in = nn.Linear(posenc.d_output, dim)
             self.d_in = nn.Sequential(periodic_enc, posenc, d_in)
         else:
@@ -625,7 +624,7 @@ class PositionalEncoding(nn.Module):
 
 class GaussianPositionalEncoding(nn.Module):
 
-    def __init__(self, d_input, num_freqs=128, scale=2.0 ** 2):
+    def __init__(self, d_input, num_freqs=64, scale=2.0 ** 1):
         super().__init__()
         dist = Normal(loc=0, scale=scale)
         frequencies = dist.sample([num_freqs, d_input])

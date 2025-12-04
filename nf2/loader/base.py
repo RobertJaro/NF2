@@ -113,14 +113,15 @@ class MapDataset(TensorsDataset):
 
         if height_mapping is not None:
             z = height_mapping['z']
-            z_min = height_mapping['z_min'] if 'z_min' in height_mapping else 0
-            z_max = height_mapping['z_max'] if 'z_max' in height_mapping else 0
-
             coords[..., 2] = z / Mm_per_ds
-            ranges = np.zeros((*self.cube_shape, 2), dtype=np.float32)
-            ranges[..., 0] = z_min / Mm_per_ds
-            ranges[..., 1] = z_max / Mm_per_ds
-            tensors['height_range'] = ranges
+
+            if 'z_min' in height_mapping and 'z_max' in height_mapping:
+                z_min = height_mapping['z_min']
+                z_max = height_mapping['z_max']
+                ranges = np.zeros((*self.cube_shape, 2), dtype=np.float32)
+                ranges[..., 0] = z_min / Mm_per_ds
+                ranges[..., 1] = z_max / Mm_per_ds
+                tensors['height_range'] = ranges
 
         if log_tau is not None:
             coords[..., 2] = log_tau

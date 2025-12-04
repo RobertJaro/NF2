@@ -11,75 +11,53 @@ data:
       ds_id: 6173
       Mm_per_pixel: 0.09
       fits_path:
-        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BLOS_panorama1050_6173_StkIQUV_rebin.fits"
-        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BTRV_panorama1050_6173_StkIQUV_rebin.fits"
-        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BAZI_panorama1050_6173_StkIQUV_rebin.fits"
-      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/mask.fits"
+        B_los: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BLOS_panorama1050_6173_StkIQUV_rebin.fits"
+        B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BTRV_panorama1050_6173_StkIQUV_rebin.fits"
+        B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BAZI_panorama1050_6173_StkIQUV_rebin.fits"
+      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits"
       load_map: False
       ambiguous_azimuth: True
-  valid_configs:
-    - type: los_trv_azi
-      ds_id: 6173
-      Mm_per_pixel: 0.09
-      fits_path:
-        B_los: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BLOS_panorama1050_6173_StkIQUV_rebin.fits"
-        B_trv: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BTRV_panorama1050_6173_StkIQUV_rebin.fits"
-        B_azi: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/BAZI_panorama1050_6173_StkIQUV_rebin.fits"
-      mask_path: "/gpfs/gpfs0/robert.jarolim/data/nf2/campaign_2023_1050_converted/mask.fits"
-      load_map: False
-      ambiguous_azimuth: True
-    - type: cube
-      ds_id: cube
-    - type: slices
-      ds_id: slices
+  random_config: { type: height }
   num_workers: 8
   iterations: 10000
-  batch_size: 8192
-  random_config:
-    batch_size: 16384
-  z_range: [ 0, 100 ]
-  boundary_config:
-    type: potential
-    batch_size: 1024
-    strides: 4
+  z_range: [ 0, 50 ]
+
 model:
-  type: gauged_vector_potential
+  type: vector_potential
   dim: 256
+  encoding_config: { type: gaussian }
+
 training:
-  epochs: 20
+  epochs: 30
 
 loss:
   - type: boundary_los_trv_azi
     name: boundary
     lambda: 1.0
     ds_id: [ 6173 ]
+    ambiguous: True
   - type: boundary
     name: potential_boundary
     lambda: 1.0e+1
     ds_id: potential
   - type: force_free
-    lambda: 1.0e-2
-  - type: azimuth_disambiguation
-    name: disambiguation
-    lambda: { start: 1.0, end: 1.0e-2, iterations: 1.0e+5 }
-    ds_id: [ 6173 ]
+    name: force_free
+    lambda: 1.0e-4
+    ds_id: [ random ]
 
-transforms:
-  - type: azimuth
-    ds_id: [ 6173 ]
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free ]
 
 callbacks:
-  # Disambiguation callbacks
-  - type: disambiguation
-    name: disambiguation-6173
-    ds_id: 6173
-    # Boundary callbacks
+  # Boundary callbacks
   - type: los_trv_azi_boundary
     name: boundary-6173
     ds_id: 6173
   # Cube evaluation
   - type: metrics
-    name: metrics-6173
+    name: metrics
     ds_id: cube
   - type: slices
     ds_id: slices

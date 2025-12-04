@@ -4,7 +4,7 @@ import numpy as np
 from astropy import constants as const
 from astropy import units as u
 
-from nf2.evaluation.metric import curl
+from nf2.evaluation.metric import curl, b_nabla_bz
 from nf2.evaluation.vtk import save_vtk
 from nf2.loader.muram import MURaMSnapshot
 
@@ -25,8 +25,10 @@ def main():
     j = curl(b) * u.G / (args.Mm_per_pixel * u.Mm) * const.c / (4 * np.pi)  # Mm_per_pixel
     j = j.to(u.G / u.s)
 
+    muram_b_nabla_bz = b_nabla_bz(b) / args.Mm_per_pixel
+
     save_vtk(args.vtk_path, vectors={'b': b, 'j': j.value},
-             scalars={'tau': muram_cube['tau']}, Mm_per_pix=args.Mm_per_pixel)
+             scalars={'tau': muram_cube['tau'], 'b_nabla_bz': muram_b_nabla_bz}, Mm_per_pix=args.Mm_per_pixel)
 
 
 if __name__ == '__main__':

@@ -13,11 +13,11 @@ data:
       fits_path:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-        B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZIPRE_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
+        B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
-#      ambiguous_azimuth: True
+      slice: [ 250, 900, 150, 950 ]
+      ambiguous_azimuth: True
   valid_configs:
     - type: los_trv_azi
       ds_id: ltau_-0.0
@@ -25,30 +25,31 @@ data:
       fits_path:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-        B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZIPRE_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
+        B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
       load_map: False
-      # slice: [ 250, 900, 150, 950 ]
-#      ambiguous_azimuth: True
+      slice: [ 250, 900, 150, 950 ]
+      ambiguous_azimuth: True
     - type: cube
       ds_id: cube
     - type: slices
       ds_id: slices
+  random_config: { type: height }
   num_workers: 16
   iterations: 10000
-  z_range: [ 0, 60 ]
+  z_range: [ 0, 40 ]
 
 model:
   type: vector_potential
   dim: 256
-
+  encoding_config: { type: gaussian }
 
 training:
-  epochs: 20
+  epochs: 100
 
 loss:
   - type: boundary_los_trv_azi
-    name: boundary
+    name: bottom
     lambda: 1.0
     ds_id: [ 'ltau_-0.0' ]
     ambiguous: True
@@ -58,14 +59,13 @@ loss:
     ds_id: potential
   - type: force_free
     name: force_free
-    lambda: 1.0e-2
+    lambda: 1.0e-4
+    ds_id: [ random ]
 
 loss_scaling:
-  - type: potential_fit
-    name: potential_fit
-    loss_ids: [boundary, potential_boundary, force_free]
-    ref_file: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-    Mm_per_pixel: 0.09
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free ]
 
 callbacks:
   # Boundary callbacks
