@@ -29,9 +29,9 @@ class _Loader:
         dz = int((scale[0] // scale[2]).to_value(u.dimensionless_unscaled))
         scale[2] = scale[0]
         # stack magnetic field
-        bx = snapshot.Bx[:, :, self.pix_height:max_height_pix:dz]
-        by = snapshot.By[:, :, self.pix_height:max_height_pix:dz]
-        bz = snapshot.Bz[:, :, self.pix_height:max_height_pix:dz]
+        bx = snapshot.Bx[:, :, self.pix_height:max_height_pix:dz] * np.sqrt(4 * np.pi)
+        by = snapshot.By[:, :, self.pix_height:max_height_pix:dz] * np.sqrt(4 * np.pi)
+        bz = snapshot.Bz[:, :, self.pix_height:max_height_pix:dz] * np.sqrt(4 * np.pi)
         b = np.stack([bx, by, bz], axis=-1) * u.G
         # compute energies
         b_energy = energy(b)['energy']
