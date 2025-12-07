@@ -14,11 +14,11 @@ data:
         B_los: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BLOS_panorama1050_6173_StkIQUV_rebin.fits"
         B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BTRV_panorama1050_6173_StkIQUV_rebin.fits"
         B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BAZI_panorama1050_6173_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits"
+      mask_config: { path: "/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits", value: 0.0 }
       load_map: False
       ambiguous_azimuth: True
   random_config: { type: height }
-  num_workers: 8
+  num_workers: 16
   iterations: 10000
   z_range: [ 0, 50 ]
 
@@ -44,11 +44,15 @@ loss:
     name: force_free
     lambda: 1.0e-4
     ds_id: [ random ]
+  - type: potential
+    name: potential
+    lambda: { type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    ds_id: [ random ]
 
 loss_scaling:
   - type: b_height
     name: b_height
-    loss_ids: [ force_free ]
+    loss_ids: [ force_free, potential ]
 
 callbacks:
   # Boundary callbacks

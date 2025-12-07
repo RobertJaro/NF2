@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/13392_0851_2slices_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_0851_2slices_v02"
+base_path: "/glade/work/rjarolim/nf2/topology/13392_0851_2slices_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/13392_0851_2slices_v01"
 logging:
   project: topology
   name: "13392 SST 08:51 - - 6173+8542"
@@ -14,7 +14,7 @@ data:
         B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
         B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits"
         B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+      mask_config: { path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits", value: 0.0 }
       load_map: False
       ambiguous_azimuth: True
     - type: los_trv_azi
@@ -24,17 +24,19 @@ data:
         B_los: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_8542_StkIQUV_rebin.fits"
         B_trv: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_8542_StkIQUV_rebin.fits"
         B_azi: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_8542_StkIQUV_rebin.fits"
-      mask_path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits"
+      mask_config: { path: "/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits" }
       height_mapping: { z: 2.0, z_min: 0, z_max: 20 }
       load_map: False
       ambiguous_azimuth: True
-  num_workers: 8
+  random_config: { type: height }
+  num_workers: 16
   iterations: 10000
   z_range: [ 0, 50 ]
 
 model:
   type: vector_potential
   dim: 256
+  encoding_config: { type: gaussian }
 
 training:
   epochs: 30
@@ -47,27 +49,30 @@ loss:
     ambiguous: True
   - type: boundary
     name: potential_boundary
-    lambda: 1.0
+    lambda: 1.0e+1
     ds_id: potential
   - type: force_free
     name: force_free
-    lambda: 1.0e-2
+    lambda: 1.0e-4
+    ds_id: [ random ]
+  - type: potential
+    name: potential
+    lambda: { type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    ds_id: [ random ]
   - type: height
     name: height
-    lambda: 1.0e-4
+    lambda: 1.0e-5
     ds_id: [ 8542 ]
 
 transforms:
-  - type: nlte_height
+  - type: height
     height_range: [ 0, 20 ]
     ds_id: [ 8542 ]
 
-#loss_scaling:
-#  - type: potential_fit
-#    name: potential_fit
-#    loss_ids: [boundary, potential_boundary, force_free]
-#    ref_file: "/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits"
-#    Mm_per_pixel: 0.09
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free, potential ]
 
 callbacks:
   # Boundary callbacks

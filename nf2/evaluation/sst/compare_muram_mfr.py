@@ -31,9 +31,9 @@ mfr_muram_BnablaBz = b_nabla_bz(mfr_muram_b) / Mm_per_pixel
 mfr_muram_j = (curl(mfr_muram_b) / Mm_per_pixel * u.G / u.Mm) * constants.c / (4 * np.pi)
 mfr_muram_j = mfr_muram_j.to_value(u.G / u.s)
 
-nf2_1slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v01/extrapolation_result.nf2'
-nf2_2slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v01/extrapolation_result.nf2'
-nf2_3slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v01/extrapolation_result.nf2'
+nf2_1slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v02/extrapolation_result.nf2'
+nf2_2slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v02/extrapolation_result.nf2'
+nf2_3slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v02/extrapolation_result.nf2'
 
 model_1slice = CartesianOutput(nf2_1slice)
 model_2slice = CartesianOutput(nf2_2slice)
@@ -77,19 +77,20 @@ mfr_1slice_squashing_out = squashing_factor(out_1slice['b'][:, :, offset:])
 mfr_2slice_squashing_out = squashing_factor(out_2slice['b'][:, :, offset:])
 mfr_2slices_amb_squashing_out = squashing_factor(out_3slice['b'][:, :, offset:])
 
-x_slice = 33 + x_min  # Mm
-# x_slice = 37 + x_min  # Mm
-# x_slice = 40 + x_min  # Mm
-xlim = [2, 12]
-# get pixel index close to x_slice in Mm
-x_slice_pix = np.argmin(np.abs(np.linspace(x_min, x_max, mfr_muram_b.shape[0]) - x_slice))
-print(f'x_slice_pix: {x_slice_pix}, x_slice: {x_slice} Mm')
 
 # compute free magnetic energy
 mfr_muram_free_energy = free_energy(mfr_muram_b * u.G)  # erg cm^-3
 mfr_1slice_free_energy = free_energy(out_1slice['b'])  # erg cm^-3
 mfr_2slice_free_energy = free_energy(out_2slice['b'])  # erg cm^-3
 mfr_2slices_amb_free_energy = free_energy(out_3slice['b'])  # erg cm^-3
+
+# x_slice = 33 + x_min  # Mm
+x_slice = 37 + x_min  # Mm
+# x_slice = 40 + x_min  # Mm
+xlim = [2, 12]
+# get pixel index close to x_slice in Mm
+x_slice_pix = np.argmin(np.abs(np.linspace(x_min, x_max, mfr_muram_b.shape[0]) - x_slice))
+print(f'x_slice_pix: {x_slice_pix}, x_slice: {x_slice} Mm')
 
 ##############################################################################
 ######################### plot Bz

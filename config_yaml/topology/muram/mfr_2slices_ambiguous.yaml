@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_2slices_ambiguous_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_mfr_2slices_ambiguous_v02"
 logging:
   project: topology
   name: MURAM MFR - tau1 + tau1e-6 - ambiguous
@@ -19,7 +19,7 @@ data:
       los_trv_azi_transform: True
       ambiguous_azimuth: True
   random_config: { type: height }
-  num_workers: 8
+  num_workers: 16
   iterations: 10000
   z_range: [ 0, 50 ]
 
@@ -45,9 +45,13 @@ loss:
     name: force_free
     lambda: 1.0e-4
     ds_id: [ random ]
+  - type: potential
+    name: potential
+    lambda: {type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    ds_id: [ random ]
   - type: height
     name: height
-    lambda: 1.0e-4
+    lambda: 1.0e-5
     ds_id: [ tau_1.0e-6 ]
 
 transforms:
@@ -58,7 +62,7 @@ transforms:
 loss_scaling:
   - type: b_height
     name: b_height
-    loss_ids: [ force_free ]
+    loss_ids: [ force_free, potential ]
 
 callbacks:
   # Boundary callbacks

@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/nlte/sst_nlte_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/sst_nlte_v01"
+base_path: "/glade/work/rjarolim/nf2/nlte/sst_nlte_v03"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/sst_nlte_v03"
 logging:
   project: NLTE
   name: "SST - full NLTE"
@@ -14,7 +14,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
+      log_tau: 0
       load_map: False
       slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
@@ -26,7 +26,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.1.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.1.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.1.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.1.fits"
+      log_tau: -0.1
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -39,7 +39,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.2.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.2.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.2.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.2.fits"
+      log_tau: -0.2
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -52,7 +52,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.3.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.3.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.3.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.3.fits"
+      log_tau: -0.3
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -65,7 +65,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.4.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.4.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.4.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.4.fits"
+      log_tau: -0.4
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -78,7 +78,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.5.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.5.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.5.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.5.fits"
+      log_tau: -0.5
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -91,7 +91,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.6.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.6.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.6.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.6.fits"
+      log_tau: -0.6
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -104,7 +104,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.7.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.7.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.7.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.7.fits"
+      log_tau: -0.7
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -117,7 +117,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.8.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.8.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.8.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.8.fits"
+      log_tau: -0.8
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -130,7 +130,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.9.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.9.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.9.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.9.fits"
+      log_tau: -0.9
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -143,7 +143,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.0.fits"
+      log_tau: -1.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -155,7 +155,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.1.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.1.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.1.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.1.fits"
+      log_tau: -1.1
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -168,7 +168,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.2.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.2.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.2.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.2.fits"
+      log_tau: -1.2
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -181,7 +181,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.3.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.3.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.3.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.3.fits"
+      log_tau: -1.3
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -194,7 +194,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.4.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.4.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.4.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.4.fits"
+      log_tau: -1.4
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -207,7 +207,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.5.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.5.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.5.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.5.fits"
+      log_tau: -1.5
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -220,7 +220,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.6.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.6.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.6.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.6.fits"
+      log_tau: -1.6
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -233,7 +233,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.7.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.7.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.7.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.7.fits"
+      log_tau: -1.7
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -246,7 +246,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.8.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.8.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.8.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.8.fits"
+      log_tau: -1.8
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -259,7 +259,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-1.9.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-1.9.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-1.9.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-1.9.fits"
+      log_tau: -1.9
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -272,7 +272,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
+      log_tau: -2.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -284,7 +284,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.1.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.1.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.1.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.1.fits"
+      log_tau: -2.1
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -297,7 +297,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.2.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.2.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.2.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.2.fits"
+      log_tau: -2.2
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -310,7 +310,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.3.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.3.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.3.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.3.fits"
+      log_tau: -2.3
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -323,7 +323,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.4.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.4.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.4.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.4.fits"
+      log_tau: -2.4
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -336,7 +336,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.5.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.5.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.5.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.5.fits"
+      log_tau: -2.5
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -349,7 +349,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.6.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.6.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.6.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.6.fits"
+      log_tau: -2.6
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -362,7 +362,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.7.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.7.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.7.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.7.fits"
+      log_tau: -2.7
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -375,7 +375,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.8.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.8.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.8.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.8.fits"
+      log_tau: -2.8
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -388,7 +388,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.9.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.9.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.9.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.9.fits"
+      log_tau: -2.9
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -401,7 +401,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.0.fits"
+      log_tau: -3.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -413,7 +413,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.1.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.1.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.1.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.1.fits"
+      log_tau: -3.1
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -426,7 +426,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.2.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.2.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.2.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.2.fits"
+      log_tau: -3.2
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -439,7 +439,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.3.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.3.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.3.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.3.fits"
+      log_tau: -3.3
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -452,7 +452,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.4.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.4.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.4.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.4.fits"
+      log_tau: -3.4
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -465,7 +465,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.5.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.5.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.5.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.5.fits"
+      log_tau: -3.5
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -478,7 +478,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.6.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.6.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.6.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.6.fits"
+      log_tau: -3.6
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -491,7 +491,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.7.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.7.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.7.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.7.fits"
+      log_tau: -3.7
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -504,7 +504,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.8.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.8.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.8.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.8.fits"
+      log_tau: -3.8
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -517,7 +517,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-3.9.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-3.9.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-3.9.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-3.9.fits"
+      log_tau: -3.9
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -530,7 +530,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.0.fits"
+      log_tau: -4.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -542,7 +542,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.1.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.1.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.1.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.1.fits"
+      log_tau: -4.1
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -555,7 +555,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.2.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.2.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.2.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.2.fits"
+      log_tau: -4.2
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -568,7 +568,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.3.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.3.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.3.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.3.fits"
+      log_tau: -4.3
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -581,7 +581,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.4.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.4.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.4.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.4.fits"
+      log_tau: -4.4
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -594,7 +594,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.5.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.5.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.5.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.5.fits"
+      log_tau: -4.5
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -607,7 +607,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.6.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.6.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.6.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.6.fits"
+      log_tau: -4.6
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -620,7 +620,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.7.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.7.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.7.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.7.fits"
+      log_tau: -4.7
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -633,7 +633,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.8.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.8.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.8.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.8.fits"
+      log_tau: -4.8
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -646,7 +646,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-4.9.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-4.9.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-4.9.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-4.9.fits"
+      log_tau: -4.9
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -659,7 +659,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
+      log_tau: -5.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -672,7 +672,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-0.0.fits"
+      log_tau: -0.0
       load_map: False
       slice: [ 250, 900, 150, 950 ]
       ambiguous_azimuth: True
@@ -683,7 +683,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-5.0.fits"
+      log_tau: -5.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -695,7 +695,7 @@ data:
         B_los: "/glade/work/rjarolim/data/nf2/nlte/BLOS_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
         B_trv: "/glade/work/rjarolim/data/nf2/nlte/BTRV_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
         B_azi: "/glade/work/rjarolim/data/nf2/nlte/BAZI_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
-        Z: "/glade/work/rjarolim/data/nf2/nlte/Z_2018-09-30T09:22:00_NLTE_ltau_-2.0.fits"
+      log_tau: -2.0
       mask_config: { path: "/glade/work/rjarolim/data/nf2/nlte/mask.fits" }
       load_map: False
       slice: [ 250, 900, 150, 950 ]
@@ -736,6 +736,14 @@ loss:
     name: force_free
     lambda: 1.0e-4
     ds_id: [ random ]
+  - type: potential
+    name: potential
+    lambda: { type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    ds_id: [ random ]
+  - type: min_height
+    name: height
+    lambda: 1.0e-5
+    ds_id: [ 'ltau_-0.1', 'ltau_-0.2', 'ltau_-0.3', 'ltau_-0.4', 'ltau_-0.5', 'ltau_-0.6', 'ltau_-0.7', 'ltau_-0.8', 'ltau_-0.9', 'ltau_-1.0', 'ltau_-1.1', 'ltau_-1.2', 'ltau_-1.3', 'ltau_-1.4', 'ltau_-1.5', 'ltau_-1.6', 'ltau_-1.7', 'ltau_-1.8', 'ltau_-1.9', 'ltau_-2.0', 'ltau_-2.1', 'ltau_-2.2', 'ltau_-2.3', 'ltau_-2.4', 'ltau_-2.5', 'ltau_-2.6', 'ltau_-2.7', 'ltau_-2.8', 'ltau_-2.9', 'ltau_-3.0', 'ltau_-3.1', 'ltau_-3.2', 'ltau_-3.3', 'ltau_-3.4', 'ltau_-3.5', 'ltau_-3.6', 'ltau_-3.7', 'ltau_-3.8', 'ltau_-3.9', 'ltau_-4.0', 'ltau_-4.1', 'ltau_-4.2', 'ltau_-4.3', 'ltau_-4.4', 'ltau_-4.5', 'ltau_-4.6', 'ltau_-4.7', 'ltau_-4.8', 'ltau_-4.9', 'ltau_-5.0' ]
 
 transforms:
   - type: height
@@ -745,7 +753,7 @@ transforms:
 loss_scaling:
   - type: b_height
     name: b_height
-    loss_ids: [ force_free ]
+    loss_ids: [ force_free, potential ]
 
 callbacks:
   # Boundary callbacks
