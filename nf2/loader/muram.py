@@ -357,5 +357,13 @@ class MURaMSimulation():
         pix_height = np.mean(pix_height, axis=(0, 1)).astype(int)
         return pix_height
 
+    def get_min_height(self, tau):
+        ref_snapshot = list(self.snapshots.values())[0]
+        # find closest to tau = .1
+        tau_cube = ref_snapshot.tau[::64, ::64, :]
+        pix_height = np.argmin(np.abs(tau_cube - tau), axis=2)
+        pix_height = np.min(pix_height, axis=(0, 1)).astype(int)
+        return pix_height
+
     def get_snapshot(self, time):
         return self.snapshots[time]

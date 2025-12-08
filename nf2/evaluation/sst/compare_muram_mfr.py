@@ -31,9 +31,9 @@ mfr_muram_BnablaBz = b_nabla_bz(mfr_muram_b) / Mm_per_pixel
 mfr_muram_j = (curl(mfr_muram_b) / Mm_per_pixel * u.G / u.Mm) * constants.c / (4 * np.pi)
 mfr_muram_j = mfr_muram_j.to_value(u.G / u.s)
 
-nf2_1slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v02/extrapolation_result.nf2'
-nf2_2slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v02/extrapolation_result.nf2'
-nf2_3slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v02/extrapolation_result.nf2'
+nf2_1slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_1slices_ambiguous_v01/extrapolation_result.nf2'
+nf2_2slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_2slices_ambiguous_v01/extrapolation_result.nf2'
+nf2_3slice = '/glade/work/rjarolim/nf2/topology/muram_mfr_3slices_ambiguous_v01/extrapolation_result.nf2'
 
 model_1slice = CartesianOutput(nf2_1slice)
 model_2slice = CartesianOutput(nf2_2slice)

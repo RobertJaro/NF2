@@ -16,7 +16,7 @@ class _Loader:
 
     def __init__(self, simulation, tau=0.1, max_height=50 * u.Mm):
         self.simulation = simulation
-        self.pix_height = simulation.get_average_height(tau)
+        self.pix_height = simulation.get_min_height(tau)
         self.max_height = max_height
 
     def load(self, iteration):
