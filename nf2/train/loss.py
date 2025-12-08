@@ -40,6 +40,9 @@ class ForceFreeLoss(BaseLoss):
         jxb = torch.cross(j, b, -1)
         force_free_loss = jxb.pow(2).sum(-1) / normalization
 
+        # check for NaNs
+        assert not torch.isnan(force_free_loss).any(), 'NaNs in force-free loss computation!'
+
         return force_free_loss
 
 class SigmaJLoss(BaseLoss):
@@ -135,10 +138,6 @@ class PotentialLoss(BaseLoss):
 
 class EnergyGradientLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
-        super().__init__(**kwargs)
-        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
@@ -171,8 +170,7 @@ class EnergyGradientLoss(BaseLoss):
                 (torch.sin(t) * torch.sin(p)) * dE_dy + \
                 torch.cos(t) * dE_dz
 
-        radius_mask = torch.norm(coords, dim=-1) > self.base_radius
-        energy_gradient_regularization = torch.relu(dE_dr) * radius_mask
+        energy_gradient_regularization = torch.relu(dE_dr)
 
         return energy_gradient_regularization
 

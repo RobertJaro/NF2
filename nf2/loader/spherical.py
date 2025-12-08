@@ -12,9 +12,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
-from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset
-from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix, \
-    vector_cartesian_to_spherical, spherical_to_cartesian_matrix
+from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, \
+    RandomRadialGroupedCoordinateDataset
+from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
 from nf2.loader.base import BaseDataModule, TensorsDataset
 
 
@@ -44,11 +44,17 @@ class SphericalSliceDataset(TensorsDataset):
         b_err = b_err / G_per_dB if b_err is not None else None
         coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
+        nan_mask = np.isnan(b).any(-1)
+        coords[nan_mask] = np.nan
+        b[nan_mask] = np.nan
+
         tensors = {'coords': coords,
                    'b_true': b, }
         if transform is not None:
+            transform[nan_mask] = np.nan
             tensors['transform'] = transform
         if b_err is not None:
+            b_err[nan_mask] = np.nan
             tensors['b_err'] = b_err
 
         super().__init__(tensors, **kwargs)
@@ -263,7 +269,7 @@ class SphericalMapDataset(SphericalSliceDataset):
             top_right = top_right.transform_to(frames.HeliographicCarrington)
             slice_lon = np.array([bottom_left.lon.to(u.rad).value, top_right.lon.to(u.rad).value])
             slice_lat = np.array([bottom_left.lat.to(u.rad).value, top_right.lat.to(u.rad).value])
-            slice_lat = sorted(np.pi / 2 - slice_lat) # convert to spherical coordinates
+            slice_lat = sorted(np.pi / 2 - slice_lat)  # convert to spherical coordinates
 
             mask = (spherical_coords[..., 1] > slice_lat[0]) & \
                    (spherical_coords[..., 1] < slice_lat[1]) & \
@@ -374,6 +380,7 @@ class SphericalDataModule(BaseDataModule):
         self.ds_mapping = {'map': SphericalMapDataset,
                            'pfss_boundary': PFSSBoundaryDataset,
                            'random_spherical': RandomSphericalCoordinateDataset,
+                           'random_radial_grouped': RandomRadialGroupedCoordinateDataset,
                            'sphere': SphereDataset,
                            'spherical_slices': SphereSlicesDataset}
 

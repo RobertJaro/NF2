@@ -6,7 +6,7 @@ from torch import nn
 
 from nf2.loader.muram import read_muram_slice
 from nf2.potential.potential_field import get_fft_potential_field
-
+from astropy import units as u
 
 class BaseScalingModule(nn.Module):
     """
@@ -144,16 +144,42 @@ class BHeightLossScalingModule(BaseScalingModule):
         :param state: A dictionary containing the state information, including 'coords' and 'b
         :return:
         """
-        z_grouped_coords = state['z_grouped_coords'] # (samples, heights, 3)
+        grouped_coords = state['grouped_coords'] # (samples, heights, 3)
         b = state['b'] # (batch_size, 3)
 
-        b = b.reshape(z_grouped_coords.shape[0], z_grouped_coords.shape[1], b.shape[-1])
-        loss = loss.reshape(z_grouped_coords.shape[0], z_grouped_coords.shape[1])
+        b = b.reshape(grouped_coords.shape[0], grouped_coords.shape[1], b.shape[-1])
+        loss = loss.reshape(grouped_coords.shape[0], grouped_coords.shape[1])
 
         b_norm = b.norm(dim=-1).pow(self.power)  # (samples, heights)
         scaling = b_norm.mean(0, keepdim=True)  # mean across height
         scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
 
         scaled_loss = scaled_loss.reshape(-1)
+
+        return scaled_loss
+
+class RadialLossScalingModule(BaseScalingModule):
+    """
+    Loss scaling based on radial distance r.
+    """
+
+    def __init__(self, Mm_per_ds, base_radius=1.1, **kwargs):
+        super().__init__(**kwargs)
+        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+
+    def forward(self, loss, state):
+        """
+        Forward pass for the radial loss scaling module.
+        This method scales the loss based on the radial distance r.
+        :param loss: The loss tensor to be scaled.
+        :param state: A dictionary containing the state information, including 'coords'.
+        :return:
+        """
+        coords = state['coords']
+
+        radius_weight = coords.pow(2).sum(-1).pow(0.5)
+        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+
+        scaled_loss = loss * radius_weight
 
         return scaled_loss

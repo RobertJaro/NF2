@@ -34,6 +34,7 @@ class BatchesDataset(Dataset):
             if os.path.exists(f):
                 os.remove(f)
 
+
 class CubeDataset(Dataset):
 
     def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13, **kwargs):
@@ -107,6 +108,60 @@ class RandomSphericalCoordinateDataset(Dataset):
         return {'coords': random_coords}
 
 
+class RandomRadialGroupedCoordinateDataset(Dataset):
+
+    def __init__(self, radius_range, batch_size, Mm_per_ds,
+                 r_sample=128, r_sampling_exponent=2,
+                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg', length=None, **kwargs):
+        longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
+        latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
+        colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to colatitude
+
+        self.length = int(length) if length is not None else 1
+
+        self.radius_range = radius_range
+        self.Mm_per_ds = Mm_per_ds
+        self.colatitude_range = colatitude_range
+        self.longitude_range = longitude_range
+        self.batch_size = batch_size
+        self.float_tensor = torch.FloatTensor
+
+        self.r_sample = r_sample
+        self.r_sampling_exponent = torch.tensor(r_sampling_exponent, dtype=torch.float32)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, item):
+        # radial coordinates
+        r_coords = self.float_tensor(self.r_sample, 1).uniform_() ** self.r_sampling_exponent
+        h_r = self.radius_range
+        r_coords = h_r[0] + r_coords * (h_r[1] - h_r[0])
+
+        # latitude coordinates
+        lat_coords = self.float_tensor(self.batch_size // self.r_sample, self.r_sample, 1).uniform_()
+        lat_r = self.colatitude_range
+        lat_coords = lat_r[0] + lat_coords * (lat_r[1] - lat_r[0])
+
+        # longitude coordinates
+        lon_coords = self.float_tensor(self.batch_size // self.r_sample, self.r_sample, 1).uniform_()
+        lon_r = self.longitude_range
+        lon_coords = lon_r[0] + lon_coords * (lon_r[1] - lon_r[0])
+
+        # expand r coords
+        r_coords = r_coords[None, :, :].repeat(self.batch_size // self.r_sample, 1, 1)
+
+        grouped_coords = torch.cat([r_coords, lat_coords, lon_coords], -1)
+
+        # convert to cartesian
+        grouped_cartesian_coords = spherical_to_cartesian(grouped_coords, f=torch)
+        grouped_cartesian_coords = grouped_cartesian_coords * (1 * u.solRad).to_value(u.Mm) / self.Mm_per_ds
+
+        coords = grouped_cartesian_coords.reshape(-1, 3)
+
+        return {'coords': coords, 'grouped_coords': grouped_cartesian_coords}
+
+
 class SphereDataset(Dataset):
 
     def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024,
@@ -146,7 +201,7 @@ class SphereSlicesDataset(Dataset):
                  longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
-        colatitude_range = sorted(np.pi / 2 - latitude_range) # convert to spherical coordinates
+        colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to spherical coordinates
         #
         ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
@@ -233,6 +288,7 @@ class RandomCoordinateDataset(Dataset):
                 random_coords[:, 2] * (self.coord_range[2, 1] - self.coord_range[2, 0]) + self.coord_range[2, 0])
         return {'coords': random_coords}
 
+
 class RandomHeightCoordinateDataset(Dataset):
 
     def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, z_sampling_exponent=2, length=None):
@@ -263,7 +319,7 @@ class RandomHeightCoordinateDataset(Dataset):
         z_grouped_coords = torch.cat([random_xy_coords, random_z_coords], -1)
         random_coords = z_grouped_coords.reshape(-1, 3)
 
-        return {'coords': random_coords, 'z_grouped_coords': z_grouped_coords}
+        return {'coords': random_coords, 'grouped_coords': z_grouped_coords}
 
 
 class IndexedDataset(Dataset):

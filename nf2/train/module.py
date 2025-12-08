@@ -9,7 +9,8 @@ from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import loss_module_mapping
-from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, BHeightLossScalingModule
+from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
+    BHeightLossScalingModule, RadialLossScalingModule
 from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
     MultiDomainModel, BScaledModel, \
     VectorPotentialScaledModel, GaugedVectorPotentialModel
@@ -133,6 +134,9 @@ class NF2Module(LightningModule):
             elif scaling_type == 'b_height':
                 name = 'B_height_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
                 loss_scaling_modules[name] = BHeightLossScalingModule(**scaling_config, name=name)
+            elif scaling_type == 'radial':
+                name = 'radial_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
+                loss_scaling_modules[name] = RadialLossScalingModule(**scaling_config, name=name, Mm_per_ds=Mm_per_ds)
             else:
                 raise ValueError(f"Invalid loss scaling type: {scaling_type}")
         self.loss_scaling_modules = nn.ModuleDict(loss_scaling_modules)
@@ -140,7 +144,7 @@ class NF2Module(LightningModule):
         for module in self.loss_scaling_modules.values():
             for loss_id in module.loss_ids:
                 assert loss_id in self.loss_modules.keys(), f"Loss id {loss_id} in loss scaling module " \
-                                                            f"not found in loss modules."
+                                                            f"not found in loss modules. Available losses: {list(self.loss_modules.keys())}"
         self.validation_outputs = {}
         self.validation_batches = {}
 
