@@ -47,7 +47,7 @@ model:
   encoding_config: { type: gaussian }
 
 training:
-  epochs: 30
+  epochs: 100
 
 loss:
   - type: boundary

@@ -328,6 +328,7 @@ class MURaMSimulation():
         # filter files --> check if tau files exists
         files = [f for f in files if os.path.exists(f.replace('Header', 'tau'))]
         iterations = [int(os.path.basename(f).split('.')[1]) for f in files]
+        iterations.sort()
 
         snapshots = [MURaMSnapshot(source_path, i) for i in iterations]
         self.snapshots = {s.time.value: s for s in snapshots}
@@ -335,7 +336,7 @@ class MURaMSimulation():
 
     @property
     def times(self):
-        return sorted(list(self.snapshots.keys()))
+        return list(self.snapshots.keys())
 
     @property
     def ds(self):

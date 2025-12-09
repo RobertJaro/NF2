@@ -297,7 +297,7 @@ class RandomHeightCoordinateDataset(Dataset):
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
         self.z_sampling_exponent = torch.tensor(z_sampling_exponent, dtype=torch.float32)
-        self.length = length if length is not None else 1
+        self.length = int(length) if length is not None else 1
         self.z_sample = z_sample
 
     def __len__(self):
@@ -340,3 +340,10 @@ class IndexedDataset(Dataset):
         data = self.dataset[idx]
         data[self.key] = torch.tensor([idx], dtype=torch.long)
         return data
+
+class EmptyDataset(Dataset):
+    def __len__(self):
+        return 0
+
+    def __getitem__(self, idx):
+        raise IndexError

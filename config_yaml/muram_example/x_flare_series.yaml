@@ -12,21 +12,17 @@ data:
   train_configs:
     - type: muram_slice
       ds_id: tau_0.1
-      data_path: "/glade/campaign/hao/radmhd/rjarolim/MURAM_X_flare/data_closed/tau_slice_0.100.*"
-  num_workers: 8
-  iterations: 5.0e+3
-  batch_size: 8192
-  random_config:
-    batch_size: 16384
+      data_path: "/glade/campaign/hao/radmhd/rjarolim/MURAM_X_flare/data_open/tau_slice_0.100.*"
+  random_config: { type: height }
+  num_workers: 16
+  iterations: 2000
   z_range: [ 0, 100 ]
-  boundary_config:
-    type: potential
-    batch_size: 1024
-    strides: 4
+
 
 model:
-  type: gauged_vector_potential
+  type: vector_potential
   dim: 256
+  encoding_config: { type: gaussian }
 
 training:
   check_val_every_n_epoch: 5
@@ -41,7 +37,14 @@ loss:
     lambda: 1.0e+1
     ds_id: potential
   - type: force_free
-    lambda: 1.0e-2
+    name: force_free
+    lambda: 1.0e-4
+    ds_id: [ random ]
+
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [ force_free ]
 
 callbacks:
   - type: boundary

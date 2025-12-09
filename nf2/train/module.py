@@ -4,6 +4,7 @@ import logging
 import numpy as np
 import torch
 import torch.distributed as dist
+from pytorch_lightning.utilities import rank_zero_only
 from pytorch_lightning import LightningModule
 from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
@@ -466,7 +467,7 @@ class NF2Module(LightningModule):
         self.load_state_dict(state_dict, strict=False)
         self.validation_outputs = {}  # reset validation outputs
 
-
+@rank_zero_only
 def save(save_path, nf2, data_module, config):
     save_state = {'model': nf2.model,
                   'config': config,

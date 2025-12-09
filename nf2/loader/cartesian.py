@@ -1,3 +1,4 @@
+import copy
 import glob
 import os
 from copy import deepcopy
@@ -6,6 +7,7 @@ import numpy as np
 from astropy import units as u
 from astropy.io import fits
 from astropy.nddata import block_reduce
+from pytorch_lightning import LightningDataModule
 from sunpy.map import Map
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset, RandomHeightCoordinateDataset
@@ -42,7 +44,7 @@ class CartesianDataModule(BaseDataModule):
         z_range = [0, 100] if z_range is None else z_range
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
-        random_config = random_config if random_config is not None else {'batch_size': 2 ** 14}
+        random_config = copy.deepcopy(random_config) if random_config is not None else {'batch_size': 2 ** 14}
         random_type = random_config.pop('type', 'default')
         if random_type == 'default':
             random_dataset = RandomCoordinateDataset(coord_range, length=iterations, **random_config)
@@ -388,7 +390,7 @@ class FldIncAziFITSDataset(MapDataset):
         super().__init__(b=b, wcs=wcs, los_trv_azi=True, **kwargs)
 
 
-class CartesianSeriesDataModule(CartesianDataModule):
+class CartesianSeriesDataModule(LightningDataModule):
 
     def __init__(self, train_configs, current_step, *args, **kwargs):
         self.args = args
@@ -403,30 +405,34 @@ class CartesianSeriesDataModule(CartesianDataModule):
             'Not enough data files found to continue training. Training completed or configuration is incorrect.'
 
         self.step = current_step
-        self.current_id = train_configs[self.step][0]['id']
         self.train_configs = train_configs
 
-        self.initialized = True  # only required for first iteration
-        super().__init__(list(train_configs[self.step]), *args, **kwargs)
+        print(f'Loading data modules... (total: {len(self.train_configs)})')
+        self.data_modules = [CartesianDataModule(train_configs=list(c), *args, **kwargs) for c in train_configs]
+        self.total_steps = len(self.train_configs)
+        super().__init__()
+
+    @property
+    def config(self):
+        return self.data_modules[self.step].config
+
+    @property
+    def validation_datasets(self):
+        return self.data_modules[self.step].validation_datasets
+
+    @property
+    def validation_dataset_mapping(self):
+        return self.data_modules[self.step].validation_dataset_mapping
+
+    @property
+    def current_id(self):
+        return self.train_configs[self.step][0]['id']
 
     def train_dataloader(self):
-        # skip reload if already initialized - for initial epoch
-        if self.initialized:
-            self.initialized = False
-            # no step increase to account for skip of initial epoch (due to loading of checkpoint)
-            return super().train_dataloader()
-        # end training if all configs are processed
-        if self.step >= len(self.train_configs):
-            print('All training files processed. Exiting...')
-            return None
-        # update ID
-        self.current_id = self.train_configs[self.step][0]['id']
-        # re-initialize
-        super().__init__(train_configs=list(self.train_configs[self.step]), *self.args, **self.kwargs)
-        print(f'\nStep {self.step + 1:03d}/{len(self.train_configs):03d}; ID: {self.current_id}')
-        # continue with next file in list
-        self.step += 1
-        return super().train_dataloader()
+        return self.data_modules[self.step].train_dataloader()
+
+    def val_dataloader(self):
+        return self.data_modules[self.step].val_dataloader()
 
 
 def _load_config(config):

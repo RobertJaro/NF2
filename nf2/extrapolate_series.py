@@ -8,15 +8,19 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import LambdaCallback
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
+from pytorch_lightning.strategies import DDPStrategy
+from pytorch_lightning.utilities import rank_zero_only
 
 from nf2.loader.cartesian import CartesianSeriesDataModule
 from nf2.loader.spherical import SphericalSeriesDataModule
+from nf2.train.callback import AdvanceDatamoduleStep
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={}, model={}, training={}, loss=[], transforms=[], config=None):
+def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={}, model={}, training={}, loss=[],
+        transforms=[], loss_scaling=[], config=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -45,7 +49,12 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     config_dict = {'base_path': base_path, 'work_directory': work_directory, 'logging': logging,
                    'model': model, 'training': training, 'config': config, 'data': data,
                    'loss': loss, 'transforms': transforms}
-    wandb_logger.experiment.config.update(config_dict, allow_val_change=True)
+
+    @rank_zero_only
+    def _log_hparams(cfg):
+        wandb_logger.log_hyperparams(cfg)
+
+    _log_hparams(config_dict)
 
     # restore model checkpoint from wandb
     if 'id' in logging:
@@ -62,19 +71,28 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     ckpt_path = 'last' if current_step > 0 else meta_path  # reload last savepoint
 
     # initialize data module
-    assert 'type' in data, 'Data module type must be specified in the configuration'
-    data_module_type = data.pop('type')
-    if data_module_type == 'cartesian':
-        data_module = CartesianSeriesDataModule(current_step=current_step, **data)
-    elif data_module_type == 'spherical':
-        data_module = SphericalSeriesDataModule(current_step=current_step, **data)
-    else:
-        raise NotImplementedError(f'Unknown data loader {data_module_type}')
+    data_module_save_path = os.path.join(work_directory, 'data_module.pkl')
+
+    @rank_zero_only
+    def _init_data_module():
+        assert 'type' in data, 'Data module type must be specified in the configuration'
+        data_module_type = data.pop('type')
+        if data_module_type == 'cartesian':
+            data_module = CartesianSeriesDataModule(current_step=current_step, **data)
+        elif data_module_type == 'spherical':
+            data_module = SphericalSeriesDataModule(current_step=current_step, **data)
+        else:
+            raise NotImplementedError(f'Unknown data loader {data_module_type}')
+        torch.save(data_module, data_module_save_path)
+
+    _init_data_module()
+    # load data module for all ranks
+    data_module = torch.load(data_module_save_path)
 
     callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
-                    model_kwargs=model, loss_config=loss, transforms=transforms)
+                    model_kwargs=model, loss_config=loss, transforms=transforms, loss_scaling=loss_scaling)
 
     reload_dataloaders_interval = training[
         'reload_dataloaders_every_n_epochs'] if 'reload_dataloaders_every_n_epochs' in training else 1
@@ -82,7 +100,7 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     # callback
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
     save_callback = LambdaCallback(
-        on_train_epoch_end=lambda *args:
+        on_validation_epoch_start=lambda *args:
         save(os.path.join(base_path, data_module.current_id + '.nf2'),
              nf2, data_module, config_dict))
 
@@ -90,17 +108,19 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
                                           every_n_epochs=reload_dataloaders_interval,
                                           save_last=True)
 
+    advance_data_module_callback = AdvanceDatamoduleStep(data_module, reload_dataloaders_interval)
+
     # general training parameters
     torch.set_float32_matmul_precision('medium')  # for A100 GPUs
     n_gpus = torch.cuda.device_count()
-    callback_modules += [checkpoint_callback, save_callback]
+    callback_modules += [checkpoint_callback, save_callback, advance_data_module_callback]
 
     val_check_interval = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else 1
     trainer = Trainer(max_epochs=-1,
                       logger=wandb_logger,
                       devices=n_gpus if n_gpus > 0 else None,
                       accelerator='gpu' if n_gpus >= 1 else None,
-                      strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
+                      strategy=DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else 'auto',
                       num_sanity_val_steps=0,
                       callbacks=callback_modules,
                       gradient_clip_val=0.1, reload_dataloaders_every_n_epochs=reload_dataloaders_interval,

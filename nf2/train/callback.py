@@ -7,6 +7,7 @@ from matplotlib.colors import LogNorm
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pytorch_lightning import Callback
 from pytorch_lightning.utilities import rank_zero_only
+
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
 
 
@@ -566,7 +567,7 @@ class DisambiguationCallback(Callback):
 
         ax = axs[1, 0]
         im = ax.imshow(azimuth_pred.T, cmap='twilight', origin='lower',
-                          extent=extent, vmin=0, vmax=2 * np.pi)
+                       extent=extent, vmin=0, vmax=2 * np.pi)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Predicted Azimuth [rad]')
@@ -577,10 +578,10 @@ class DisambiguationCallback(Callback):
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Flip Probability')
 
-        axs[0,0].set_title('Input Azimuth')
-        axs[0,1].set_title('Disambiguated Azimuth')
-        axs[1,0].set_title('Predicted Azimuth')
-        axs[1,1].set_title('Flip Probability')
+        axs[0, 0].set_title('Input Azimuth')
+        axs[0, 1].set_title('Disambiguated Azimuth')
+        axs[1, 0].set_title('Predicted Azimuth')
+        axs[1, 1].set_title('Flip Probability')
 
         fig.tight_layout()
         name = f"{self.validation_dataset_key} - Disambiguation" if self.name is None else self.name
@@ -736,14 +737,16 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_title('B_trv_true')
 
         ax = axs[2, 0]
-        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
+        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[deg]')
         ax.set_title('B_azi')
 
         ax = axs[2, 1]
-        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
+        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[deg]')
@@ -752,7 +755,6 @@ class LosTrvAziBoundaryCallback(Callback):
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
-
 
     def plot_b_coords(self, b, b_true, original_coords, transformed_coords):
         extent = [original_coords[..., 0].min(), original_coords[..., 0].max(),
@@ -800,7 +802,8 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_ylabel('Y [Mm]')
 
         ax = axs[2, 0]
-        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
+        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Azimuth [rad]')
@@ -809,7 +812,8 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_ylabel('Y [Mm]')
 
         ax = axs[2, 1]
-        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
+        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Azimuth [rad]')
@@ -867,7 +871,7 @@ class MetricsCallback(Callback):
         theta_J = torch.rad2deg(theta_J)
 
         sigma_J = (torch.norm(torch.cross(j, b, dim=-1), dim=-1) / (torch.norm(b, dim=-1) + 1e-7)).sum() / (
-                    torch.norm(j, dim=-1).sum() + 1e-7)
+                torch.norm(j, dim=-1).sum() + 1e-7)
 
         b_norm = b.pow(2).sum(-1).pow(0.5) + 1e-7
         div_loss = (div / b_norm).mean()
@@ -879,3 +883,28 @@ class MetricsCallback(Callback):
                              "force-free": ff_loss.cpu().numpy(),
                              "sigma_J": sigma_J.cpu().numpy(),
                              "theta_J": theta_J.cpu().numpy()}})
+
+
+class AdvanceDatamoduleStep(Callback):
+    def __init__(self, data_module, every_n):
+        super().__init__()
+        self.every_n = every_n
+        self.data_module = data_module
+
+    @rank_zero_only
+    def on_train_epoch_start(self, trainer, pl_module):
+        data_module = self.data_module
+        print(f'\nStep {data_module.step + 1:03d}/{len(data_module.train_configs):03d}; ID: {data_module.current_id}')
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        current_epoch = trainer.current_epoch
+        if (current_epoch + 1) % self.every_n != 0:
+            return
+
+        data_module = self.data_module
+        data_module.step += 1
+
+        # if we've used all configs, stop training cleanly
+        if data_module.step >= data_module.total_steps:
+            print('All training files processed. Stopping training...')
+            trainer.should_stop = True
