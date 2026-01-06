@@ -52,7 +52,7 @@ class BaseDataModule(LightningDataModule):
 
     def train_dataloader(self):
         loaders = {name: DataLoader(ds, batch_size=None, num_workers=self.num_workers,
-                                    pin_memory=True, shuffle=True, persistent_workers=True, prefetch_factor=5)
+                                    pin_memory=False, shuffle=True, persistent_workers=True, prefetch_factor=5)
                    for name, ds in self.training_datasets.items()}
         return CombinedLoader(loaders, 'max_size_cycle')
 
@@ -62,7 +62,7 @@ class BaseDataModule(LightningDataModule):
         for dataset in datasets.values():
             # add dataset wrapper for indexing
             dataset = IndexedDataset(dataset)
-            loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,
+            loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=False,
                                 shuffle=False)
             loaders.append(loader)
         return loaders
