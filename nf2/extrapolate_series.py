@@ -87,7 +87,7 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
 
     _init_data_module()
     # load data module for all ranks
-    data_module = torch.load(data_module_save_path)
+    data_module = torch.load(data_module_save_path, weights_only=False)
 
     callback_modules = load_callbacks(callbacks, data_module)
 
@@ -100,7 +100,7 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     # callback
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
     save_callback = LambdaCallback(
-        on_validation_epoch_start=lambda *args:
+        on_train_epoch_end=lambda *args:
         save(os.path.join(base_path, data_module.current_id + '.nf2'),
              nf2, data_module, config_dict))
 
