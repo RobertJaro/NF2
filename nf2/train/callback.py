@@ -890,13 +890,22 @@ class AdvanceDatamoduleStep(Callback):
         super().__init__()
         self.every_n = every_n
         self.data_module = data_module
+        # assures that train epoch start is called at least once before we start advancing steps
+        # avoids errors for continued training from an interrupted checkpoint
+        self.initialized = False
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        self._print_step()
+        self.initialized = True
 
     @rank_zero_only
-    def on_train_epoch_start(self, trainer, pl_module):
+    def _print_step(self):
         data_module = self.data_module
         print(f'\nStep {data_module.step + 1:03d}/{len(data_module.train_configs):03d}; ID: {data_module.current_id}')
 
     def on_train_epoch_end(self, trainer, pl_module):
+        if not self.initialized:
+            return
         current_epoch = trainer.current_epoch
         if (current_epoch + 1) % self.every_n != 0:
             return
