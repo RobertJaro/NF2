@@ -15,12 +15,12 @@ from nf2.loader.base import MapDataset, TensorsDataset
 muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
                    'By': {'id': 'result_prim_7', 'unit': u.Gauss},
                    'Bx': {'id': 'result_prim_6', 'unit': u.Gauss},
-                   'vx': {'id': 'result_prim_1', 'unit': u.cm / u.s},
-                   'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
-                   'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
+                   # 'vx': {'id': 'result_prim_1', 'unit': u.cm / u.s},
+                   # 'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
+                   # 'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
                    'tau': {'id': 'tau', 'unit': 1},
-                   'P': {'id': 'eosP', 'unit': u.erg / u.cm ** 3},
-                   'rho': {'id': 'result_prim_0', 'unit': u.g / u.cm ** 3},
+                   # 'P': {'id': 'eosP', 'unit': u.erg / u.cm ** 3},
+                   # 'rho': {'id': 'result_prim_0', 'unit': u.g / u.cm ** 3},
                    }
 
 

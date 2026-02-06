@@ -442,13 +442,13 @@ def _load_config(config):
         data_path = config.pop('data_path')
         fits_paths, error_paths = _load_paths(data_path)
         ids = [os.path.basename(fp['Br']).split('.')[-3] for fp in fits_paths]
-        configs = [{**config, 'id': i, 'data_path': {**fp, **ep}}
-                   for i, fp, ep in zip(ids, fits_paths, error_paths)]
+        configs = [{**config, 'id': id, 'data_path': {**fp, **ep}}
+                   for id, fp, ep in zip(ids, fits_paths, error_paths)]
     elif c_type == 'muram_slice':
         data_path = config.pop('data_path')
         slices = sorted(glob.glob(data_path))
         ids = [os.path.basename(s).split('.')[-1] for s in slices]
-        configs = [{**config, 'id': i, 'data_path': s} for i, s in zip(ids, slices)]
+        configs = [{**config, 'id': id, 'data_path': s} for id, s in zip(ids, slices)]
     else:
         raise NotImplementedError(f'Unknown data loader {c_type}')
     return configs

@@ -12,7 +12,7 @@ data:
   train_configs:
     - type: muram_slice
       ds_id: tau_0.1
-      data_path: "/glade/campaign/hao/radmhd/rjarolim/MURAM_X_flare/data_open/tau_slice_0.100.*"
+      data_path: "/glade/campaign/hao/radmhd/rjarolim/MURAM_X_flare/data_closed_v2/tau_slice_0.100.*"
   random_config: { type: height }
   num_workers: 16
   iterations: 2000

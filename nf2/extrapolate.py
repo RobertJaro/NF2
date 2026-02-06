@@ -75,7 +75,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
         torch.save(data_module, data_module_save_path)
     _init_data_module()
     # load data module for all ranks
-    data_module = torch.load(data_module_save_path)
+    data_module = torch.load(data_module_save_path, weights_only=False)
 
     # initialize callbacks
     callback_modules = load_callbacks(callbacks, data_module)
