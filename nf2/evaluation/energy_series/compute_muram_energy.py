@@ -14,24 +14,27 @@ from nf2.potential.potential_field import get_fft_potential_field
 
 class _Loader:
 
-    def __init__(self, simulation, tau=0.1, max_height=50 * u.Mm):
+    def __init__(self, simulation, tau=0.1, max_height=50 * u.Mm, tau_height_func=np.median):
         self.simulation = simulation
-        self.pix_height = simulation.get_min_height(tau)
         self.max_height = max_height
+        self.tau = tau
+        self.tau_height_func = tau_height_func
 
     def load(self, iteration):
         snapshot = self.simulation.iterations[iteration]
         scale = list(self.simulation.ds)
 
+        # compute min height from tau
+        min_height_pix = snapshot.get_tau_height_pix(self.tau, func=self.tau_height_func)
         # load max height
         max_height_pix = int((self.max_height / scale[2]).to_value(u.pixel))
         # adjust scale
         dz = int((scale[0] // scale[2]).to_value(u.dimensionless_unscaled))
         scale[2] = scale[0]
         # stack magnetic field
-        bx = snapshot.Bx[:, :, self.pix_height:self.pix_height + max_height_pix:dz] * np.sqrt(4 * np.pi)
-        by = snapshot.By[:, :, self.pix_height:self.pix_height + max_height_pix:dz] * np.sqrt(4 * np.pi)
-        bz = snapshot.Bz[:, :, self.pix_height:self.pix_height + max_height_pix:dz] * np.sqrt(4 * np.pi)
+        bx = snapshot.Bx[:, :, min_height_pix:min_height_pix + max_height_pix:dz] * np.sqrt(4 * np.pi)
+        by = snapshot.By[:, :, min_height_pix:min_height_pix + max_height_pix:dz] * np.sqrt(4 * np.pi)
+        bz = snapshot.Bz[:, :, min_height_pix:min_height_pix + max_height_pix:dz] * np.sqrt(4 * np.pi)
         b = np.stack([bx, by, bz], axis=-1) * u.G
         # compute energies
         b_energy = energy(b)['energy']
@@ -50,13 +53,15 @@ class _Loader:
                 'total_free_energy[erg]': total_free_energy.to_value(u.erg),
                 'profile_energy[erg/cm]': profile_energy.to_value(u.erg / u.cm),
                 'profile_free_energy[erg/cm]': profile_free_energy.to_value(u.erg / u.cm),
-                'scale[cm/pix]': scale[2].to_value(u.cm / u.pix)}
+                'scale[cm/pix]': scale[2].to_value(u.cm / u.pix),
+                'min_height[pix]': min_height_pix, 'tau': self.tau, 'tau_height_func': self.tau_height_func.__name__}
 
 
 def main():
     parser = argparse.ArgumentParser(description='Compute total and free magnetic energy from a MURaM snapshot.')
     parser.add_argument('--data_path', type=str, required=True, help='path to the MURaM simulation.')
     parser.add_argument('--out_path', type=str, default='.', help='output path')
+    parser.add_argument('--chunk_id', type=int, default=None, help='chunk_id for parallel processing (1-10).')
     args = parser.parse_args()
 
     out_path = args.out_path
@@ -85,6 +90,11 @@ def main():
 
     # with Pool(16) as p:
     #     for result in tqdm(p.imap(loader.load, iterations), total=len(iterations)):
+    if args.chunk_id is not None:
+        chunk_id = args.chunk_id
+        chunk_size = np.ceil(len(selected_iterations) / 10).astype(int)
+        selected_iterations = selected_iterations[chunk_id * chunk_size:(chunk_id + 1) * chunk_size]
+
     for iteration in tqdm(selected_iterations):
         result = loader.load(iteration)
         iteration = result['iteration']

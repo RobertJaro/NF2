@@ -311,6 +311,13 @@ class MURaMSnapshot():
 
         return {'B': b, 'tau': tau, 'P': p}
 
+    def get_tau_height_pix(self, tau, func=np.median, strides=16):
+        # find closest to tau
+        tau_cube = self.tau[::strides, ::strides, :]
+        pix_height = np.argmin(np.abs(tau_cube - tau), axis=2)
+        pix_height = func(pix_height, axis=(0, 1)).astype(int)
+        return pix_height
+
 
 def read_muram_slice(filepath):
     data = np.fromfile(filepath, dtype=np.float32)
@@ -321,7 +328,7 @@ def read_muram_slice(filepath):
     return slice, Nvar, shape, time
 
 
-class MURaMSimulation():
+class MURaMSimulation:
 
     def __init__(self, source_path):
         files = sorted(glob.glob(os.path.join(source_path, 'Header.*')))
@@ -342,7 +349,7 @@ class MURaMSimulation():
     def ds(self):
         return list(self.snapshots.values())[0].ds
 
-    def load_tau(self, tau=0.1, keys=('Bx', 'By', 'Bz', 'vz'), spatial_strides=1):
+    def load_tau(self, tau=0.1, keys=('Bx', 'By', 'Bz'), spatial_strides=1):
         pix_height = self.get_average_height(tau)
         data = {k: [getattr(s, k)[::spatial_strides, ::spatial_strides, pix_height]
                     for s in self.snapshots.values()] for k in keys}
@@ -356,14 +363,6 @@ class MURaMSimulation():
         tau_cube = ref_snapshot.tau[::64, ::64, :]
         pix_height = np.argmin(np.abs(tau_cube - tau), axis=2)
         pix_height = np.mean(pix_height, axis=(0, 1)).astype(int)
-        return pix_height
-
-    def get_min_height(self, tau):
-        ref_snapshot = list(self.snapshots.values())[0]
-        # find closest to tau = .1
-        tau_cube = ref_snapshot.tau[::64, ::64, :]
-        pix_height = np.argmin(np.abs(tau_cube - tau), axis=2)
-        pix_height = np.min(pix_height, axis=(0, 1)).astype(int)
         return pix_height
 
     def get_snapshot(self, time):
