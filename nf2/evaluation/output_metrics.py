@@ -4,7 +4,7 @@ from astropy.nddata import block_reduce
 from tqdm import tqdm
 
 from nf2.data.util import cartesian_to_spherical
-from nf2.evaluation.energy import get_free_mag_energy
+from nf2.evaluation.energy import get_free_mag_energy, get_free_mag_energy_fft
 from nf2.train.model import calculate_current_from_jacobian
 
 
@@ -111,6 +111,9 @@ def free_energy(b, **kwargs):
     free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
     return {'free_energy': free_energy}
 
+def free_energy_fft(b, **kwargs):
+    free_energy = get_free_mag_energy_fft(b.to_value(u.G)) * u.erg * u.cm ** -3
+    return {'free_energy': free_energy}
 
 def squashing_factor(b, interp_ratio = 3, x_range=None, y_range=None, z_range=None, **kwargs):
     # local imports for optional dependency
@@ -329,6 +332,7 @@ metric_mapping = {
     'magnetic_helicity': magnetic_helicity,
     'los_trv_azi': los_trv_azi,
     'free_energy': free_energy,
+    'free_energy_fft': free_energy_fft,
     'energy': energy,
     'squashing_factor': squashing_factor
 }

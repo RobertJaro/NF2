@@ -140,20 +140,9 @@ def get_fft_potential_field(Bz0, Nz, scale=1, alpha=0):
 
     fftBz0 = np.fft.fft2(Bz0)
 
-    kx = np.zeros([Nx])
-    ky = np.zeros([Ny])
-
-    kx[0:Nx // 2] = np.arange(Nx // 2) / Nx
-    kx[Nx // 2:Nx] = np.arange(Nx // 2) / Nx - 0.5
-
-    kx = np.array([kx[:], ] * Ny).transpose()
-    kx *= 2 * np.pi
-
-    ky[0:Ny // 2] = np.arange(Ny // 2) / Ny
-    ky[Ny // 2:] = np.arange(Ny // 2) / Ny - 0.5
-
-    ky = np.array([ky[:], ] * Nx)
-    ky *= 2 * np.pi
+    # Use FFT-native frequency bins so odd/even sizes are handled correctly.
+    kx = (2 * np.pi) * np.fft.fftfreq(Nx)[:, None]
+    ky = (2 * np.pi) * np.fft.fftfreq(Ny)[None, :]
 
     k2 = kx * kx + ky * ky
     w2 = k2 - alpha ** 2
@@ -164,12 +153,13 @@ def get_fft_potential_field(Bz0, Nz, scale=1, alpha=0):
     HyB = np.zeros([Nx, Ny], dtype=complex)
     HzB = np.ones([Nx, Ny], dtype=complex)
 
-    HxB[np.where(k2 != 0)] = -1j * kx[np.where(k2 != 0)] * wabs[np.where(k2 != 0)] / k2[
-        np.where(k2 != 0)] + 1j * alpha * ky[np.where(k2 != 0)] / k2[np.where(k2 != 0)]
+    mask = k2 != 0
+    kx_full = np.broadcast_to(kx, (Nx, Ny))
+    ky_full = np.broadcast_to(ky, (Nx, Ny))
+    HxB[mask] = -1j * kx_full[mask] * wabs[mask] / k2[mask] + 1j * alpha * ky_full[mask] / k2[mask]
     HxB[0, 0] = -1j
 
-    HyB[np.where(k2 != 0)] = -1j * ky[np.where(k2 != 0)] * wabs[np.where(k2 != 0)] / k2[
-        np.where(k2 != 0)] - 1j * alpha * kx[np.where(k2 != 0)] / k2[np.where(k2 != 0)]
+    HyB[mask] = -1j * ky_full[mask] * wabs[mask] / k2[mask] - 1j * alpha * kx_full[mask] / k2[mask]
     HyB[0, 0] = -1j
 
     Bx_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
