@@ -211,10 +211,9 @@ class MURaMSnapshot():
     def v(self):
         return np.stack([self.vx, self.vy, self.vz], axis=-1)
 
-    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1, method='mean'):
+    def load_cube(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, target_tau=1, method='median'):
         b = self.B
         tau = self.tau
-        p = self.P
 
         # integer division
         assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
@@ -226,7 +225,6 @@ class MURaMSnapshot():
 
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
-        p = block_reduce(p, (x_binning, y_binning, z_binning), np.mean)
 
         pix_height = np.argmin(np.abs(tau - target_tau), axis=2) * u.pix
         if method == 'mean':
@@ -244,9 +242,8 @@ class MURaMSnapshot():
         max_height = min_height + int((height / resolution).to_value(u.pix))
         b = b[:, :, min_height:max_height]
         tau = tau[:, :, min_height:max_height]
-        p = p[:, :, min_height:max_height]
 
-        return {'B': b, 'tau': tau, 'P': p}
+        return {'B': b, 'tau': tau}
 
     def load_tau(self, target_tau, **kwargs):
         tau = self.tau
@@ -290,7 +287,6 @@ class MURaMSnapshot():
     def load_base(self, resolution=0.192 * u.Mm / u.pix, height=100 * u.Mm, base_height=180):
         b = self.B[:, :, base_height:]
         tau = self.tau[:, :, base_height:]
-        p = self.P[:, :, base_height:]
 
         # integer division
         assert resolution % self.ds[0] == 0, f'resolution {resolution} must be a multiple of {self.ds[0]}'
@@ -302,14 +298,12 @@ class MURaMSnapshot():
 
         b = block_reduce(b, (x_binning, y_binning, z_binning, 1), np.mean)
         tau = block_reduce(tau, (x_binning, y_binning, z_binning), np.mean)
-        p = block_reduce(p, (x_binning, y_binning, z_binning), np.mean)
 
         max_height = int((height / resolution).to_value(u.pix))
         b = b[:, :, :max_height]
         tau = tau[:, :, :max_height]
-        p = p[:, :, :max_height]
 
-        return {'B': b, 'tau': tau, 'P': p}
+        return {'B': b, 'tau': tau}
 
     def get_tau_height_pix(self, tau, func=np.median, strides=16):
         # find closest to tau

@@ -120,9 +120,9 @@ class CartesianOutput(BaseOutput):
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
-        n_x_pix = np.round((x_max - x_min) / ds_per_pixel).astype(int) + 1
-        n_y_pix = np.round((y_max - y_min) / ds_per_pixel).astype(int) + 1
-        n_z_pix = np.round((z_max - z_min) / ds_per_pixel).astype(int) + 1
+        n_x_pix = np.round((x_max - x_min) / ds_per_pixel).astype(int)
+        n_y_pix = np.round((y_max - y_min) / ds_per_pixel).astype(int)
+        n_z_pix = np.round((z_max - z_min) / ds_per_pixel).astype(int)
 
         coords = np.stack(np.mgrid[:n_x_pix, :n_y_pix, :n_z_pix], -1)
         coords = coords * ds_per_pixel + np.array([x_min, y_min, z_min]).reshape((1, 1, 1, 3))
@@ -252,7 +252,7 @@ class HeightTransformOutput(CartesianOutput):
         self.height_mapping_list = self.state['data']['height_mapping']
         self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
 
-    def load_height_mapping(self, **kwargs):
+    def load_height_mapping(self, Mm_per_pixel=None, **kwargs):
         mapping_out = []
         for coord_range, height_mapping, ds_per_pixel in zip(self.coord_range_list, self.height_mapping_list,
                                                              self.ds_per_pixel_list):
@@ -262,7 +262,7 @@ class HeightTransformOutput(CartesianOutput):
             y_min, y_max = coord_range[1]
             z = height_mapping['z'] / self.Mm_per_ds
 
-            pixel_per_ds = 1 / ds_per_pixel
+            pixel_per_ds = self.Mm_per_ds / Mm_per_pixel if Mm_per_pixel is not None else 1 / ds_per_pixel
             coords = np.stack(
                 np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
                             np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds)),

@@ -17,10 +17,15 @@ def main():
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (needs to be a multiple of 0.192)',
                         required=False, default=0.192 * 4)
     parser.add_argument('--height', type=float, help='height of the snapshot', required=False, default=100)
+    parser.add_argument('--target_tau', type=float, help='target optical depth', required=False, default=1.0)
+    parser.add_argument('--method', type=str, help='base height selection method', required=False, default='min')
     args = parser.parse_args()
 
     snapshot = MURaMSnapshot(args.source_path, args.iteration)
-    muram_cube = snapshot.load_cube(args.Mm_per_pixel * u.Mm / u.pix, target_tau=1.0e-4, height=args.height * u.Mm)
+    muram_cube = snapshot.load_cube(args.Mm_per_pixel * u.Mm / u.pix,
+                                    target_tau=args.target_tau,
+                                    height=args.height * u.Mm,
+                                    method=args.method)
     b = muram_cube['B']
     j = curl(b) * u.G / (args.Mm_per_pixel * u.Mm) * const.c / (4 * np.pi)  # Mm_per_pixel
     j = j.to(u.G / u.s)
