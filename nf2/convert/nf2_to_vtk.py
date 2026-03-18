@@ -23,7 +23,7 @@ class _SaveFileTask(Thread):
 
         vectors['b'] = self.output['b']
 
-        save_vtk(self.out_path, vectors=vectors, scalars=scalars, Mm_per_pix=Mm_per_pixel)
+        save_vtk(self.out_path, coords=self.output['coords'], vectors=vectors, scalars=scalars, Mm_per_pix=Mm_per_pixel)
 
 
 def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, metrics=None, x_range=None, y_range=None, **kwargs):
