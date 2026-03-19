@@ -14,7 +14,7 @@ from nf2.potential.potential_field import get_fft_potential_field
 
 class _Loader:
 
-    def __init__(self, simulation, tau=0.1, max_height=50 * u.Mm, tau_height_func=np.median):
+    def __init__(self, simulation, tau=0.1, max_height=50 * u.Mm, tau_height_func=np.min):
         self.simulation = simulation
         self.max_height = max_height
         self.tau = tau

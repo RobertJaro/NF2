@@ -6,7 +6,7 @@ logging:
   name: "6173 multi-height"
 data:
   type: fits
-  slices:
+  train_configs:
     - type: fits
       Mm_per_pixel: 0.36
       fits_path:

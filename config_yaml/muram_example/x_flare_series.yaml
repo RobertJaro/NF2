@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/muram_example/series_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/series_v01"
+base_path: "/glade/work/rjarolim/nf2/muram_example/series_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/series_v02"
 meta_path: "/glade/work/rjarolim/nf2/muram_example/x_flare_v01/last.ckpt"
 
 logging:
@@ -25,7 +25,7 @@ model:
   encoding_config: { type: gaussian }
 
 training:
-  check_val_every_n_epoch: 5
+  check_val_every_n_epoch: 1
 
 loss:
   - type: boundary

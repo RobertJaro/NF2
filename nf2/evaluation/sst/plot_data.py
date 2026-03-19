@@ -6,15 +6,15 @@ from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 
-out_path = '/glade/work/rjarolim/nf2/sst/evaluation'
+out_path = '/glade/work/rjarolim/nf2/topology/results'
 os.makedirs(out_path, exist_ok=True)
 
-wl_keys = ['6173_StkIQUV_rebin', '7699_StkIQUV_rebin_v2', '8542_StkIQUV_rebin']
+wl_keys = ['6173_StkIQUV_rebin', '8542_StkIQUV_rebin']
 
-los_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_{i}.fits' for i in wl_keys]
-trv_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_{i}.fits' for i in wl_keys]
-azi_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_{i}.fits' for i in wl_keys]
-mask = fits.getdata('/glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits')
+los_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BLOS_panorama1050_{i}.fits' for i in wl_keys]
+trv_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BTRV_panorama1050_{i}.fits' for i in wl_keys]
+azi_files = [f'/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/BAZI_panorama1050_{i}.fits' for i in wl_keys]
+mask = fits.getdata('/glade/work/rjarolim/data/SST/campaign_2023_1050_converted/mask.fits')
 
 fig, axs = plt.subplots(len(wl_keys), 4, figsize=(13, 6))
 
@@ -63,7 +63,7 @@ for i in range(len(labels)):
     ax.set_ylim(0, 1.5e5)
 
 plt.tight_layout()
-plt.savefig(os.path.join(out_path, 'sst_data_overview.png'))
+plt.savefig(os.path.join(out_path, 'sst_data_overview_1050.png'))
 plt.show()
 
 ########################################################################################################################
@@ -94,6 +94,6 @@ for ax in axs:
     ax.set_aspect('equal')
 
 plt.tight_layout()
-plt.savefig(os.path.join(out_path, 'sst_scatter.png'))
+plt.savefig(os.path.join(out_path, 'sst_scatter_1050.png'))
 plt.close()
 

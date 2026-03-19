@@ -240,7 +240,7 @@ class AziBoundaryLoss(BaseLoss):
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
-    def __init__(self, ambiguous=False, los_weight=0.9, **kwargs):
+    def __init__(self, ambiguous=False, los_weight=0.7, **kwargs):
         super().__init__(**kwargs)
         self.ambiguous = ambiguous
         assert los_weight >= 0 and los_weight <= 1, 'los_weight must be between 0 and 1'

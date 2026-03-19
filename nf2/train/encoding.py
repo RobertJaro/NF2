@@ -2,6 +2,7 @@ from typing import Iterable
 
 import torch
 from torch import nn
+from torch.distributions import Normal
 
 from nf2.train.layers import SirenLayer
 
@@ -30,7 +31,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         encoded_coordinates = []
         for i, frequencies in enumerate(self.frequencies):
-            encoded = x[:, None, i:i+1] * torch.pi * frequencies
+            encoded = x[:, None, i:i + 1] * torch.pi * frequencies
             encoded = encoded.reshape(x.shape[0], -1)
             encoded = torch.cat([torch.sin(encoded), torch.cos(encoded)], -1)
             encoded_coordinates.append(encoded)
@@ -66,3 +67,39 @@ class MultispectralEncoding(nn.Module):
 
         encoded = torch.cat(encoded_coordinates, -1)
         return encoded
+
+
+class GaussianPositionalEncoding(nn.Module):
+
+    def __init__(self, d_input, num_freqs=64, scale=2.0 ** 1):
+        super().__init__()
+        dist = Normal(loc=0, scale=scale)
+        frequencies = dist.sample([num_freqs, d_input])
+        self.frequencies = nn.Parameter(2 * torch.pi * frequencies, requires_grad=False)
+        self.d_output = d_input * (num_freqs * 2 + 1)
+
+    def forward(self, x):
+        encoded = torch.einsum('...j,ij->...ij', x, self.frequencies)
+        encoded = encoded.reshape(*x.shape[:-1], -1)
+        encoded = torch.cat([x, torch.sin(encoded), torch.cos(encoded)], -1)
+        return encoded
+
+
+class PeriodicEncoding(nn.Module):
+
+    def __init__(self, d_input, coord_range, ds_per_pixel):
+        super().__init__()
+        coord_range[..., 1] = coord_range[..., 1] + ds_per_pixel  # add one pixel --> [0, 2pi] = [0, n_pix + 1]
+        self.coord_range = nn.Parameter(torch.tensor(coord_range, dtype=torch.float32), requires_grad=False)
+        self.d_output = d_input + 2
+
+    def forward(self, coord):
+        scaled_x = (coord[..., 0:1] - self.coord_range[0, 0]) / (
+                self.coord_range[0, 1] - self.coord_range[0, 0]) * 2 * torch.pi
+        scaled_y = (coord[..., 1:2] - self.coord_range[1, 0]) / (
+                self.coord_range[1, 1] - self.coord_range[1, 0]) * 2 * torch.pi
+        encoded_coord = torch.cat([
+            torch.sin(scaled_x), torch.cos(scaled_x),
+            torch.sin(scaled_y), torch.cos(scaled_y),
+            coord[..., 2:]], -1)
+        return encoded_coord

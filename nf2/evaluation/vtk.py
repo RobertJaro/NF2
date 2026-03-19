@@ -21,6 +21,9 @@ def save_vtk(path, coords=None, vectors={}, scalars={}, Mm_per_pix=720e-3):
     if coords is None:
         # Generate the grid
         pts = np.stack(np.mgrid[0:dim[0], 0:dim[1], 0:dim[2]], -1).astype(np.int64) * Mm_per_pix
+        # center points
+        pts[..., 0] -= dim[0] * Mm_per_pix / 2
+        pts[..., 1] -= dim[1] * Mm_per_pix / 2
         # reorder the points and vectors in agreement with VTK
         pts = pts.transpose(2, 1, 0, 3)
         pts = pts.reshape((-1, 3))

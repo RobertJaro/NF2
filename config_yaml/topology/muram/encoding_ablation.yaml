@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/encoding_ablation/encoding_{scale}_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/encoding_{scale}_v02"
+base_path: "/glade/work/rjarolim/nf2/topology/encoding_ablation/encoding_<<scale>>_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/encoding_<<scale>>_v01"
 logging:
   project: topology-ablation
-  name: Encoding - scale {scale}
+  name: Encoding - scale <<scale>>
 data:
   type: cartesian
   train_configs:

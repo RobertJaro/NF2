@@ -9,6 +9,6 @@ def load_yaml_config(yaml_config_file, overwrite_args=None):
     with open(yaml_config_file) as f:
         config_str = f.read()
     for overwrite_key, overwrite_value in overwrite_args.items():
-        config_str = config_str.replace('{%s}' % overwrite_key, overwrite_value)
+        config_str = config_str.replace('<<%s>>' % overwrite_key, overwrite_value)
     config = yaml.safe_load(config_str)
     return config

@@ -43,7 +43,7 @@ data:
   random_config: { type: height }
   num_workers: 16
   iterations: 10000
-  z_range: [ 0, 50 ]
+  z_range: [ 0, 100 ]
 
 model:
   type: vector_potential
@@ -69,7 +69,7 @@ loss:
     ds_id: [ random ]
   - type: potential
     name: potential
-    lambda: { type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    lambda: { type: step, steps: 5.0e+3, start: 1.0e-4, end: 0.0 }
     ds_id: [ random ]
   - type: height
     name: height

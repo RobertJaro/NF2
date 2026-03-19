@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/topology/muram_sma_2slices_ambiguous_v01"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_2slices_ambiguous_v01"
+base_path: "/glade/work/rjarolim/nf2/topology/muram_sma_2slices_ambiguous_ff<<force_free>>_v01"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/muram_sma_2slices_ambiguous_ff<<force_free>>_v01"
 logging:
   project: topology
-  name: MURAM SMA - tau1 + tau1e-6 - ambiguous
+  name: MURAM SMA - tau1 + tau1e-6 - ambiguous - ff <<force_free>>
 data:
   type: cartesian
   train_configs:
@@ -43,11 +43,11 @@ loss:
     ds_id: potential
   - type: force_free
     name: force_free
-    lambda: 1.0e-4
+    lambda: <<force_free>>
     ds_id: [ random ]
   - type: potential
     name: potential
-    lambda: {type: step, steps: 5.0e+3, start: 1.0e-5, end: 0.0 }
+    lambda: {type: step, steps: 5.0e+3, start: 1.0e-4, end: 0.0 }
     ds_id: [ random ]
   - type: height
     name: height

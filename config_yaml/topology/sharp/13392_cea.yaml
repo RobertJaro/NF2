@@ -55,7 +55,6 @@ callbacks:
   - type: boundary
     name: boundary-sharp
     ds_id: sharp
-    weights: [0.1, 0.1, 0.9]
   # Cube evaluation
   - type: metrics
     name: metrics
