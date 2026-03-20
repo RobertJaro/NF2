@@ -12,6 +12,7 @@ from sunpy.map import Map
 
 from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset, RandomHeightCoordinateDataset
 from nf2.data.loader import load_potential_field_boundary
+from nf2.loader.analytical import AnalyticalDataset
 from nf2.loader.base import TensorsDataset, BaseDataModule, MapDataset
 from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
 
@@ -148,13 +149,16 @@ class CartesianDataModule(BaseDataModule):
             return MURaMCubeDataset(**kwargs)
         elif type == 'muram_pressure':
             return MURaMPressureDataset(**kwargs)
+        elif type == 'analytical':
+            return AnalyticalDataset(**kwargs)
         elif type == 'slices':
             return SlicesDataset(**kwargs)
         elif type == 'cube':
             return CubeDataset(**kwargs)
         else:
             raise ValueError(f'Unknown boundary type: {type}. Supported types: '
-                             f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
+                             f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muram_cube, '
+                             f'muram_pressure, analytical, slices, cube')
 
     def _load_ds_config(self, config):
         """
@@ -438,12 +442,17 @@ class CartesianSeriesDataModule(LightningDataModule):
 def _load_config(config):
     config = deepcopy(config)
     c_type = config['type']
-    if c_type == 'fits':
+    if c_type in {'fits', 'cartesian', 'sharp'}:
         data_path = config.pop('data_path')
         fits_paths, error_paths = _load_paths(data_path)
         ids = [os.path.basename(fp['Br']).split('.')[-3] for fp in fits_paths]
-        configs = [{**config, 'id': id, 'data_path': {**fp, **ep}}
-                   for id, fp, ep in zip(ids, fits_paths, error_paths)]
+        dataset_type = 'sharp' if c_type == 'sharp' else 'fits'
+        if error_paths is None:
+            configs = [{**config, 'type': dataset_type, 'id': id, 'fits_path': fp}
+                       for id, fp in zip(ids, fits_paths)]
+        else:
+            configs = [{**config, 'type': dataset_type, 'id': id, 'fits_path': fp, 'error_path': ep}
+                       for id, fp, ep in zip(ids, fits_paths, error_paths)]
     elif c_type == 'muram_slice':
         data_path = config.pop('data_path')
         slices = sorted(glob.glob(data_path))

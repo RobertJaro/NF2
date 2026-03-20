@@ -1,0 +1,46 @@
+run:
+  mode: series
+  geometry: cartesian
+  output_dir: /glade/work/rjarolim/nf2/sharp/13229/series_VP
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/13229_series_VP
+  resume_from: /glade/work/rjarolim/nf2/sharp/13229/init_VP/last.ckpt
+logging:
+  project: AR 13229
+  name: series VP
+data:
+  parameters:
+    num_workers: 8
+    iterations: 5000.0
+    z_range:
+    - 0
+    - 200
+  train: []
+  validation: []
+  sequence:
+    frames:
+      type: fits
+      data_path:
+      - Bp: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Bp.fits
+        Br: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Br.fits
+        Bt: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Bt.fits
+        Bp_err: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Bp_err.fits
+        Br_err: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Br_err.fits
+        Bt_err: /glade/campaign/hao/radmhd/rjarolim/AR13229/sharps/13229_large/*Bt_err.fits
+model:
+  type: vector_potential
+  dim: 256
+training:
+  check_val_every_n_epoch: 5
+losses:
+- type: boundary
+  name: boundary
+  lambda: 1
+  ds_id: boundary_01
+- type: boundary
+  name: potential
+  lambda: 10
+  ds_id: potential
+- type: force_free
+  lambda: 0.1
+- type: divergence
+  lambda: 0.1

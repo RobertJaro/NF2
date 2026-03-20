@@ -1,228 +1,140 @@
 # Neural Network Force-Free magnetic field extrapolation - NF2
-<img src="https://github.com/RobertJaro/NF2/blob/main/images/logo.jpg" width="150" height="150">
 
-# [Usage](#usage) --- [Paper](#paper) --- [Data](#data)
+NF2 is a framework for neural magnetic-field extrapolation with separate cartesian and spherical geometry implementations sharing one execution, configuration, and export surface.
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/notebooks/NF2_SHARP_extrapolation.ipynb)
+## Status
 
+The repository is mid-refactor and now uses:
 
-## Abstract
-
-While the photospheric magnetic field of our Sun is routinely measured, its extent into the upper atmosphere remains elusive.
-We present a novel approach for coronal magnetic field extrapolation, using a neural network that integrates observational data and the physical force-free magnetic field model. 
-Our method flexibly finds a trade-off between the observation and force-free magnetic field assumption, improving the understanding of the connection between the observation and the underlying physics.
-We utilize meta-learning concepts to simulate the evolution of active region NOAA 11158. Our simulation of 5 days of observations at full cadence, requires less than 13 hours of total computation time, enabling real-time force-free magnetic field extrapolations. 
-A systematic comparison of the time evolution of free magnetic energy and magnetic helicity in the coronal volume, as well as comparison to EUV observations demonstrates the validity of our approach. The obtained temporal and spatial depletion of free magnetic energy unambiguously relates to the observed flare activity.
-
-## Usage
-
-NF2 can be used as framework to download SHARP data, perform extrapolations and to verify the results. 
-The colab notebook provides a basic example that can be adjusted for arbitrary active regions.
-For local usage configuration files can be used to perform extrapolations of single active regions or series.
+- a shared execution layer in `nf2/core`
+- canonical YAML configs in `config/`
+- shared geometry adapters in `nf2/geometry`
+- shared output/export layers in `nf2/output` and `nf2/export`
 
 ## Installation
 
-Use pip to install the NF2 package.
-```
+```bash
 pip install nf2
 ```
 
-For the latest version use the following command.
-```
-pip install git+https://github.com/RobertJaro/NF2@v0.3.0
-```
+For local development:
 
-Make sure that PyTorch is installed if you use a GPU environment. Run in python console:
-```python
-import torch
-    
-print('PyTorch version:', torch.__version__)
-print('GPU available:', torch.cuda.is_available())
-print('Number of GPUs:', torch.cuda.device_count())
+```bash
+pip install -e .
 ```
 
-## Scripts (command line)
+PyTorch must be installed in the target runtime environment.
 
-NF2 runs can be configured through yaml files.
-The method can be used for single active regions or time series.
+## Main Commands
 
-### Data download
-
-NF2 provides direct data download of SHARP data from JSOC.
-
-Download of single SHARP region:
-```
-nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00
+```bash
+nf2-extrapolate --config /path/to/config.yaml
+nf2-extrapolate-analytic --config config/analytical/case1.yaml
+nf2-extrapolate-series --config /path/to/series.yaml
+nf2-export --checkpoint /path/to/result.nf2 --format vtk
 ```
 
-Download of SHARP series:
-```
-nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00 --t_end 2011-02-16T00:00:00
-```
+Analytical Low and Lou examples are available in:
 
-To use near real-time data add `--series sharp_cea_720s_nrt`
+- `config/analytical/case1.yaml`
+- `config/analytical/case2.yaml`
+- `notebooks/01_Quickstart_Analytical_Extrapolation.ipynb`
 
-### AR - Extrapolation
-The code provides NLFF extrapolations where a trade-off between the observation and the force-free magnetic field assumption is found. The weighting is controlled through the lambda parameters in the configuration file. Increase the force-free lambda to enforce the force-free magnetic field assumption. If solutions closer to the observation are desired, decrease the force-free lambda.
+User quickstarts are ordered for click-and-go runs:
 
-Basic example for NOAA AR 11158 (377.yaml):
+- `notebooks/01_Quickstart_Analytical_Extrapolation.ipynb`
+- `notebooks/02_Quickstart_SHARP_By_Date.ipynb`
+- `notebooks/03_Quickstart_Spherical_By_Date.ipynb`
+
+Supported export formats:
+
+- `vtk`
+- `hdf5`
+- `fits`
+- `npz`
+- `binary`
+
+## Config Shape
+
+NF2 now uses a canonical config schema:
+
 ```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
+run:
+  mode: single
+  geometry: cartesian
+  output_dir: /path/to/results
+  work_dir: /path/to/work
+
 logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "SHARP 377"
+  project: nf2
+  name: demo
+
 data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
-      error_path: # optional
-        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
-model:
-  type: b
-  dim: 256
-training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-    - type: divergence
-      lambda: 1.0e-1
-```
-The training can be started with the following command and requires about 1 hour on a single V100 GPU.
-```
-nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377.yaml
-```
+  parameters:
+    iterations: 10000
+    num_workers: 8
+  train:
+    - type: fits
+      fits_path:
+        Br: /path/to/Br.fits
+        Bt: /path/to/Bt.fits
+        Bp: /path/to/Bp.fits
+  validation:
+    - type: cube
+      ds_id: cube
 
-### AR - Divergence free
-
-To enforce a divergence free magnetic field, the magnetic field can be computed through a vector potential.
-For this we specify the model type as vector_potential and remove the divergence loss term. The divergence free condition can be kept for monitoring but should be close to zero. 
-Extrapolations that use the vector potential will require more computational resources and training time since the optimization is performed through second order derivatives.
-
-Example for a divergence-free extrapolation of NOAA AR 11158 (377_vp.yaml):
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "SHARP 377 - VP"
-data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
-      error_path: # optional
-        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
 model:
   type: vector_potential
   dim: 256
+
 training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
+  epochs: 20
+
+losses:
+  - type: force_free
+    lambda: 0.1
 ```
 
+Series configs add:
+
+- `run.mode: series`
+- `run.resume_from`
+- `data.sequence`
+
+## Documentation
+
+Primary docs are being built in `docs/`.
+
+Start with:
+
+- `docs/installation.md`
+- `docs/configuration.md`
+- `docs/training.md`
+- `docs/export.md`
+- `docs/architecture.md`
+
+Local docs build:
+
+```bash
+pip install -r docs/requirements.txt
+make docs
 ```
-nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377_vp.yaml
+
+Local preview:
+
+```bash
+make docs-serve
 ```
 
-### Time series
+Read the Docs hosting:
 
-For the extrapolations of time series we can use the model weights of the previous time step. A single time step can then be performed in a few minutes.
-For this we also create a configuration that specifies our data set.
-
-Example for the time series of NOAA 13664 (related to the May 2024 geomagnetic storm; SHARP 11149).
-
-(initial frame - 13664.yaml)
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>/init"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "NOAA 13664 - init"
-data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp.fits"
-      error_path:
-        Br_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
-model:
-  type: vector_potential
-  dim: 256
-training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-```
-(series - 13664_series.yaml)
-
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>/series"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-meta_path: "<<PATH TO SAVE THE RESULTS>>/init/last.ckpt"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "NOAA 13664 - series"
-data:
-  type: sharp
-  data_path: "<<ABSOLUTE PATH TO DATA>>"
-  num_workers: 8
-  iterations: 2.0e+3
-model:
-  type: vector_potential
-  dim: 256
-training:
-  check_val_every_n_epoch: 5 # validation plots in 1h steps
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: 1
-      ds_id: [boundary_01, potential]
-    - type: force_free
+- repository config: [`.readthedocs.yml`](/Users/rjarolim/PycharmProjects/NF2/.readthedocs.yml)
+- docs dependencies: [`docs/requirements.txt`](/Users/rjarolim/PycharmProjects/NF2/docs/requirements.txt)
       lambda: 1.0e-1
 ```
 
 Run initial extrapolation and series extrapolation:
-``` 
+```
 nf2-extrapolate --config <<your path>>/13664.yaml
 nf2-extrapolate-series --config <<your path>>/13664_series.yaml
 ```
@@ -299,5 +211,3 @@ Korsós, M.B., Jarolim, R., Erdélyi, R., Veronig, A.M., Morgan, H. and Zuccarel
 All our simulation results are publicly available (parameter variation, time series, 66 individual active regions).
 
 http://kanzelhohe.uni-graz.at/nf2/
-
-

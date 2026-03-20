@@ -1,0 +1,78 @@
+run:
+  mode: single
+  geometry: cartesian
+  output_dir: /glade/work/rjarolim/nf2/topology/13392_0851_1slices_ff<<force_free>>_v01
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/13392_0851_1slices_ff<<force_free>>_v01
+logging:
+  project: topology
+  name: 13392 SST 08:51 - - 6173
+data:
+  parameters:
+    random_config:
+      type: height
+    num_workers: 16
+    iterations: 10000
+    z_range:
+    - 0
+    - 100
+  train:
+  - type: los_trv_azi
+    ds_id: 6173
+    Mm_per_pixel: 0.09
+    fits_path:
+      B_los: /glade/work/rjarolim/data/SST/campaign_2023_v2/BLOS_panorama0851_6173_StkIQUV_rebin.fits
+      B_trv: /glade/work/rjarolim/data/SST/campaign_2023_v2/BTRV_panorama0851_6173_StkIQUV_rebin.fits
+      B_azi: /glade/work/rjarolim/data/SST/campaign_2023_v2/BAZI_panorama0851_6173_StkIQUV_rebin.fits
+    mask_config:
+      path: /glade/work/rjarolim/data/SST/campaign_2023_v2/mask.fits
+      value: 0.0
+    load_map: false
+    ambiguous_azimuth: true
+  validation: []
+model:
+  type: vector_potential
+  dim: 256
+  encoding_config:
+    type: gaussian
+training:
+  epochs: 30
+losses:
+- type: boundary_los_trv_azi
+  name: boundary
+  lambda: 1.0
+  ds_id:
+  - 6173
+  ambiguous: true
+- type: boundary
+  name: potential_boundary
+  lambda: 10.0
+  ds_id: potential
+- type: force_free
+  name: force_free
+  lambda: <<force_free>>
+  ds_id:
+  - random
+- type: potential
+  name: potential
+  lambda:
+    type: step
+    steps: 5000.0
+    start: 0.0001
+    end: 0.0
+  ds_id:
+  - random
+callbacks:
+- type: los_trv_azi_boundary
+  name: boundary-6173
+  ds_id: 6173
+- type: metrics
+  name: metrics
+  ds_id: cube
+- type: slices
+  ds_id: slices
+loss_scaling:
+- type: b_height
+  name: b_height
+  loss_ids:
+  - force_free
+  - potential

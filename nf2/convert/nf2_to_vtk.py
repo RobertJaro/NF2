@@ -1,43 +1,20 @@
 import argparse
-import os.path
-from threading import Thread
 
-from nf2.evaluation.output import CartesianOutput
-from nf2.evaluation.vtk import save_vtk
-
-
-class _SaveFileTask(Thread):
-
-    def __init__(self, out_path, output, metrics):
-        super().__init__()
-        self.out_path = out_path
-        self.output = output
-        self.metrics = metrics if metrics is not None else []
-
-    def run(self):
-        Mm_per_pixel = self.output['Mm_per_pixel']
-
-        # split output into vectors and scalars
-        vectors = {k: v for k, v in self.output['metrics'].items() if len(v.shape) == 4 and v.shape[-1] == 3}
-        scalars = {k: v for k, v in self.output['metrics'].items() if len(v.shape) == 3}
-
-        vectors['b'] = self.output['b']
-
-        save_vtk(self.out_path, coords=self.output['coords'], vectors=vectors, scalars=scalars, Mm_per_pix=Mm_per_pixel)
+from nf2.export.core import export_checkpoint
 
 
 def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, metrics=None, x_range=None, y_range=None, **kwargs):
-    out_path = out_path if out_path is not None \
-        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.vtk')
-
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    nf2_out = CartesianOutput(nf2_path)
-    output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, metrics=metrics,
-                               height_range=height_range, x_range=x_range, y_range=y_range, **kwargs)
-
-    # save file in background
-    task = _SaveFileTask(out_path, output, metrics)
-    task.start()
+    return export_checkpoint(
+        nf2_path,
+        "vtk",
+        out_path=out_path,
+        Mm_per_pixel=Mm_per_pixel,
+        height_range=height_range,
+        metrics=metrics,
+        x_range=x_range,
+        y_range=y_range,
+        **kwargs,
+    )
 
 
 def main():
@@ -52,14 +29,7 @@ def main():
     parser.add_argument('--metrics', type=str, nargs='*', help='metrics to be computed', required=False, default=['j'])
 
     args = parser.parse_args()
-    nf2_path = args.nf2_path
-
-    Mm_per_pixel = args.Mm_per_pixel
-    out_path = args.out_path
-    height_range = args.height_range
-    metrics = args.metrics
-
-    convert(nf2_path, out_path, Mm_per_pixel, height_range, metrics=metrics, progress=True,
+    convert(args.nf2_path, args.out_path, args.Mm_per_pixel, args.height_range, metrics=args.metrics, progress=True,
             x_range=args.x_range, y_range=args.y_range)
 
 

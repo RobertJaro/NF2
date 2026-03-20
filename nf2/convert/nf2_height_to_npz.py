@@ -9,7 +9,7 @@ from nf2.evaluation.output import HeightTransformOutput
 
 def convert(nf2_path, out_path=None, Mm_per_pixel=None, **kwargs):
     out_path = out_path if out_path is not None \
-        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.npy')
+        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.pkl')
 
     nf2_out = HeightTransformOutput(nf2_path)
     output = nf2_out.load_height_mapping(Mm_per_pixel=Mm_per_pixel)
@@ -20,7 +20,7 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, **kwargs):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
+    parser = argparse.ArgumentParser(description='Convert NF2 height mappings to PKL.')
     parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
     parser.add_argument('--out_path', type=str, help='path to the target PKL file', required=False, default=None)
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False,
@@ -32,9 +32,10 @@ def main():
     Mm_per_pixel = args.Mm_per_pixel
     out_path = args.out_path
 
-    dirname = os.path.dirname(out_path)
-    if not os.path.exists(dirname):
-        os.makedirs(dirname, exist_ok=True)
+    if out_path is not None:
+        dirname = os.path.dirname(out_path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname, exist_ok=True)
 
     convert(nf2_path, out_path, Mm_per_pixel)
 

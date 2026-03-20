@@ -8,7 +8,8 @@ from sunpy.map import Map
 from torch import nn
 from tqdm import tqdm
 
-from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical
+from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical, \
+    latitude_to_colatitude
 from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping
@@ -383,10 +384,11 @@ class SphericalOutput(BaseOutput):
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
+        colatitude_range = sorted(latitude_to_colatitude(latitude_range.to_value(u.rad)))
         spherical_coords = np.stack(
             np.meshgrid(
                 np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), sampling[0]),
-                np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), sampling[1]),
+                np.linspace(colatitude_range[0], colatitude_range[1], sampling[1]),
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
@@ -483,7 +485,7 @@ class SphericalOutput(BaseOutput):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to(u.solRad).value,
-            spherical_coords.lat.to(u.rad).value,
+            latitude_to_colatitude(spherical_coords.lat.to(u.rad).value),
             spherical_coords.lon.to(u.rad).value,
         ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)

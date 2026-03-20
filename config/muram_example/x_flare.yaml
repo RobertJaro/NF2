@@ -1,0 +1,67 @@
+run:
+  mode: single
+  geometry: cartesian
+  output_dir: /glade/work/rjarolim/nf2/muram_example/x_flare_v01
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/x_flare_v01
+logging:
+  project: NF2-MURAM
+  name: X Flare - v01
+data:
+  parameters:
+    random_config:
+      type: height
+    num_workers: 16
+    iterations: 10000
+    z_range:
+    - 0
+    - 100
+  train:
+  - type: muram_slice
+    ds_id: tau_0.1
+    data_path: /glade/campaign/hao/radmhd/rjarolim/MURAM_X_flare/data_closed_v2/tau_slice_0.100.0000000
+  validation: []
+model:
+  type: vector_potential
+  dim: 256
+  encoding_config:
+    type: gaussian
+training:
+  epochs: 30
+losses:
+- type: boundary
+  name: boundary
+  lambda: 1.0
+  ds_id: tau_0.1
+- type: boundary
+  name: potential_boundary
+  lambda: 10.0
+  ds_id: potential
+- type: force_free
+  name: force_free
+  lambda: 0.0001
+  ds_id:
+  - random
+- type: potential
+  name: potential
+  lambda:
+    type: step
+    steps: 5000.0
+    start: 1.0e-05
+    end: 0.0
+  ds_id:
+  - random
+callbacks:
+- type: boundary
+  name: boundary-tau_0.1
+  ds_id: tau_0.1
+- type: metrics
+  name: metrics
+  ds_id: cube
+- type: slices
+  ds_id: slices
+loss_scaling:
+- type: b_height
+  name: b_height
+  loss_ids:
+  - force_free
+  - potential

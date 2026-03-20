@@ -1,0 +1,22 @@
+site_name: NF2
+site_description: Neural Network Force-Free magnetic field extrapolation
+theme:
+  name: mkdocs
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - Configuration: configuration.md
+  - Dataset Catalog: dataset_catalog.md
+  - Geometry Workflows: geometries.md
+  - Training: training.md
+  - Losses and Transforms: losses_and_transforms.md
+  - Export: export.md
+  - Evaluation: evaluation.md
+  - Coordinates and Units: coordinates.md
+  - Architecture: architecture.md
+  - Developer Guide: developer.md
+  - Configuration Catalog: configuration_catalog.md
+  - Examples: examples.md
+  - Deployment: deployment.md
+  - Migration: migration.md

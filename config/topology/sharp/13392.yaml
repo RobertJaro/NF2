@@ -1,0 +1,78 @@
+run:
+  mode: single
+  geometry: cartesian
+  output_dir: /glade/work/rjarolim/nf2/topology/sharp_13392_v01
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/sharp_13392_v01
+logging:
+  project: topology
+  name: 13392 SHARP 09:12
+data:
+  parameters:
+    random_config:
+      type: height
+    num_workers: 16
+    iterations: 10000
+    z_range:
+    - 0
+    - 50
+  train:
+  - type: fld_inc_azi
+    ds_id: 9875
+    fits_path:
+      B_fld: /glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.field.fits
+      B_inc: /glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.inclination.fits
+      B_azi: /glade/work/rjarolim/data/nf2/13392/hmi.sharp_720s.9875.20230806_091200_TAI.azimuth.fits
+    ambiguous_azimuth: false
+    slice:
+    - 380
+    - 840
+    - 0
+    - 1000
+  validation: []
+model:
+  type: vector_potential
+  dim: 256
+  encoding_config:
+    type: gaussian
+training:
+  epochs: 30
+losses:
+- type: boundary_los_trv_azi
+  name: boundary
+  lambda: 1.0
+  ds_id:
+  - 9875
+  ambiguous: false
+- type: boundary
+  name: potential_boundary
+  lambda: 10.0
+  ds_id: potential
+- type: force_free
+  name: force_free
+  lambda: 0.0001
+  ds_id:
+  - random
+- type: potential
+  name: potential
+  lambda:
+    type: step
+    steps: 5000.0
+    start: 1.0e-05
+    end: 0.0
+  ds_id:
+  - random
+callbacks:
+- type: los_trv_azi_boundary
+  name: boundary-9875
+  ds_id: 9875
+- type: metrics
+  name: metrics
+  ds_id: cube
+- type: slices
+  ds_id: slices
+loss_scaling:
+- type: b_height
+  name: b_height
+  loss_ids:
+  - force_free
+  - potential

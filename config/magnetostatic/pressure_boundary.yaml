@@ -1,0 +1,63 @@
+run:
+  mode: single
+  geometry: cartesian
+  output_dir: /glade/work/rjarolim/nf2/magnetostatic/pressure_v02
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/pressure_v02
+logging:
+  project: magnetostatic
+  name: Pressure Boundary
+data:
+  parameters:
+    z_range:
+    - 0
+    - 60
+    iterations: 10000
+    batch_size: 8192
+    random_batch_size: 16384
+  train:
+  - type: muram_cube
+    name: bottom_b
+    data_path: /glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D
+    iteration: 474000
+    tau: 0.1
+    batch_size: 4096
+  - type: muram_pressure
+    name: pressure
+    data_path: /glade/campaign/hao/radmhd/Rempel/Spot_Motion/case_B/3D
+    iteration: 474000
+    tau: 0.1
+    batch_size: 4096
+  validation: []
+model:
+  type: magneto_static
+  dim: 256
+  encoding_config:
+    type: gaussian
+    scale: 64
+  cutoff: true
+training:
+  epochs: 20
+losses:
+- type: boundary
+  name: boundary
+  lambda: 1.0
+  ds_id:
+  - bottom_b
+  - potential
+- type: pressure_boundary
+  lambda: 0.1
+  ds_id:
+  - pressure
+- type: magneto_static
+  lambda: 0.0001
+- type: divergence
+  lambda: 0.01
+- type: force_free
+  lambda: 0.0
+- type: b_height_scaling
+  lambda: 0.01
+  height_scaling: false
+- type: p_height_scaling
+  lambda: 0.01
+- type: min_pressure
+  lambda: 0.01

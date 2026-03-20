@@ -1,0 +1,69 @@
+run:
+  mode: single
+  geometry: spherical
+  output_dir: /glade/work/rjarolim/nf2/synoptic/{CR}_v01
+  work_dir: /glade/derecho/scratch/rjarolim/nf2/{CR}_v01
+logging:
+  project: synoptic
+  name: '{CR}'
+data:
+  parameters:
+    max_radius: 2.5
+    G_per_dB: 2000
+    num_workers: 8
+    batch_size: 16384
+    iterations: 10000
+  train:
+  - type: map
+    ds_id: synoptic
+    batch_size: 8192
+    files:
+      Br: /glade/work/rjarolim/data/global/synoptic/hmi.synoptic_mr_polfil_720s.{CR}.Mr_polfil.fits
+      Bt: /glade/work/rjarolim/data/global/synoptic/hmi.b_synoptic.{CR}.Bt.fits
+      Bp: /glade/work/rjarolim/data/global/synoptic/hmi.b_synoptic.{CR}.Bp.fits
+  - type: random_spherical
+    ds_id: random
+    batch_size: 16384
+  validation:
+  - type: map
+    ds_id: synoptic_valid
+    filter_nans: false
+    shuffle: false
+    plot_overview: false
+    files:
+      Br: /glade/work/rjarolim/data/global/synoptic/hmi.synoptic_mr_polfil_720s.{CR}.Mr_polfil.fits
+      Bt: /glade/work/rjarolim/data/global/synoptic/hmi.b_synoptic.{CR}.Bt.fits
+      Bp: /glade/work/rjarolim/data/global/synoptic/hmi.b_synoptic.{CR}.Bp.fits
+  - type: spherical_slices
+    ds_id: slices
+    n_slices: 10
+    plot_currents: true
+  - type: sphere
+    ds_id: sphere
+model:
+  type: vector_potential
+  dim: 512
+training:
+  epochs: 100
+losses:
+- type: boundary
+  name: boundary
+  lambda:
+    start: 1000.0
+    end: 10.0
+    iterations: 50000.0
+  ds_id: synoptic
+- type: energy_gradient
+  lambda: 10.0
+  ds_id: random
+  base_radius: 1.04
+- type: potential
+  lambda: 0.0
+  ds_id: random
+  base_radius: 1.04
+- type: force_free
+  lambda: 0.1
+- type: radial
+  lambda: 0.0001
+  ds_id: random
+  base_radius: 2.0

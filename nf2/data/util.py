@@ -1,6 +1,16 @@
 import numpy as np
 
 
+def latitude_to_colatitude(latitude, f=np):
+    pi = getattr(f, "pi", np.pi)
+    return pi / 2 - latitude
+
+
+def colatitude_to_latitude(colatitude, f=np):
+    pi = getattr(f, "pi", np.pi)
+    return pi / 2 - colatitude
+
+
 def spherical_to_cartesian_matrix(c):
     r, t, p = c[..., 0], c[..., 1], c[..., 2]
     sin = np.sin

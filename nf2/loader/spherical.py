@@ -14,7 +14,8 @@ from sunpy.map import Map, all_coordinates_from_map
 
 from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, \
     RandomRadialGroupedCoordinateDataset
-from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
+from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix, \
+    latitude_to_colatitude
 from nf2.loader.base import BaseDataModule, TensorsDataset
 
 
@@ -177,7 +178,7 @@ class SphericalMapDataset(SphericalSliceDataset):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to_value(u.solRad),
-            np.pi / 2 - spherical_coords.lat.to_value(u.rad),
+            latitude_to_colatitude(spherical_coords.lat.to_value(u.rad)),
             spherical_coords.lon.to_value(u.rad),
         ]).transpose()
         cartesian_coords = spherical_to_cartesian(spherical_coords)
@@ -345,11 +346,11 @@ class PFSSBoundaryDataset(SphericalSliceDataset):
         # load coordinates
         spherical_coords = np.stack([
             spherical_coords.radius.value,
-            spherical_coords.lat.to_value(u.rad),
+            latitude_to_colatitude(spherical_coords.lat.to_value(u.rad)),
             spherical_coords.lon.to(u.rad).value]).T
 
         if mask is not None:
-            slice_lat = (mask['latitude_range'] * u.deg).to_value(u.rad)
+            slice_lat = sorted(latitude_to_colatitude((mask['latitude_range'] * u.deg).to_value(u.rad)))
             slice_lon = (mask['longitude_range'] * u.deg).to_value(u.rad)
             lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
                        (spherical_coords[..., 1] < slice_lat[1])
@@ -374,7 +375,7 @@ class SphericalDataModule(BaseDataModule):
     def __init__(self, train_configs, validation_configs,
                  max_radius=1.3,
                  Mm_per_ds=(1 * u.solRad).to_value(u.Mm),
-                 G_per_dB=None, work_directory=None,
+                 G_per_dB=500, work_directory=None,
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
