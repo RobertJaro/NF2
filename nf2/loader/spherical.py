@@ -3,7 +3,6 @@ from collections import OrderedDict
 from copy import copy, deepcopy
 
 import numpy as np
-import pfsspy
 import wandb
 from astropy import units as u
 from astropy.coordinates import SkyCoord
@@ -28,6 +27,7 @@ class SphericalSliceDataset(TensorsDataset):
         if strides > 1:
             b = b[::strides, ::strides]
             coords = coords[::strides, ::strides]
+            spherical_coords = spherical_coords[::strides, ::strides]
             b_err = b_err[::strides, ::strides] if b_err is not None else None
             transform = transform[::strides, ::strides] if transform is not None else None
         self.cube_shape = b.shape[:-1]
@@ -49,7 +49,7 @@ class SphericalSliceDataset(TensorsDataset):
         b[nan_mask] = np.nan
 
         tensors = {'coords': coords,
-                   'b_true': b, }
+                   'b_true': b}
         if transform is not None:
             transform[nan_mask] = np.nan
             tensors['transform'] = transform
@@ -165,7 +165,7 @@ class SphericalSliceDataset(TensorsDataset):
 
 class SphericalMapDataset(SphericalSliceDataset):
 
-    def __init__(self, files, mask_configs=None, insert=None, **kwargs):
+    def __init__(self, files, mask_configs=None, insert=None, mu_filter=None, **kwargs):
         # load maps
         r_map = Map(files['Br'])
         t_map = Map(files['Bt'])
@@ -184,8 +184,18 @@ class SphericalMapDataset(SphericalSliceDataset):
 
         # load data and transform matrix
         b_spherical = np.stack([r_map.data, t_map.data, p_map.data]).transpose()
+        nan_mask = ~np.isnan(b_spherical[..., 0]) & np.isnan(b_spherical[..., 1:]).any(-1)
+        b_spherical[nan_mask, 1:] = 0  # set missing transverse components to zero
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
+        mu_mask = self._mu_filter_mask(r_map, mu_filter)
+        mu_mask = mu_mask.T if mu_mask is not None else None
+        if mu_mask is not None:
+            b_spherical[mu_mask] = np.nan
+            b_cartesian[mu_mask] = np.nan
+            cartesian_coords[mu_mask] = np.nan
+            spherical_coords[mu_mask] = np.nan
+            transform[mu_mask] = np.nan
 
         # load error maps
         if 'Br_err' in files and 'Bt_err' in files and 'Bp_err' in files:
@@ -195,6 +205,8 @@ class SphericalMapDataset(SphericalSliceDataset):
             b_error_spherical = np.stack([r_error_map.data,
                                           t_error_map.data,
                                           p_error_map.data]).transpose()
+            if mu_mask is not None:
+                b_error_spherical[mu_mask] = np.nan
         else:
             b_error_spherical = None
 
@@ -255,10 +267,8 @@ class SphericalMapDataset(SphericalSliceDataset):
         m_type = mask_config['type']
         if m_type == 'reference':
             ref_map = Map(mask_config['file'])
-            # use reference time to avoid temporal shift
-            ref_map.meta['date-obs'] = r_map.date.to_datetime().isoformat()
-            reprojected_map = ref_map.reproject_to(r_map.wcs)
-            mask = ~np.isnan(reprojected_map.data).T
+            mask = self._reference_pixel_mask(ref_map, r_map, spherical_coords.shape[:2],
+                                              mask_config.get('mu_filter'))
         elif m_type == 'helioprojective':
             ref_map = Map(mask_config['file'])
             bottom_left = SkyCoord(mask_config['Tx'][0] * u.arcsec, mask_config['Ty'][0] * u.arcsec,
@@ -304,69 +314,49 @@ class SphericalMapDataset(SphericalSliceDataset):
         spherical_coords[mask] = np.nan
         transform[mask] = np.nan
 
+    @staticmethod
+    def _reference_pixel_mask(ref_map, target_map, target_shape, mu_filter=None):
+        ref_coords = all_coordinates_from_map(ref_map).transform_to(frames.HeliographicCarrington)
+        ref_coords = SkyCoord(lon=ref_coords.lon, lat=ref_coords.lat, radius=ref_coords.radius,
+                              frame=frames.HeliographicCarrington, obstime=target_map.date, observer='self')
+        x_pix, y_pix = target_map.world_to_pixel(ref_coords)
+        x_pix = x_pix.to_value(u.pix)
+        y_pix = y_pix.to_value(u.pix)
 
-class PFSSBoundaryDataset(SphericalSliceDataset):
+        ny, nx = target_map.data.shape
+        valid = np.isfinite(ref_map.data) & np.isfinite(x_pix) & np.isfinite(y_pix)
+        mu_mask = SphericalMapDataset._mu_filter_mask(ref_map, mu_filter)
+        if mu_mask is not None:
+            valid &= ~mu_mask
+        x_idx = np.rint(x_pix[valid]).astype(int)
+        y_idx = np.rint(y_pix[valid]).astype(int)
+        in_bounds = (x_idx >= 0) & (x_idx < nx) & (y_idx >= 0) & (y_idx < ny)
 
-    def __init__(self, Br, radius_range, source_surface_height=2.5, resample=[360, 180], sampling_points=100, mask=None,
-                 insert=None, **kwargs):
-        height = radius_range[1]
-        assert source_surface_height >= height, 'Source surface height must be greater than height (set source_surface_height to >height)'
+        mask = np.zeros(target_shape, dtype=bool)
+        mask[x_idx[in_bounds], y_idx[in_bounds]] = True
+        return mask
 
-        # load synoptic map
-        potential_r_map = Map(Br)
-        potential_r_map = potential_r_map.resample(resample * u.pix)
+    @staticmethod
+    def _mu_filter_mask(smap, mu_filter):
+        if mu_filter is None:
+            return None
+        if isinstance(mu_filter, (int, float)):
+            mu_filter = {'min': mu_filter}
 
-        # insert additional data (e.g., HMI full disk maps)
-        insert = insert if insert is not None else []
-        insert = insert if isinstance(insert, list) else [insert]
-        for file_in in insert:
-            map_in = Map(file_in)
-            # prevent temporal rotation
-            potential_r_map.meta['date-obs'] = map_in.date.to_datetime().isoformat()
-            map_in = map_in.reproject_to(potential_r_map.wcs)
-            condition = ~np.isnan(map_in.data)
-            potential_r_map.data[condition] = map_in.data[condition]
+        coords = all_coordinates_from_map(smap)
+        rho = np.hypot(coords.Tx.to_value(u.rad), coords.Ty.to_value(u.rad))
+        rsun = smap.rsun_obs.to_value(u.rad)
+        radial_distance = rho / rsun
 
-        # PFSS extrapolation
-        pfss_in = pfsspy.Input(potential_r_map, sampling_points, source_surface_height)
-        pfss_out = pfsspy.pfss(pfss_in)
+        with np.errstate(invalid='ignore'):
+            mu = np.sqrt(1 - radial_distance ** 2)
 
-        # load B field
-        ref_coords = all_coordinates_from_map(potential_r_map)
-        spherical_coords = SkyCoord(lon=ref_coords.lon, lat=ref_coords.lat, radius=height * u.solRad,
-                                    frame=ref_coords.frame)
-        potential_shape = spherical_coords.shape  # required workaround for pfsspy spherical reshape
-        spherical_b = pfss_out.get_bvec(spherical_coords.reshape((-1,)))
-        spherical_b = spherical_b.reshape((*potential_shape, 3)).value
-        spherical_b = np.stack([spherical_b[..., 0],
-                                spherical_b[..., 1],
-                                spherical_b[..., 2]]).T
-
-        # load coordinates
-        spherical_coords = np.stack([
-            spherical_coords.radius.value,
-            spherical_coords.lat.to_value(u.rad),
-            spherical_coords.lon.to(u.rad).value]).T
-
-        if mask is not None:
-            slice_lat = (mask['latitude_range'] * u.deg).to_value(u.rad)
-            slice_lon = (mask['longitude_range'] * u.deg).to_value(u.rad)
-            lat_mask = (spherical_coords[..., 1] > slice_lat[0]) & \
-                       (spherical_coords[..., 1] < slice_lat[1])
-            lon_mask = (spherical_coords[..., 2] > slice_lon[0]) & \
-                       (spherical_coords[..., 2] < slice_lon[1])
-            if slice_lon[1] > 2 * np.pi:
-                lon_mask = lon_mask | \
-                           ((spherical_coords[..., 2] > 0) & (spherical_coords[..., 2] < slice_lon[1] - 2 * np.pi))
-            mask = lat_mask & lon_mask
-            spherical_b[mask] = np.nan
-            spherical_coords[mask] = np.nan
-
-        # convert to spherical coordinates
-        coords = spherical_to_cartesian(spherical_coords)
-        transform = cartesian_to_spherical_matrix(spherical_coords)
-        #
-        super().__init__(b=spherical_b, coords=coords, spherical_coords=spherical_coords, transform=transform, **kwargs)
+        mask = ~np.isfinite(mu) | (radial_distance > 1)  # mask out-of-disk pixels
+        if 'min' in mu_filter:
+            mask |= mu < mu_filter['min']
+        if 'max' in mu_filter:
+            mask |= mu > mu_filter['max']
+        return mask
 
 
 class SphericalDataModule(BaseDataModule):
@@ -378,7 +368,6 @@ class SphericalDataModule(BaseDataModule):
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
-                           'pfss_boundary': PFSSBoundaryDataset,
                            'random_spherical': RandomSphericalCoordinateDataset,
                            'random_radial_grouped': RandomRadialGroupedCoordinateDataset,
                            'sphere': SphereDataset,

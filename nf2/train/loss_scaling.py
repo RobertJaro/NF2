@@ -144,14 +144,14 @@ class BHeightLossScalingModule(BaseScalingModule):
         :param state: A dictionary containing the state information, including 'coords' and 'b
         :return:
         """
-        grouped_coords = state['grouped_coords'] # (samples, heights, 3)
-        b = state['b'] # (batch_size, 3)
+        grouped_coords = state['grouped_coords']  # (angular samples, radial samples, 3)
+        b = state['b']  # (batch_size, 3)
 
         b = b.reshape(grouped_coords.shape[0], grouped_coords.shape[1], b.shape[-1])
         loss = loss.reshape(grouped_coords.shape[0], grouped_coords.shape[1])
 
-        b_norm = b.norm(dim=-1).pow(self.power)  # (samples, heights)
-        scaling = b_norm.mean(0, keepdim=True)  # mean across height
+        b_norm = b.norm(dim=-1).pow(self.power)  # (angular samples, radial samples)
+        scaling = b_norm.mean(0, keepdim=True)  # mean across angular samples
         scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
 
         scaled_loss = scaled_loss.reshape(-1)
@@ -163,9 +163,13 @@ class RadialLossScalingModule(BaseScalingModule):
     Loss scaling based on radial distance r.
     """
 
-    def __init__(self, Mm_per_ds, base_radius=1.1, **kwargs):
+    def __init__(self, Mm_per_ds, base_radius=1.1, max_radius=None, **kwargs):
         super().__init__(**kwargs)
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+        self.max_radius = None if max_radius is None else (max_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
+
+        if self.max_radius is not None and self.max_radius <= self.base_radius:
+            raise ValueError('max_radius must be greater than base_radius for radial loss scaling.')
 
     def forward(self, loss, state):
         """
@@ -178,7 +182,13 @@ class RadialLossScalingModule(BaseScalingModule):
         coords = state['coords']
 
         radius_weight = coords.pow(2).sum(-1).pow(0.5)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+        radius_weight = radius_weight - self.base_radius
+
+        if self.max_radius is not None:
+            radius_weight = radius_weight / (self.max_radius - self.base_radius)
+            radius_weight = torch.clip(radius_weight, min=0, max=1)
+        else:
+            radius_weight = torch.clip(radius_weight, min=0)
 
         scaled_loss = loss * radius_weight
 

@@ -32,7 +32,7 @@ def parse_args():
 
 def _plot_b_nabla_bz(data, ax, x_slice_pix, y_min, y_max, z_min, z_max, heights=None):
     im = ax.imshow(data[x_slice_pix, :, :].T,
-                   origin='lower', cmap='coolwarm', vmin=-.1, vmax=.1, extent=[y_min, y_max, z_min, z_max])
+                   origin='lower', cmap='bwr', vmin=-.1, vmax=.1, extent=[y_min, y_max, z_min, z_max])
     if heights is not None:
         for h in heights:
             ax.plot(np.linspace(y_min, y_max, h.shape[1]), h[x_slice_pix, :].to_value(u.Mm),
@@ -50,7 +50,7 @@ def _plot_squashing_factor_Q(data, ax, y_min, y_max, z_min, z_max, z_offset):
 
 def _plot_twist(data, ax, y_min, y_max, z_min, z_max, z_offset):
     im = ax.imshow(data[0, :, :].T,
-                   origin='lower', cmap='seismic',
+                   origin='lower', cmap='coolwarm',
                    extent=[y_min, y_max, z_min + z_offset, z_max], vmin=-1, vmax=1)
     return im
 

@@ -11,6 +11,21 @@ from pytorch_lightning.utilities import rank_zero_only
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
 
 
+def _log_norm(values, floor=1e-6):
+    values = np.asarray(values)
+    values = values[np.isfinite(values) & (values > 0)]
+    if values.size == 0:
+        return LogNorm(vmin=floor, vmax=floor * 10)
+    vmin = max(values.min(), floor)
+    vmax = max(values.max(), vmin * 10)
+    return LogNorm(vmin=vmin, vmax=vmax)
+
+
+def _trapezoid(y, x, axis):
+    integrate = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+    return integrate(y, x=x, axis=axis)
+
+
 class SphericalSlicesCallback(Callback):
 
     def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
@@ -43,24 +58,27 @@ class SphericalSlicesCallback(Callback):
 
     def plot_b(self, b, coords):
         n_samples = b.shape[0]
-        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
+        fig, plot_axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12), squeeze=False)
         for i in range(3):
             for j in range(n_samples):
-                v_min_max = np.max(np.abs(b[j, :, :]))
-                # extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
-                #           coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
-                # extent = np.rad2deg(extent)
-                extent = None
                 height = coords[j, :, :, 0].mean()
-                im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='lower', extent=extent)
-                axs[i, j].set_xlabel('Longitude [deg]')
-                axs[i, j].set_ylabel('Latitude [deg]')
-                # add locatable colorbar
-                divider = make_axes_locatable(axs[i, j])
+                b_slice = b[j, :, :, i]
+                v_min_max = np.nanmax(np.abs(b_slice))
+                v_min_max = max(v_min_max, 1)
+                im = plot_axs[i, j].imshow(b_slice, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
+                                            origin='lower', extent=None)
+                divider = make_axes_locatable(plot_axs[i, j])
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
-                axs[i, j].set_title(f'{height:.02f} - $B_{["r", "t", "p"][i]}$')
+                if i == 2:
+                    plot_axs[i, j].set_xlabel('Longitude [deg]')
+                else:
+                    plot_axs[i, j].tick_params(labelbottom=False)
+                if j == 0:
+                    plot_axs[i, j].set_ylabel('Latitude [deg]')
+                else:
+                    plot_axs[i, j].tick_params(labelleft=False)
+                plot_axs[i, j].set_title(f'{height:.02f} - $B_{["r", "t", "p"][i]}$')
         fig.tight_layout()
         wandb.log({f"{self.name} - B": fig})
         plt.close('all')
@@ -68,36 +86,71 @@ class SphericalSlicesCallback(Callback):
     def plot_current(self, j, coords):
         j = (j ** 2).sum(-1) ** 0.5
         n_samples = j.shape[0]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        width_ratios = [1] * n_samples + [0.05]
+        fig, axs = plt.subplots(1, n_samples + 1, figsize=(n_samples * 4 + 0.4, 4),
+                                gridspec_kw={'width_ratios': width_ratios}, constrained_layout=True,
+                                squeeze=False)
+        plot_axs = axs[0, :-1]
+        cbar_ax = axs[0, -1]
+        norm = _log_norm(j)
         for i in range(n_samples):
-            # extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
-            #           coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
-            # extent = np.rad2deg(extent)
-            extent = None
             height = coords[i, :, :, 0].mean()
-            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
-            axs[i].set_xlabel('Longitude [deg]')
-            axs[i].set_ylabel('Latitude [deg]')
-            # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='J [G/ds]')
-            axs[i].set_title(f'{height:.02f} - $|J|$')
-        fig.tight_layout()
+            im = self._plot_spherical_map(plot_axs[i], j[i, :, :], coords[i], cmap='plasma', norm=norm)
+            plot_axs[i].set_xlabel('Longitude [deg]')
+            if i == 0:
+                plot_axs[i].set_ylabel(r'$\sin(\mathrm{latitude})$')
+            else:
+                plot_axs[i].tick_params(labelleft=False)
+            plot_axs[i].set_title(f'{height:.02f} $R_\\odot$ - $|J|$')
+        fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
         wandb.log({f"{self.name} - Current density": fig})
         plt.close('all')
         # plot integrated current density
-        j = np.sum(j, axis=0)
+        j, j_label = self._integrate_radial_current(j, coords)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j, cmap='viridis', origin='lower', norm=LogNorm(), extent=extent)
+        im = self._plot_spherical_map(ax, j, coords[0], cmap='plasma', norm=_log_norm(j), physical_units=True)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax)
+        plt.colorbar(im, cax=cax, label=j_label)
+        ax.set_xlabel('Longitudinal arc length [Mm]')
+        ax.set_ylabel('Latitudinal arc length [Mm]')
         #
         fig.tight_layout()
         wandb.log({f"{self.name} - Integrated Current density": fig})
         plt.close('all')
+
+    @staticmethod
+    def _plot_spherical_map(ax, values, coords, physical_units=False, **kwargs):
+        longitude_rad = np.unwrap(coords[..., 2], axis=1)
+        longitude = np.rad2deg(longitude_rad)
+        latitude_rad = np.pi / 2 - coords[..., 1]
+        latitude = np.rad2deg(latitude_rad)
+
+        if physical_units:
+            radius_Mm = np.nanmean(coords[..., 0]) * (1 * u.solRad).to_value(u.Mm)
+            longitude = radius_Mm * (longitude_rad - np.nanmean(longitude_rad))
+            latitude = radius_Mm * latitude_rad
+            aspect = 'equal'
+        else:
+            latitude = np.sin(latitude_rad)
+            aspect = 180 / np.pi
+
+        extent = [np.nanmin(longitude), np.nanmax(longitude),
+                  np.nanmin(latitude), np.nanmax(latitude)]
+
+        im = ax.imshow(np.flipud(values), origin='lower', extent=extent, aspect=aspect, **kwargs)
+        if not physical_units:
+            ax.set_ylim(-1, 1)
+        return im
+
+    def _integrate_radial_current(self, j, coords):
+        if j.shape[0] < 2:
+            return j[0], r'$|J|$ [G/Mm]'
+
+        radius_Mm = coords[..., 0] * (1 * u.solRad).to_value(u.Mm)
+        integrated_j = _trapezoid(j, x=radius_Mm, axis=0)
+        return integrated_j, r'$\int |J|\,dr$ [G]'
 
 
 class SlicesCallback(Callback):
@@ -137,23 +190,31 @@ class SlicesCallback(Callback):
 
     def plot_b(self, b, coords):
         n_samples = b.shape[2]
-        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
+        fig, plot_axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12), squeeze=False)
         for i in range(3):
             for j in range(n_samples):
-                v_min_max = np.max(np.abs(b[:, :, j]))
                 extent = [coords[0, 0, j, 0], coords[-1, -1, j, 0],
                           coords[0, 0, j, 1], coords[-1, -1, j, 1]]
                 extent = np.array(extent) * self.Mm_per_ds
                 height = coords[:, :, j, 2].mean() * self.Mm_per_ds
-                im = axs[i, j].imshow(b[:, :, j, i].T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='lower', extent=extent)
-                axs[i, j].set_xlabel('X [Mm]')
-                axs[i, j].set_ylabel('Y [Mm]')
-                # add locatable colorbar
-                divider = make_axes_locatable(axs[i, j])
+                b_slice = b[:, :, j, i]
+                v_min_max = np.nanmax(np.abs(b_slice))
+                v_min_max = max(v_min_max, 1)
+                ax = plot_axs[i, j]
+                im = ax.imshow(b_slice.T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
+                               origin='lower', extent=extent)
+                divider = make_axes_locatable(ax)
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
-                axs[i, j].set_title(f'{height:.02f} - $B_{["x", "y", "z"][i]}$')
+                if i == 2:
+                    ax.set_xlabel('X [Mm]')
+                else:
+                    ax.tick_params(labelbottom=False)
+                if j == 0:
+                    ax.set_ylabel('Y [Mm]')
+                else:
+                    ax.tick_params(labelleft=False)
+                ax.set_title(f'{height:.02f} - $B_{["x", "y", "z"][i]}$')
         fig.tight_layout()
         wandb.log({f"{self.name} - B": fig})
         plt.close('all')
@@ -161,41 +222,54 @@ class SlicesCallback(Callback):
     def plot_current(self, j, coords):
         j = (j ** 2).sum(-1) ** 0.5
         n_samples = j.shape[2]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        width_ratios = [1] * n_samples + [0.05]
+        fig, axs = plt.subplots(1, n_samples + 1, figsize=(n_samples * 4 + 0.4, 4),
+                                gridspec_kw={'width_ratios': width_ratios}, constrained_layout=True,
+                                squeeze=False)
+        plot_axs = axs[0, :-1]
+        cbar_ax = axs[0, -1]
+        norm = _log_norm(j)
         for i in range(n_samples):
             extent = [coords[0, 0, i, 0], coords[-1, -1, i, 0],
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            norm = LogNorm(vmin=max(j[:, :, i].min(), 1e-6), vmax=max(j[:, :, i].max(), 1e-6))
-            im = axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm, extent=extent)
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-            # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='J [G/ds]')
-            axs[i].set_title(f'{height:.02f} - $|J|$')
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-        fig.tight_layout()
+            im = plot_axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm, extent=extent)
+            plot_axs[i].set_xlabel('X [Mm]')
+            if i == 0:
+                plot_axs[i].set_ylabel('Y [Mm]')
+            else:
+                plot_axs[i].tick_params(labelleft=False)
+            plot_axs[i].set_title(f'{height:.02f} - $|J|$')
+        fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
         wandb.log({f"{self.name} - Current density": fig})
         plt.close('all')
         # plot integrated current density
-        j = np.sum(j, axis=2)
+        j, j_label = self._integrate_height_current(j, coords)
+        extent = [coords[0, 0, 0, 0], coords[-1, -1, 0, 0],
+                  coords[0, 0, 0, 1], coords[-1, -1, 0, 1]]
+        extent = np.array(extent) * self.Mm_per_ds
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        norm = LogNorm(vmin=max(j.min(), 1e-6), vmax=max(j.max(), 1e-6))
+        norm = _log_norm(j)
         im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=norm, extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax)
+        plt.colorbar(im, cax=cax, label=j_label)
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
         #
         fig.tight_layout()
         wandb.log({f"{self.name} - Integrated Current density": fig})
         plt.close('all')
+
+    def _integrate_height_current(self, j, coords):
+        if j.shape[2] < 2:
+            return j[:, :, 0], r'$|J|$ [G/Mm]'
+
+        height_Mm = coords[..., 2] * self.Mm_per_ds
+        integrated_j = _trapezoid(j, x=height_Mm, axis=2)
+        return integrated_j, r'$\int |J|\,dz$ [G]'
 
     def plot_pressure(self, p, grad_P, coords):
         grad_P = np.linalg.norm(grad_P, axis=-1)
@@ -280,11 +354,14 @@ class SlicesCallback(Callback):
 
 class BoundaryCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, component_labels=None, **kwargs):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        if component_labels is None and validation_dataset_key == 'synoptic_valid':
+            component_labels = ['r', 't', 'p']
+        self.component_labels = component_labels or ['x', 'y', 'z']
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
@@ -331,54 +408,23 @@ class BoundaryCallback(Callback):
     def plot_b(self, b, b_true):
         extent = None
 
-        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+        fig, axs = plt.subplots(3, 3, figsize=(8.4, 8),
+                                gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
+        plot_axs = axs[:, :2]
+        cbar_axs = axs[:, 2]
 
         b_norm = np.nanmax(np.abs(b_true))
         b_norm = min(500, b_norm)
 
-        ax = axs[0, 0]
-        im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_x$')
+        for i, label in enumerate(self.component_labels):
+            im = plot_axs[i, 0].imshow(b[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 0].set_title(f'Predicted $B_{label}$')
+            im = plot_axs[i, 1].imshow(b_true[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 1].set_title(f'True $B_{label}$')
+            fig.colorbar(im, cax=cbar_axs[i], label='[G]')
 
-        ax = axs[0, 1]
-        im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_x$')
-
-        ax = axs[1, 0]
-        im = ax.imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_y$')
-
-        ax = axs[1, 1]
-        im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_y$')
-
-        ax = axs[2, 0]
-        im = ax.imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_z$')
-
-        ax = axs[2, 1]
-        im = ax.imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_z$')
-
-        fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
@@ -386,72 +432,36 @@ class BoundaryCallback(Callback):
         extent = [original_coords[..., 0].min(), original_coords[..., 0].max(),
                   original_coords[..., 1].min(), original_coords[..., 1].max()]
 
-        fig, axs = plt.subplots(4, 2, figsize=(8, 8))
+        fig, axs = plt.subplots(4, 3, figsize=(8.4, 8),
+                                gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
+        plot_axs = axs[:, :2]
+        cbar_axs = axs[:, 2]
 
         b_norm = np.nanmax(np.abs(b_true))
         b_norm = min(500, b_norm)
 
-        ax = axs[0, 0]
-        im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_x$')
+        for i, label in enumerate(self.component_labels):
+            im = plot_axs[i, 0].imshow(b[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 0].set_title(f'Predicted $B_{label}$')
+            im = plot_axs[i, 1].imshow(b_true[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 1].set_title(f'True $B_{label}$')
+            fig.colorbar(im, cax=cbar_axs[i], label='[G]')
 
-        ax = axs[0, 1]
-        im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_x$')
-
-        ax = axs[1, 0]
-        im = ax.imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_y$')
-
-        ax = axs[1, 1]
-        im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_y$')
-
-        ax = axs[2, 0]
-        im = ax.imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('Predicted $B_z$')
-
-        ax = axs[2, 1]
-        im = ax.imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        ax.set_title('True $B_z$')
-
-        ax = axs[3, 0]
+        ax = plot_axs[3, 0]
         im = ax.imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Z [Mm]')
         ax.set_title('Transformed z')
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
 
-        ax = axs[3, 1]
+        ax = plot_axs[3, 1]
         im = ax.imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Z [Mm]')
         ax.set_title('Original z')
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
+        fig.colorbar(im, cax=cbar_axs[3], label='Z [Mm]')
 
-        fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
@@ -862,10 +872,10 @@ class MetricsCallback(Callback):
 
         div = outputs['div'] * self.gauss_per_dB / self.Mm_per_ds
 
-        norm = torch.norm(b, dim=-1) * torch.norm(j, dim=-1)
+        norm = torch.norm(b, dim=-1) * torch.norm(j, dim=-1) + 1e-7
         sigma = torch.norm(torch.cross(j, b, dim=-1), dim=-1) / norm
         j_weight = torch.norm(j, dim=-1)
-        angle = (sigma * j_weight).sum() / j_weight.sum()
+        angle = (sigma * j_weight).sum() / (j_weight.sum() + 1e-7)
         angle = torch.clip(angle, -1. + 1e-7, 1. - 1e-7)
         theta_J = torch.arcsin(angle)
         theta_J = torch.rad2deg(theta_J)

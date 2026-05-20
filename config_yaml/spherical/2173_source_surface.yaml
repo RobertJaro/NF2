@@ -1,9 +1,9 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/2173/<<time>>_v02"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/<<time>>_v02"
+base_path: "/glade/work/rjarolim/nf2/spherical/2173_source_surface_v02"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/2173_source_surface_v01"
 logging:
   project: spherical
-  name: "2173 <<time>>"
+  name: "2173 source surface"
 data:
   type: spherical
   train_configs:
@@ -11,19 +11,14 @@ data:
       ds_id: full_disk
       batch_size: 4096
       files:
-        Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Br.fits"
-        Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bt.fits"
-        Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bp.fits"
-        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Br_err.fits"
-        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bt_err.fits"
-        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bp_err.fits"
+        Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br.fits"
+        Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp.fits"
+        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp_err.fits"
       mu_filter:
         min: 0.2
-#      mask_configs:
-#        type: heliographic_carrington
-#        longitude_range: [ 82.85, 244.83 ]
-#        latitude_range: [ -78.34, 65.71  ]
-#        invert: true
     - type: map
       ds_id: synoptic
       batch_size: 4096
@@ -33,7 +28,7 @@ data:
         Bp: "/glade/work/rjarolim/data/global/fd_2173/hmi.b_synoptic.2173.Bp.fits"
       mask_configs:
         type: reference
-        file: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Br.fits"
+        file: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br.fits"
         mu_filter:
           min: 0.2
     - type: random_radial_grouped
@@ -41,8 +36,6 @@ data:
       batch_size: 16384
       n_lat_lon_sample: 64
       length: 1.0e+4
-#      longitude_range: [ 82.85, 244.83 ]
-#      latitude_range: [ -78.34, 65.71  ]
   validation_configs:
     - type: map
       ds_id: full_disk_valid
@@ -50,12 +43,12 @@ data:
       shuffle: false
       plot_overview: false
       files:
-        Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Br.fits"
-        Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bt.fits"
-        Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bp.fits"
-        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Br_err.fits"
-        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bt_err.fits"
-        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.<<time>>_TAI.Bp_err.fits"
+        Br: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br.fits"
+        Bt: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt.fits"
+        Bp: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp.fits"
+        Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br_err.fits"
+        Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt_err.fits"
+        Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp_err.fits"
       mu_filter:
         min: 0.2
       mask_configs:
@@ -76,13 +69,9 @@ data:
       ds_id: slices
       n_slices: 10
       plot_currents: true
-#      longitude_range: [ 82.85, 244.83 ]
-#      latitude_range: [ -78.34, 65.71  ]
     - type: sphere
       ds_id: sphere
-#      longitude_range: [ 82.85, 244.83 ]
-#      latitude_range: [ -78.34, 65.71  ]
-  max_radius: 1.5
+  max_radius: 2.5
   G_per_dB: 100
   num_workers: 16
   batch_size: 16384
@@ -97,7 +86,7 @@ training:
 loss:
   - type: boundary
     name: boundary
-    lambda: 1.0
+    lambda: { start: 1.0e+3, end: 1.0, iterations: 5.0e+3 }
     ds_id: [full_disk, synoptic]
   - type: force_free
     name: force_free
@@ -105,7 +94,7 @@ loss:
     ds_id: [ random ]
   - type: potential
     name: potential
-    lambda: {type: step, steps: 5.0e+3, start: 1.0e-4, end: 0.0 }
+    lambda: {type: step, steps: 5.0e+3, start: 1.0e-2, end: 0.0 }
     ds_id: [ random ]
   - type: potential
     name: potential_top
@@ -113,7 +102,11 @@ loss:
     ds_id: [ random ]
   - type: energy_gradient
     name: energy_gradient
-    lambda: 1.0e+1
+    lambda: { start: 1.0e-2, end: 1.0, iterations: 5.0e+3 }
+    ds_id: [ random ]
+  - type: radial
+    name: radial
+    lambda: 1.0e-2
     ds_id: [ random ]
 
 loss_scaling:
@@ -124,7 +117,13 @@ loss_scaling:
   - type: radial
     name: radial
     base_radius: 1.2
+    max_radius: 2.5
     loss_ids: [ energy_gradient, potential_top ]
+  - type: radial
+    name: source_surface_radial
+    base_radius: 2.0
+    max_radius: 2.5
+    loss_ids: [ radial ]
 
 
 callbacks:

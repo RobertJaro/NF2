@@ -95,22 +95,19 @@ class DivergenceLoss(BaseLoss):
 
 class RadialLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
-        super().__init__(**kwargs)
-        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-
     def forward(self, b, coords, *args, **kwargs):
-        # radial regularization --> vanishing phi and theta components
-        radius_weight = torch.norm(coords, dim=-1)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+        eps = 1e-8
 
-        normalization = torch.norm(b, dim=-1) * torch.norm(coords, dim=-1) + 1e-7
-        radial_regularization = torch.norm(torch.cross(b, coords, dim=-1), dim=-1)
-        radial_regularization = radial_regularization / normalization
+        r_hat = coords / torch.linalg.norm(coords, dim=-1, keepdim=True).clamp_min(eps)
+        r_hat = r_hat.detach()
 
-        radial_regularization = radial_regularization * radius_weight
+        b_cross_r = torch.cross(b, r_hat, dim=-1)
 
-        return radial_regularization
+        b2 = torch.sum(b**2, dim=-1).detach().clamp_min(eps)
+
+        radial_loss = torch.sum(b_cross_r**2, dim=-1) / b2
+
+        return radial_loss
 
 
 class PotentialLoss(BaseLoss):
@@ -157,12 +154,7 @@ class EnergyGradientLoss(BaseLoss):
         dE_dz = 2 * (b[:, 0] * dBx_dz + b[:, 1] * dBy_dz + b[:, 2] * dBz_dz)
 
         # dE/dr = dE/dx * dx/dr + dE/dy * dy/dr + dE/dz * dz/dr
-        # x = r * cos(t) * cos(p)
-        # y = r * cos(t) * sin(p)
-        # z = r * sin(t)
-        # dx/dr = cos(t) * cos(p)
-        # dy/dr = cos(t) * sin(p)
-        # dz/dr = sin(t)
+        # theta is colatitude: x = r sin(t) cos(p), y = r sin(t) sin(p), z = r cos(t).
         coords_spherical = cartesian_to_spherical(coords, f=torch)
         t = coords_spherical[:, 1]
         p = coords_spherical[:, 2]
@@ -294,13 +286,18 @@ class BoundaryLoss(BaseLoss):
         weights = torch.tensor(weights, dtype=torch.float32)
         self.register_buffer('weights_buffer', weights)
 
-    def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
+    def forward(self, b, b_true, transform=None, b_err=None, weights=None, *args, **kwargs):
         # apply transforms
         transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         # compute diff
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
         b_diff = torch.einsum('...i,i->...', b_diff.pow(2), self.weights_buffer)
+        # if weights is not None:
+        #     weights = weights.reshape(-1).to(b_diff)
+        #     weighted_sum = (b_diff * weights).sum()
+        #     weight_sum = weights.sum().clamp_min(1e-7)
+        #     return weighted_sum / weight_sum
         return b_diff
 
 

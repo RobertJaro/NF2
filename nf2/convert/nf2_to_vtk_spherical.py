@@ -23,7 +23,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     nf2_path = args.nf2_path
-    out_path = nf2_path.replace('.nf2', '.vtk') if args.out_path is None else args.out_path
+    out_path = args.out_path if args.out_path is not None \
+        else os.path.join(os.path.dirname(nf2_path), os.path.basename(os.path.dirname(nf2_path)) + '.vtk')
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     radius_range = tuple(args.radius_range) * u.solRad
     if args.radians:
@@ -42,10 +44,15 @@ if __name__ == '__main__':
     result = output.load(radius_range, latitude_range, longitude_range, pixels_per_solRad, progress=True,
                          metrics={'j': current_density, 'alpha': alpha})
 
-    vectors = {'B': result['b'], 'B_rtp': result['b_rtp']}
+    vectors = {'B': result['b']}
     radius = result['spherical_coords'][..., 0]
     metrics = result['metrics']
-    scalars = {'radius': radius, 'current_density': np.sum(metrics['j'] ** 2, -1) ** 0.5, 'alpha': metrics['alpha']}
+    scalars = {'radius': radius,
+               'B_r': result['b_rtp'][..., 0],
+               'B_theta': result['b_rtp'][..., 1],
+               'B_phi': result['b_rtp'][..., 2],
+               'current_density': np.sum(metrics['j'] ** 2, -1) ** 0.5,
+               'alpha': metrics['alpha']}
     coords = result['coords']
 
     save_vtk(out_path, coords, vectors, scalars)

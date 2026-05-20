@@ -63,7 +63,7 @@ class RandomSphericalCoordinateDataset(Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
                  latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
-                 radial_weighted_sampling=False, latitude_weighted_sampling=False, **kwargs):
+                 volume_uniform_sampling=True, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to colatitude
@@ -74,8 +74,7 @@ class RandomSphericalCoordinateDataset(Dataset):
         self.longitude_range = longitude_range
         self.batch_size = batch_size
         self.float_tensor = torch.FloatTensor
-        self.radial_weighted_sampling = radial_weighted_sampling
-        self.latitude_weighted_sampling = latitude_weighted_sampling
+        self.volume_uniform_sampling = volume_uniform_sampling
 
     def __len__(self):
         return 1
@@ -84,18 +83,17 @@ class RandomSphericalCoordinateDataset(Dataset):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
         # r [1, height]
         h_r = self.radius_range
-        if self.radial_weighted_sampling:
-            v_min, v_max = np.min(np.log(h_r)), np.max(np.log(h_r))
-            random_coords[:, 0] = v_min + random_coords[:, 0] * (v_max - v_min)
-            random_coords[:, 0] = torch.exp(random_coords[:, 0])
+        if self.volume_uniform_sampling:
+            r_min, r_max = np.min(h_r), np.max(h_r)
+            random_coords[:, 0] = (r_min ** 3 + random_coords[:, 0] * (r_max ** 3 - r_min ** 3)) ** (1 / 3)
         else:
             random_coords[:, 0] = h_r[0] + random_coords[:, 0] * (h_r[1] - h_r[0])
         # theta [0, pi]
-        if self.latitude_weighted_sampling:
+        if self.volume_uniform_sampling:
             lat_r = self.colatitude_range
-            v_min, v_max = np.min(np.sin(lat_r)), np.max(np.sin(lat_r))
+            v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
             random_coords[:, 1] = v_min + random_coords[:, 1] * (v_max - v_min)
-            random_coords[:, 1] = torch.arcsin(random_coords[:, 1])
+            random_coords[:, 1] = torch.arccos(random_coords[:, 1])
         else:
             lat_r = self.colatitude_range
             random_coords[:, 1] = lat_r[0] + random_coords[:, 1] * (lat_r[1] - lat_r[0])
@@ -111,7 +109,7 @@ class RandomSphericalCoordinateDataset(Dataset):
 class RandomRadialGroupedCoordinateDataset(Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
-                 r_sample=128, r_sampling_exponent=2,
+                 n_lat_lon_sample=128, volume_uniform_sampling=True,
                  latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg', length=None, **kwargs):
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
@@ -123,33 +121,49 @@ class RandomRadialGroupedCoordinateDataset(Dataset):
         self.Mm_per_ds = Mm_per_ds
         self.colatitude_range = colatitude_range
         self.longitude_range = longitude_range
-        self.batch_size = batch_size
+        self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
 
-        self.r_sample = r_sample
-        self.r_sampling_exponent = torch.tensor(r_sampling_exponent, dtype=torch.float32)
+        self.n_lat_lon_sample = int(n_lat_lon_sample)
+        if self.n_lat_lon_sample <= 0:
+            raise ValueError('n_lat_lon_sample must be a positive integer.')
+        if self.batch_size % self.n_lat_lon_sample != 0:
+            raise ValueError(
+                f'batch_size ({self.batch_size}) must be divisible by '
+                f'n_lat_lon_sample ({self.n_lat_lon_sample}).')
+        self.radial_sample = self.batch_size // self.n_lat_lon_sample
+        self.volume_uniform_sampling = volume_uniform_sampling
 
     def __len__(self):
         return self.length
 
     def __getitem__(self, item):
         # radial coordinates
-        r_coords = self.float_tensor(self.r_sample, 1).uniform_() ** self.r_sampling_exponent
         h_r = self.radius_range
-        r_coords = h_r[0] + r_coords * (h_r[1] - h_r[0])
+        r_coords = self.float_tensor(self.radial_sample, 1).uniform_()
+        if self.volume_uniform_sampling:
+            r_min, r_max = np.min(h_r), np.max(h_r)
+            r_coords = (r_min ** 3 + r_coords * (r_max ** 3 - r_min ** 3)) ** (1 / 3)
+        else:
+            r_coords = h_r[0] + r_coords * (h_r[1] - h_r[0])
 
         # latitude coordinates
-        lat_coords = self.float_tensor(self.batch_size // self.r_sample, self.r_sample, 1).uniform_()
+        lat_coords = self.float_tensor(self.n_lat_lon_sample, self.radial_sample, 1).uniform_()
         lat_r = self.colatitude_range
-        lat_coords = lat_r[0] + lat_coords * (lat_r[1] - lat_r[0])
+        if self.volume_uniform_sampling:
+            v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
+            lat_coords = v_min + lat_coords * (v_max - v_min)
+            lat_coords = torch.arccos(lat_coords)
+        else:
+            lat_coords = lat_r[0] + lat_coords * (lat_r[1] - lat_r[0])
 
         # longitude coordinates
-        lon_coords = self.float_tensor(self.batch_size // self.r_sample, self.r_sample, 1).uniform_()
+        lon_coords = self.float_tensor(self.n_lat_lon_sample, self.radial_sample, 1).uniform_()
         lon_r = self.longitude_range
         lon_coords = lon_r[0] + lon_coords * (lon_r[1] - lon_r[0])
 
         # expand r coords
-        r_coords = r_coords[None, :, :].repeat(self.batch_size // self.r_sample, 1, 1)
+        r_coords = r_coords[None, :, :].repeat(self.n_lat_lon_sample, 1, 1)
 
         grouped_coords = torch.cat([r_coords, lat_coords, lon_coords], -1)
 
@@ -205,8 +219,9 @@ class SphereSlicesDataset(Dataset):
         #
         ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
+        radius_samples = np.exp(np.linspace(np.log(radius_range[0]), np.log(radius_range[1]), n_slices))
         coords = np.stack(
-            np.meshgrid(np.linspace(radius_range[0], radius_range[1], n_slices),
+            np.meshgrid(radius_samples,
                         np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat),
                         np.linspace(longitude_range[0], longitude_range[1], longitude_resolution),
                         indexing='ij'), -1)

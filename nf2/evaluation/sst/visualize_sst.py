@@ -6,7 +6,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from sunpy.visualization.colormaps import cm
 
 
-MAGNETOGRAM_LIMIT = 1000
+MAGNETOGRAM_LIMIT = 1500
 INTENSITY_VMIN = 0.1e-8
 INTENSITY_VMAX = 3e-8
 MM_PER_PIXEL_INTENSITY = 0.045

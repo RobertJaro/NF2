@@ -17,6 +17,8 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
+      mu_filter:
+        max: 0.99
     - type: map
       ds_id: synoptic
       batch_size: 4096
@@ -27,6 +29,8 @@ data:
       mask_configs:
         type: reference
         file: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br.fits"
+        mu_filter:
+          max: 0.99
     - type: random_spherical
       ds_id: random
       batch_size: 16384
@@ -43,6 +47,8 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp_err.fits"
+      mu_filter:
+        max: 0.99
       mask_configs:
         type: heliographic_carrington
         longitude_range: [ 1.603, 4.116 ]

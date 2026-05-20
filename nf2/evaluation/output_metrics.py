@@ -77,7 +77,7 @@ def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
     p = coords_spherical[..., 2]
     dE_dr = (np.sin(t) * np.cos(p)) * dE_dx + \
             (np.sin(t) * np.sin(p)) * dE_dy + \
-            np.cos(p) * dE_dz
+            np.cos(t) * dE_dz
 
     return {'dE_dr': dE_dr}
 

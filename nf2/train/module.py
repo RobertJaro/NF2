@@ -234,6 +234,19 @@ class NF2Module(LightningModule):
 
         return [optimizer], [scheduler]
 
+    @staticmethod
+    def _collate_states(states):
+        state_keys = set.intersection(*(set(s.keys()) for s in states))
+        state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
+
+        if 'b_err' not in state and any('b_err' in s for s in states):
+            state['b_err'] = torch.cat([
+                s['b_err'] if 'b_err' in s else torch.zeros_like(s['b_true'])
+                for s in states
+            ])
+
+        return state
+
     def training_step(self, batch, batch_nb):
         loader_keys = list(batch.keys())
 
@@ -270,8 +283,7 @@ class NF2Module(LightningModule):
                 ds_id = loss_module.ds_id
                 if isinstance(ds_id, list):
                     states = [state_dict[i] for i in ds_id]
-                    state_keys = states[0].keys()
-                    state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
+                    state = self._collate_states(states)
                 else:
                     state = state_dict[ds_id]
                 loss = loss_module(**state)
@@ -284,8 +296,7 @@ class NF2Module(LightningModule):
                 raise e
         total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
 
-        loss_dict['loss'] = total_loss
-        return loss_dict
+        return {**{k: v.detach() for k, v in loss_dict.items()}, 'loss': total_loss}
 
     def apply_transforms(self, batch):
         loader_keys = list(batch.keys())
