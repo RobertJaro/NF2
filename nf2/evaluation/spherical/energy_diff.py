@@ -22,7 +22,8 @@ os.makedirs(results_path, exist_ok=True)
 
 sampling = [128, 128, 128]
 longitude_range = [150, 210]
-latitude_range = [60, 120]
+colatitude_range = [60, 120]
+latitude_range = [90 - colatitude_range[1], 90 - colatitude_range[0]]
 radius_range = [1.0, 1.3]
 dr = ((radius_range[1] - radius_range[0]) * u.solRad).to_value(u.cm) / sampling[0]
 
@@ -50,7 +51,7 @@ energy_diff = np.clip(energy_2 - energy_1, a_min=0, a_max=None)
 
 energy_map = energy_diff.sum(0) * dr
 
-extent = [*longitude_range, *reversed(latitude_range)]
+extent = [*longitude_range, *reversed(colatitude_range)]
 
 fig, ax = plt.subplots(figsize=(5, 5))
 im = ax.imshow(energy_map, origin='upper', cmap='Reds', extent=extent,

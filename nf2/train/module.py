@@ -97,8 +97,17 @@ class NF2Module(LightningModule):
 
         # load meta state
         if meta_path:
-            state_dict = torch.load(meta_path)['model'].state_dict() \
-                if meta_path.endswith('nf2') else torch.load(meta_path)['m']
+            checkpoint = torch.load(meta_path, map_location='cpu')
+            if meta_path.endswith('nf2'):
+                state_dict = checkpoint['model'].state_dict()
+            elif 'm' in checkpoint:
+                state_dict = checkpoint['m']
+            elif 'state_dict' in checkpoint:
+                state_dict = checkpoint['state_dict']
+                state_dict = {k.replace('model.', '', 1): v for k, v in state_dict.items()
+                              if k.startswith('model.')}
+            else:
+                raise KeyError(f"Unsupported meta checkpoint format: {meta_path}")
             model.load_state_dict(state_dict)
             logging.info('Loaded meta state: %s' % meta_path)
 
@@ -237,6 +246,7 @@ class NF2Module(LightningModule):
     @staticmethod
     def _collate_states(states):
         state_keys = set.intersection(*(set(s.keys()) for s in states))
+        state_keys.discard('requires_jacobian')
         state = {k: torch.cat([s[k] for s in states]) for k in state_keys}
 
         if 'b_err' not in state and any('b_err' in s for s in states):
@@ -246,6 +256,30 @@ class NF2Module(LightningModule):
             ])
 
         return state
+
+    @staticmethod
+    def _requires_jacobian(state):
+        requires_jacobian = state.get('requires_jacobian', True)
+        if torch.is_tensor(requires_jacobian):
+            return bool(requires_jacobian.flatten()[0].item())
+        return bool(requires_jacobian)
+
+    def _forward_dataset_group(self, batch, loader_keys, compute_jacobian):
+        if not loader_keys:
+            return {}, None, {}
+
+        coords = torch.cat([batch[k]['coords'] for k in loader_keys], 0)
+        model_out = self.model(coords, compute_jacobian=compute_jacobian)
+        model_out_keys = model_out.keys()
+
+        result_mapping = {}
+        idx = 0
+        for k in loader_keys:
+            n_coords = batch[k]['coords'].shape[0]
+            result_mapping[k] = {mk: model_out[mk][idx:idx + n_coords] for mk in model_out_keys}
+            idx += n_coords
+
+        return model_out, coords, result_mapping
 
     def training_step(self, batch, batch_nb):
         loader_keys = list(batch.keys())
@@ -257,25 +291,24 @@ class NF2Module(LightningModule):
         # transform batch
         self.apply_transforms(batch)
 
-        # concatenate all points
-        coords = torch.cat([batch[k]['coords'] for k in loader_keys], 0)
+        jacobian_loader_keys = [k for k in loader_keys if self._requires_jacobian(batch[k])]
+        no_jacobian_loader_keys = [k for k in loader_keys if k not in jacobian_loader_keys]
 
         # forward step
-        model_out = self.model(coords)
-        model_out_keys = model_out.keys()
+        jacobian_model_out, jacobian_coords, jacobian_result_mapping = self._forward_dataset_group(
+            batch, jacobian_loader_keys, compute_jacobian=True)
+        _, _, no_jacobian_result_mapping = self._forward_dataset_group(
+            batch, no_jacobian_loader_keys, compute_jacobian=False)
 
-        # split back into dataloaders
-        result_mapping = {}
-        idx = 0
-        for k in loader_keys:
-            n_coords = batch[k]['coords'].shape[0]
-            result_mapping[k] = {mk: model_out[mk][idx:idx + n_coords] for mk in model_out_keys}
-            idx += n_coords
+        result_mapping = {**jacobian_result_mapping, **no_jacobian_result_mapping}
 
         state_dict = {k: {**result_mapping[k], **batch[k]} for k in loader_keys}
 
-        # global state
-        state_dict['all'] = {**model_out, 'coords': coords}
+        # global state for physics losses. Datasets that opt out of gradients do not provide jac_matrix.
+        if jacobian_loader_keys:
+            state_dict['all'] = {**jacobian_model_out, 'coords': jacobian_coords}
+        else:
+            state_dict['all'] = self._collate_states([state_dict[k] for k in loader_keys])
 
         loss_dict = {}
         for name, loss_module in self.loss_modules.items():

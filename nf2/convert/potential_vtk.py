@@ -19,7 +19,7 @@ parser.add_argument('--synoptic', type=str, help='path to the source radial magn
 parser.add_argument('--out_path', type=str, help='path to the target VTK files')
 
 parser.add_argument('--radius_range', nargs='+', type=float, default=(0.999, 1.5), required=False)
-parser.add_argument('--latitude_range', nargs='+', type=float, default=(0 * np.pi, 1 * np.pi), required=False)
+parser.add_argument('--latitude_range', nargs='+', type=float, default=(-0.5 * np.pi, 0.5 * np.pi), required=False)
 parser.add_argument('--longitude_range', nargs='+', type=float, default=(0 * np.pi, 2 * np.pi), required=False)
 parser.add_argument('--pixels_per_solRad', type=int, default=64, required=False)
 
@@ -30,6 +30,7 @@ os.makedirs(out_path, exist_ok=True)
 
 radius_range = tuple(args.radius_range)
 latitude_range = tuple(args.latitude_range)
+colatitude_range = sorted(np.pi / 2 - np.array(latitude_range))
 longitude_range = tuple(args.longitude_range)
 pixels_per_solRad = args.pixels_per_solRad
 
@@ -74,7 +75,7 @@ vtk_path = os.path.join(out_path, 'potential.vtk')
 
 spherical_bounds = np.stack(
     np.meshgrid(np.linspace(radius_range[0], radius_range[1], 50),
-                np.linspace(latitude_range[0], latitude_range[1], 50),
+                np.linspace(colatitude_range[0], colatitude_range[1], 50),
                 np.linspace(longitude_range[0], longitude_range[1], 50), indexing='ij'), -1)
 
 cartesian_bounds = spherical_to_cartesian(spherical_bounds)
@@ -96,9 +97,9 @@ radius = np.sqrt(np.sum(coords ** 2, -1))
 
 spherical_coords = cartesian_to_spherical(coords)
 condition = (spherical_coords[..., 0] >= radius_range[0]) & (spherical_coords[..., 0] < radius_range[1]) \
-            & (spherical_coords[..., 1] > latitude_range[0]) & (spherical_coords[..., 1] < latitude_range[1]) \
+            & (spherical_coords[..., 1] > colatitude_range[0]) & (spherical_coords[..., 1] < colatitude_range[1]) \
     # & (spherical_coords[..., 2] > longitude_range[0]) & (spherical_coords[..., 2] < longitude_range[1])
-spherical_coords[..., 1] -= np.pi / 2
+spherical_coords[..., 1] = np.pi / 2 - spherical_coords[..., 1]
 sub_coords = spherical_coords[condition]
 
 cube_shape = coords.shape[:-1]

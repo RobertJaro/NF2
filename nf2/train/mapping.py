@@ -1,5 +1,5 @@
 from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback, \
-    LosTrvAziBoundaryCallback, DisambiguationCallback, PressureBoundaryCallback
+    LosTrvAziBoundaryCallback, DisambiguationCallback, PressureBoundaryCallback, SphericalFITSComparisonCallback
 
 
 def load_callbacks(callback_configs, data_module):
@@ -18,6 +18,8 @@ def load_callbacks(callback_configs, data_module):
             callback = DisambiguationCallback(ds_id, ds.cube_shape, G_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'spherical_slices':
             callback = SphericalSlicesCallback(ds_id, ds.cube_shape, G_per_dB, Mm_per_ds)
+        elif callback_type == 'fits_comparison':
+            callback = SphericalFITSComparisonCallback(ds_id, ds.cube_shape, G_per_dB, Mm_per_ds)
         elif callback_type == 'slices':
             callback = SlicesCallback(ds_id, ds.cube_shape, G_per_dB, Mm_per_ds)
         elif callback_type == 'metrics':

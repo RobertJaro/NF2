@@ -1,38 +1,30 @@
 import os
-import uuid
 
 import numpy as np
 from astropy.nddata import block_reduce
 from pytorch_lightning import LightningDataModule
 from pytorch_lightning.utilities import CombinedLoader
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
-from nf2.data.dataset import BatchesDataset, IndexedDataset
+from nf2.data.dataset import IndexedDataset, TensorsDataset
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 
-class TensorsDataset(BatchesDataset):
+class RequiresJacobianDataset(Dataset):
 
-    def __init__(self, tensors, work_directory, filter_nans=True, shuffle=True, ds_name=None, **kwargs):
-        # filter nan entries
-        nan_mask = np.any([np.all(np.isnan(t), axis=tuple(range(1, t.ndim))) for t in tensors.values()], axis=0)
-        if nan_mask.sum() > 0 and filter_nans:
-            print(f'Filtering {nan_mask.sum()} nan entries')
-            tensors = {k: v[~nan_mask] for k, v in tensors.items()}
+    def __init__(self, dataset):
+        self.dataset = dataset
 
-        # shuffle data
-        if shuffle:
-            r = np.random.permutation(list(tensors.values())[0].shape[0])
-            tensors = {k: v[r] for k, v in tensors.items()}
+    def __len__(self):
+        return len(self.dataset)
 
-        ds_name = uuid.uuid4() if ds_name is None else ds_name
-        batches_paths = {}
-        for k, v in tensors.items():
-            coords_npy_path = os.path.join(work_directory, f'{ds_name}_{k}.npy')
-            np.save(coords_npy_path, v.astype(np.float32))
-            batches_paths[k] = coords_npy_path
+    def __getitem__(self, idx):
+        batch = self.dataset[idx]
+        batch['requires_jacobian'] = self.dataset.requires_jacobian
+        return batch
 
-        super().__init__(batches_paths, **kwargs)
+    def __getattr__(self, item):
+        return getattr(self.dataset, item)
 
 
 class BaseDataModule(LightningDataModule):
@@ -48,12 +40,16 @@ class BaseDataModule(LightningDataModule):
         self.num_workers = num_workers if num_workers is not None else os.cpu_count()
 
     def clear(self):
-        [ds.clear() for ds in self.datasets.values() if isinstance(ds, BatchesDataset)]
+        [ds.clear() for ds in self.datasets.values() if isinstance(ds, TensorsDataset)]
 
     def train_dataloader(self):
+        datasets = {
+            name: RequiresJacobianDataset(ds)
+            for name, ds in self.training_datasets.items()
+        }
         loaders = {name: DataLoader(ds, batch_size=None, num_workers=self.num_workers,
                                     pin_memory=False, shuffle=True, persistent_workers=True, prefetch_factor=5)
-                   for name, ds in self.training_datasets.items()}
+                   for name, ds in datasets.items()}
         return CombinedLoader(loaders, 'max_size_cycle')
 
     def val_dataloader(self):

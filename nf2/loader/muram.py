@@ -9,8 +9,9 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm
 from tqdm import tqdm
 
+from nf2.data.dataset import TensorsDataset
 from nf2.data.util import img_to_los_trv_azi
-from nf2.loader.base import MapDataset, TensorsDataset
+from nf2.loader.base import MapDataset
 
 muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
                    'By': {'id': 'result_prim_7', 'unit': u.Gauss},

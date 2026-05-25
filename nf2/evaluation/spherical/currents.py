@@ -64,7 +64,8 @@ if __name__ == '__main__':
 
     sampling = [128, 128, 128]
     longitude_range = [150, 210]
-    latitude_range = [60, 120]
+    colatitude_range = [60, 120]
+    latitude_range = [90 - colatitude_range[1], 90 - colatitude_range[0]]
     radius_range = [1.0, 1.3]
     dr = ((radius_range[1] - radius_range[0]) * u.solRad).to_value(u.cm) / sampling[0]
 
@@ -120,7 +121,7 @@ if __name__ == '__main__':
         ax.imshow(euv_map.data / exposure_time, origin='lower', cmap=euv_map.cmap, extent=[0, 360, 180, 0],
                   norm=euv_norm)
         ax.set_xlim(*longitude_range)
-        ax.set_ylim(*reversed(latitude_range))
+        ax.set_ylim(*reversed(colatitude_range))
         fig.savefig(os.path.join(results_path, f'euv_{date_str}.jpg'), dpi=300)
         plt.close(fig)
 
@@ -130,7 +131,7 @@ if __name__ == '__main__':
 
         spherical_coords = model_out['spherical_coords']
         spherical_coords = SkyCoord(lon=spherical_coords[..., 2] * u.rad,
-                                    lat=(spherical_coords[..., 1]) * u.rad,
+                                    lat=(np.pi / 2 - spherical_coords[..., 1]) * u.rad,
                                     radius=spherical_coords[..., 0] * u.solRad,
                                     frame=br_map.coordinate_frame)
         pfss_cube_shape = spherical_coords.shape
@@ -144,7 +145,7 @@ if __name__ == '__main__':
         ff_energy = energy(b)
         free_energy = ff_energy - potential_energy
 
-        extent = [*longitude_range, *reversed(latitude_range)]
+        extent = [*longitude_range, *reversed(colatitude_range)]
 
         # B field
         fig, ax = plt.subplots(figsize=(5, 5))
@@ -172,7 +173,7 @@ if __name__ == '__main__':
         cax = divider.append_axes('right', size='2%', pad=0.05)
         fig.colorbar(im, cax=cax, orientation='vertical')
         ax.set_xlim(*longitude_range)
-        ax.set_ylim(*reversed(latitude_range))
+        ax.set_ylim(*reversed(colatitude_range))
         fig.savefig(os.path.join(results_path, f'b_obs_{date_str}.jpg'), dpi=300)
         plt.close(fig)
 
@@ -244,7 +245,7 @@ if __name__ == '__main__':
                        norm=euv_norm)
         ax.set_title('SDO/AIA 193 $\AA$')
         ax.set_xlim(*longitude_range)
-        ax.set_ylim(*latitude_range)
+        ax.set_ylim(*colatitude_range)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes('right', size='2%', pad=0.05)
         fig.colorbar(im, cax=cax, orientation='vertical', label='[DN/s]')

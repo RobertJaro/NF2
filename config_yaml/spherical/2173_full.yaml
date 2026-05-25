@@ -17,7 +17,8 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_170000_TAI.Bp_err.fits"
-      mu_filter:
+      mask_configs:
+        type: mu_filter
         max: 0.99
     - type: map
       ds_id: synoptic
@@ -47,13 +48,13 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_000000_TAI.Bp_err.fits"
-      mu_filter:
-        max: 0.99
       mask_configs:
-        type: heliographic_carrington
-        longitude_range: [ 1.603, 4.116 ]
-        latitude_range: [  0.424, 2.938 ]
-        invert: true
+        - type: mu_filter
+          max: 0.99
+        - type: heliographic_carrington
+          longitude_range: [ 1.603, 4.116 ]
+          latitude_range: [  0.424, 2.938 ]
+          invert: true
     - type: spherical_slices
       ds_id: slices
       n_slices: 10

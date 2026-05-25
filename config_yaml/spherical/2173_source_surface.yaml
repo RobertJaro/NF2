@@ -17,7 +17,8 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp_err.fits"
-      mu_filter:
+      mask_configs:
+        type: mu_filter
         min: 0.2
     - type: map
       ds_id: synoptic
@@ -49,13 +50,13 @@ data:
         Br_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Br_err.fits"
         Bt_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bt_err.fits"
         Bp_err: "/glade/work/rjarolim/data/global/fd_2173/full_disk/hmi.b_720s.20160205_160000_TAI.Bp_err.fits"
-      mu_filter:
-        min: 0.2
       mask_configs:
-        type: heliographic_carrington
-        longitude_range: [ 82.85, 244.83 ]
-        latitude_range: [ -78.34, 65.71  ]
-        invert: true
+        - type: mu_filter
+          min: 0.2
+        - type: heliographic_carrington
+          longitude_range: [ 82.85, 244.83 ]
+          latitude_range: [ -78.34, 65.71  ]
+          invert: true
     - type: map
       ds_id: synoptic_valid
       filter_nans: false

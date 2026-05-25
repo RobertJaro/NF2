@@ -383,10 +383,11 @@ class SphericalOutput(BaseOutput):
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
         radius_range = radius_range if radius_range is not None else self.radius_range
+        colatitude_range = sorted(np.pi / 2 * u.rad - latitude_range)
         spherical_coords = np.stack(
             np.meshgrid(
                 np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), sampling[0]),
-                np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), sampling[1]),
+                np.linspace(colatitude_range[0].to_value(u.rad), colatitude_range[1].to_value(u.rad), sampling[1]),
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
@@ -422,18 +423,18 @@ class SphericalOutput(BaseOutput):
                         np.linspace(z_min, z_max, int((z_max - z_min) * res)), indexing='ij'), -1)
         # flipped z axis
         spherical_coords = cartesian_to_spherical(coords)
-        lat_coord = spherical_coords[..., 1]
+        colatitude_coord = spherical_coords[..., 1]
         lon_coord = (spherical_coords[..., 2] % (2 * np.pi))
         rad_coord = spherical_coords[..., 0]
 
-        min_lat, max_lat = latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad)
+        min_colatitude, max_colatitude = latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad)
         min_lon, max_lon = (longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad))
 
         # only evaluate coordinates in simulation volume
-        if min_lat == max_lat:
-            lat_cond = np.ones_like(lat_coord, dtype=bool)
+        if min_colatitude == max_colatitude:
+            lat_cond = np.ones_like(colatitude_coord, dtype=bool)
         else:
-            lat_cond = (lat_coord >= min_lat) & (lat_coord < max_lat)
+            lat_cond = (colatitude_coord >= min_colatitude) & (colatitude_coord < max_colatitude)
         if min_lon == max_lon:
             lon_cond = np.ones_like(lon_coord, dtype=bool)
         else:
@@ -483,7 +484,7 @@ class SphericalOutput(BaseOutput):
         r = r * u.solRad if r.unit == u.dimensionless_unscaled else r
         spherical_coords = np.stack([
             r.to(u.solRad).value,
-            spherical_coords.lat.to(u.rad).value,
+            np.pi / 2 - spherical_coords.lat.to(u.rad).value,
             spherical_coords.lon.to(u.rad).value,
         ], -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)

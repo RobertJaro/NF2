@@ -7,7 +7,7 @@ from pytorch_lightning import LightningDataModule
 from torch.utils.data import DataLoader, RandomSampler
 
 from nf2.data.analytical_field import get_analytic_b_field
-from nf2.data.dataset import BatchesDataset, RandomCoordinateDataset, CubeDataset
+from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, TensorsDataset
 from nf2.data.loader import prep_b_data
 
 
@@ -106,35 +106,20 @@ class AnalyticDataModule(LightningDataModule):
         cube_shape = [*b_cube.shape[:2], height]
         self.cube_shape = cube_shape
 
-        # prep dataset
-        # shuffle data
-        r = np.random.permutation(coords.shape[0])
-        coords = coords[r]
-        values = values[r]
-        # store data to disk
-        coords_npy_path = os.path.join(work_directory, 'coords.npy')
-        np.save(coords_npy_path, coords)
-        values_npy_path = os.path.join(work_directory, 'values.npy')
-        np.save(values_npy_path, values)
-        # create data loaders
-        batches_path = {'coords': coords_npy_path, 'values': values_npy_path}
+        tensors = {'coords': coords, 'values': values}
         if boundary['type'] == "tau":  # add ranges
             ranges /= spatial_norm
-            ranges = ranges[r]
-            ranges_npy_path = os.path.join(work_directory, 'ranges.npy')
-            np.save(ranges_npy_path, ranges)
-            batches_path['height_ranges'] = ranges_npy_path
+            tensors['height_ranges'] = ranges
 
         boundary_batch_size = int(batch_size['boundary']) if isinstance(batch_size, dict) else int(batch_size)
         random_batch_size = int(batch_size['random']) if isinstance(batch_size, dict) else int(batch_size)
 
-        self.dataset = BatchesDataset(batches_path, boundary_batch_size)
+        self.dataset = TensorsDataset(tensors, boundary_batch_size, work_directory, ds_name='analytical_boundary')
         self.random_dataset = RandomCoordinateDataset(cube_shape, spatial_norm, random_batch_size)
         self.cube_dataset = CubeDataset(cube_shape, spatial_norm, batch_size=boundary_batch_size)
-        self.batches_path = batches_path
 
     def clear(self):
-        [os.remove(f) for f in self.batches_path.values()]
+        self.dataset.clear()
 
     def train_dataloader(self):
         data_loader = DataLoader(self.dataset, batch_size=None, num_workers=self.num_workers, pin_memory=True,

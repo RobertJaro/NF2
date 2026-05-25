@@ -83,7 +83,7 @@ training:
   loss_config:
     - type: boundary
       name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4} #1
+      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
       ds_id: [AR, full_disk]
     - type: energy_gradient
       lambda: 1.0

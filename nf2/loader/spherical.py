@@ -1,6 +1,9 @@
 import os
+import glob
+import re
+import multiprocessing as mp
 from collections import OrderedDict
-from copy import copy, deepcopy
+from copy import deepcopy
 
 import numpy as np
 import wandb
@@ -8,13 +11,64 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+from pytorch_lightning import LightningDataModule
+from pytorch_lightning.utilities import rank_zero_only
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
 from nf2.data.dataset import RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, \
-    RandomRadialGroupedCoordinateDataset
+    RandomRadialGroupedCoordinateDataset, TensorsDataset
 from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
-from nf2.loader.base import BaseDataModule, TensorsDataset
+from nf2.loader.base import BaseDataModule
+
+
+def _mu_filter_mask(smap, mu_filter):
+    if mu_filter is None:
+        return None
+    if isinstance(mu_filter, (int, float)):
+        mu_filter = {'min': mu_filter}
+
+    coords = all_coordinates_from_map(smap)
+    rho = np.hypot(coords.Tx.to_value(u.rad), coords.Ty.to_value(u.rad))
+    rsun = smap.rsun_obs.to_value(u.rad)
+    radial_distance = rho / rsun
+
+    with np.errstate(invalid='ignore'):
+        mu = np.sqrt(1 - radial_distance ** 2)
+
+    mask = ~np.isfinite(mu) | (radial_distance > 1)
+    if 'min' in mu_filter:
+        mask |= mu < mu_filter['min']
+    if 'max' in mu_filter:
+        mask |= mu > mu_filter['max']
+    return mask
+
+
+def _reference_map_lon_lat(reference_map):
+    carrington_coords = all_coordinates_from_map(reference_map).transform_to(frames.HeliographicCarrington)
+    center_lon = reference_map.center.transform_to(frames.HeliographicCarrington).lon
+    longitude_deg = carrington_coords.lon.wrap_at(center_lon + 180 * u.deg).to_value(u.deg)
+    latitude_deg = carrington_coords.lat.to_value(u.deg)
+    return longitude_deg, latitude_deg
+
+
+def _reference_map_coordinate_bounds(reference_map, mu_filter=None, name='reference map'):
+    longitude_deg, latitude_deg = _reference_map_lon_lat(reference_map)
+    valid = np.isfinite(reference_map.data) & np.isfinite(longitude_deg) & np.isfinite(latitude_deg)
+
+    mu_mask = _mu_filter_mask(reference_map, mu_filter)
+    if mu_mask is not None:
+        valid &= ~mu_mask
+
+    if not np.any(valid):
+        raise ValueError(f'No valid coordinates found in {name}.')
+
+    return {
+        'latitude_range': [float(np.nanmin(latitude_deg[valid])),
+                           float(np.nanmax(latitude_deg[valid]))],
+        'longitude_range': [float(np.nanmin(longitude_deg[valid])),
+                            float(np.nanmax(longitude_deg[valid]))],
+    }
 
 
 class SphericalSliceDataset(TensorsDataset):
@@ -22,8 +76,9 @@ class SphericalSliceDataset(TensorsDataset):
     def __init__(self, b, coords, spherical_coords, G_per_dB, Mm_per_ds,
                  b_err=None, transform=None,
                  plot_overview=True, strides=1, **kwargs):
+        ds_name = kwargs.get('ds_name')
         if plot_overview:
-            self._plot(b, coords, spherical_coords, transform)
+            self._plot(b, coords, spherical_coords, transform, ds_name)
         if strides > 1:
             b = b[::strides, ::strides]
             coords = coords[::strides, ::strides]
@@ -59,7 +114,9 @@ class SphericalSliceDataset(TensorsDataset):
 
         super().__init__(tensors, **kwargs)
 
-    def _plot(self, b, coords, spherical_coords, transform):
+    @rank_zero_only
+    def _plot(self, b, coords, spherical_coords, transform, ds_name=None):
+        log_prefix = f'{ds_name}/' if ds_name is not None else ''
         b_min_max = 200
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
@@ -108,7 +165,7 @@ class SphericalSliceDataset(TensorsDataset):
 
         fig.tight_layout()
 
-        wandb.log({"Spherical": wandb.Image(fig)})
+        wandb.log({f"{log_prefix}Spherical": wandb.Image(fig)})
         plt.close('all')
 
         b_cartesian = np.einsum('...ij,...j->...i', transform, b) if transform is not None else b
@@ -159,13 +216,16 @@ class SphericalSliceDataset(TensorsDataset):
 
         fig.tight_layout()
 
-        wandb.log({"Cartesian": wandb.Image(fig)})
+        wandb.log({f"{log_prefix}Cartesian": wandb.Image(fig)})
         plt.close('all')
 
 
 class SphericalMapDataset(SphericalSliceDataset):
 
-    def __init__(self, files, mask_configs=None, insert=None, mu_filter=None, **kwargs):
+    def __init__(self, files, mask_configs=None, insert=None, **kwargs):
+        if 'mu_filter' in kwargs:
+            raise TypeError("mu_filter is no longer a SphericalMapDataset argument; use mask_configs instead.")
+
         # load maps
         r_map = Map(files['Br'])
         t_map = Map(files['Bt'])
@@ -188,15 +248,6 @@ class SphericalMapDataset(SphericalSliceDataset):
         b_spherical[nan_mask, 1:] = 0  # set missing transverse components to zero
         b_cartesian = vector_spherical_to_cartesian(b_spherical, spherical_coords)
         transform = cartesian_to_spherical_matrix(spherical_coords)
-        mu_mask = self._mu_filter_mask(r_map, mu_filter)
-        mu_mask = mu_mask.T if mu_mask is not None else None
-        if mu_mask is not None:
-            b_spherical[mu_mask] = np.nan
-            b_cartesian[mu_mask] = np.nan
-            cartesian_coords[mu_mask] = np.nan
-            spherical_coords[mu_mask] = np.nan
-            transform[mu_mask] = np.nan
-
         # load error maps
         if 'Br_err' in files and 'Bt_err' in files and 'Bp_err' in files:
             r_error_map = Map(files['Br_err'])
@@ -205,8 +256,6 @@ class SphericalMapDataset(SphericalSliceDataset):
             b_error_spherical = np.stack([r_error_map.data,
                                           t_error_map.data,
                                           p_error_map.data]).transpose()
-            if mu_mask is not None:
-                b_error_spherical[mu_mask] = np.nan
         else:
             b_error_spherical = None
 
@@ -265,7 +314,10 @@ class SphericalMapDataset(SphericalSliceDataset):
     def _mask(self, b_cartesian, b_error_spherical, b_spherical, cartesian_coords, mask_config, r_map,
               spherical_coords, transform):
         m_type = mask_config['type']
-        if m_type == 'reference':
+        if m_type == 'mu_filter':
+            mask = _mu_filter_mask(r_map, mask_config)
+            mask = mask.T if mask is not None else np.zeros(spherical_coords.shape[:2], dtype=bool)
+        elif m_type == 'reference':
             ref_map = Map(mask_config['file'])
             mask = self._reference_pixel_mask(ref_map, r_map, spherical_coords.shape[:2],
                                               mask_config.get('mu_filter'))
@@ -301,8 +353,9 @@ class SphericalMapDataset(SphericalSliceDataset):
 
             mask = lat_mask & lon_mask
         else:
-            raise NotImplementedError(f"Unknown mask type '{type}'. "
-                                      f"Please choose from: ['reference', 'helioprojective', 'heliographic_carrington']")
+            raise NotImplementedError(f"Unknown mask type '{m_type}'. "
+                                      f"Please choose from: ['mu_filter', 'reference', 'helioprojective', "
+                                      f"'heliographic_carrington']")
 
         mask = ~mask if 'invert' in mask_config and mask_config['invert'] else mask
 
@@ -325,7 +378,7 @@ class SphericalMapDataset(SphericalSliceDataset):
 
         ny, nx = target_map.data.shape
         valid = np.isfinite(ref_map.data) & np.isfinite(x_pix) & np.isfinite(y_pix)
-        mu_mask = SphericalMapDataset._mu_filter_mask(ref_map, mu_filter)
+        mu_mask = _mu_filter_mask(ref_map, mu_filter)
         if mu_mask is not None:
             valid &= ~mu_mask
         x_idx = np.rint(x_pix[valid]).astype(int)
@@ -338,36 +391,53 @@ class SphericalMapDataset(SphericalSliceDataset):
 
     @staticmethod
     def _mu_filter_mask(smap, mu_filter):
-        if mu_filter is None:
-            return None
-        if isinstance(mu_filter, (int, float)):
-            mu_filter = {'min': mu_filter}
+        return _mu_filter_mask(smap, mu_filter)
 
-        coords = all_coordinates_from_map(smap)
-        rho = np.hypot(coords.Tx.to_value(u.rad), coords.Ty.to_value(u.rad))
-        rsun = smap.rsun_obs.to_value(u.rad)
-        radial_distance = rho / rsun
 
-        with np.errstate(invalid='ignore'):
-            mu = np.sqrt(1 - radial_distance ** 2)
+class SphericalFITSReferenceDataset(TensorsDataset):
 
-        mask = ~np.isfinite(mu) | (radial_distance > 1)  # mask out-of-disk pixels
-        if 'min' in mu_filter:
-            mask |= mu < mu_filter['min']
-        if 'max' in mu_filter:
-            mask |= mu > mu_filter['max']
-        return mask
+    def __init__(self, Mm_per_ds, reference_br=None, reference_file=None, radius_range=None, batch_size=1024,
+                 n_slices=10, **kwargs):
+        reference_br = reference_file if reference_br is None else reference_br
+        if reference_br is None:
+            raise ValueError('SphericalFITSReferenceDataset requires reference_br or reference_file.')
+        reference_map = Map(reference_br)
+
+        longitude_deg, latitude_deg = _reference_map_lon_lat(reference_map)
+        longitude_rad = np.deg2rad(longitude_deg)
+        colatitude_rad = np.pi / 2 - np.deg2rad(latitude_deg)
+        radius = np.linspace(radius_range[0], radius_range[1], int(n_slices), dtype=np.float32)
+
+        spherical_coords = np.empty((len(radius), *reference_map.data.shape, 3), dtype=np.float32)
+        spherical_coords[..., 0] = radius[:, None, None]
+        spherical_coords[..., 1] = colatitude_rad[None]
+        spherical_coords[..., 2] = longitude_rad[None]
+
+        cartesian_coords = spherical_to_cartesian(spherical_coords)
+        cartesian_coords = cartesian_coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
+
+        self.cube_shape = spherical_coords.shape[:-1]
+        tensors = {
+            'coords': cartesian_coords.reshape(-1, 3),
+            'spherical_coords': spherical_coords.reshape(-1, 3),
+            'reference_br': np.broadcast_to(reference_map.data[None], self.cube_shape).reshape(-1, 1),
+            'reference_lon': np.broadcast_to(longitude_deg[None], self.cube_shape).reshape(-1, 1),
+            'reference_lat': np.broadcast_to(latitude_deg[None], self.cube_shape).reshape(-1, 1),
+        }
+
+        super().__init__(tensors, batch_size=batch_size, Mm_per_ds=Mm_per_ds, **kwargs)
 
 
 class SphericalDataModule(BaseDataModule):
 
     def __init__(self, train_configs, validation_configs,
                  max_radius=1.3,
-                 Mm_per_ds=(1 * u.solRad).to_value(u.Mm),
+                 Mm_per_ds=100,
                  G_per_dB=None, work_directory=None,
                  batch_size=4096, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
+                           'fits_reference': SphericalFITSReferenceDataset,
                            'random_spherical': RandomSphericalCoordinateDataset,
                            'random_radial_grouped': RandomRadialGroupedCoordinateDataset,
                            'sphere': SphereDataset,
@@ -399,67 +469,212 @@ class SphericalDataModule(BaseDataModule):
             config = deepcopy(config)
             c_type = config.pop('type')
             c_name = config.pop('ds_id') if 'ds_id' in config else f'{prefix}_{c_type}_{i}'
+            requires_jacobian = config.pop('requires_jacobian', True)
             config['ds_name'] = c_name
             # update config with general config
             for k, v in general_config.items():
                 if k not in config:
                     config[k] = v
+            if c_type in ['random_spherical', 'random_radial_grouped']:
+                self._apply_random_reference_map(config)
+            config['requires_jacobian'] = requires_jacobian
             os.makedirs(config['work_directory'], exist_ok=True)
             dataset = self.ds_mapping[c_type](**config)
             datasets[c_name] = dataset
         return datasets
 
+    @staticmethod
+    def _apply_random_reference_map(config):
+        reference_config = config.pop('reference_map', None)
+        if reference_config is None:
+            return
 
-class SphericalSeriesDataModule(SphericalDataModule):
+        if isinstance(reference_config, str):
+            reference_config = {'file': reference_config}
+        if not isinstance(reference_config, dict):
+            raise TypeError('reference_map must be a file path or configuration dictionary.')
 
-    def __init__(self, fits_paths, synoptic_fits_path, *args, **kwargs):
+        reference_file = reference_config.get('file')
+        if reference_file is None:
+            raise ValueError('reference_map requires a file.')
+
+        reference_map = Map(reference_file)
+        mu_filter = reference_config.get('mu_filter', reference_config.get('mu'))
+        bounds = _reference_map_coordinate_bounds(reference_map, mu_filter, f'reference_map file: {reference_file}')
+
+        config.setdefault('latitude_range', bounds['latitude_range'])
+        config.setdefault('longitude_range', bounds['longitude_range'])
+        config.setdefault('unit', 'deg')
+
+
+def _load_spherical_data_module(worker_args):
+    step, total_steps, train_configs, args, kwargs = worker_args
+    print(f'Loading data module {step + 1:03d}/{total_steps:03d}; '
+          f'ID: {SphericalSeriesDataModule._step_id(train_configs, step)}')
+    return SphericalDataModule(train_configs, *args, **kwargs)
+
+
+class SphericalSeriesDataModule(LightningDataModule):
+
+    def __init__(self, train_configs, current_step=0, iterations=None, data_module_workers=None, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-        self.fits_paths = copy(fits_paths)
-        self.synoptic_fits_path = synoptic_fits_path
+        self.iterations = iterations
 
-        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
+        self.train_configs = self._expand_train_configs(train_configs)
+        self.step = current_step
+        self.total_steps = len(self.train_configs)
 
-        self.initialized = True  # only required for first iteration
-        train_configs = self._build_config(fits_paths[0])
-        super().__init__(train_configs, *self.args, **self.kwargs)
+        assert self.step < self.total_steps, \
+            'Not enough data files found to continue training. Training completed or configuration is incorrect.'
 
-    def _build_config(self, fits):
-        full_disk_config = {
-            'type': 'map',
-            'ds_id': 'full_disk',
-            'batch_size': 4096,
-            'files': {'Br': fits['Br'], 'Bt': fits['Bt'], 'Bp': fits['Bp'], }
-        }
-        synoptic_config = {
-            'type': 'map',
-            'ds_id': 'synoptic',
-            'batch_size': 4096,
-            'files': {'Br': self.synoptic_fits_path['Br'],
-                      'Bt': self.synoptic_fits_path['Bt'],
-                      'Bp': self.synoptic_fits_path['Bp']},
-            'mask_configs': [{'type': 'reference', 'file': fits['Br']}]
-        }
-        random_config = {
-            'type': 'random_spherical',
-            'ds_id': 'random',
-            'batch_size': 16384
-        }
-        train_configs = [full_disk_config, synoptic_config, random_config]
-        return train_configs
+        self.data_modules = [None] * self.total_steps
+        super().__init__()
+        self._load_data_modules(data_module_workers)
+
+    def _expand_train_configs(self, train_configs):
+        expanded_configs = [self._expand_config(config) for config in train_configs]
+        total_steps = max(len(configs) for configs in expanded_configs)
+        assert all(len(configs) in (1, total_steps) for configs in expanded_configs), \
+            'Inconsistent number of training files in configurations. Check your configurations.'
+
+        configs_by_step = []
+        for step in range(total_steps):
+            step_configs = [deepcopy(configs[step] if len(configs) > 1 else configs[0])
+                            for configs in expanded_configs]
+            context = {config.get('ds_id', f'train_{i}'): config
+                       for i, config in enumerate(step_configs)}
+            configs_by_step.append([self._resolve_placeholders(config, context) for config in step_configs])
+        return configs_by_step
+
+    def _expand_config(self, config):
+        config = deepcopy(config)
+        if config['type'] == 'map':
+            configs = self._expand_map_config(config)
+        else:
+            configs = [config]
+
+        if self.iterations is not None:
+            for c in configs:
+                if c['type'] in ['random_spherical', 'random_radial_grouped'] and 'length' not in c:
+                    c['length'] = self.iterations
+        return configs
+
+    def _expand_map_config(self, config):
+        files = config.get('files')
+        if files is None:
+            return [config]
+        if isinstance(files, list):
+            configs = []
+            for f in files:
+                c = deepcopy(config)
+                c['files'] = f
+                c['id'] = self._files_id(f)
+                configs.append(c)
+            return configs
+
+        expanded_files = {k: self._expand_file_value(v) for k, v in files.items()}
+        series_lengths = [len(v) for v in expanded_files.values() if isinstance(v, list)]
+        if len(series_lengths) == 0:
+            return [config]
+
+        n_steps = max(series_lengths)
+        assert all(length in (1, n_steps) for length in series_lengths), \
+            f'Inconsistent number of files in spherical map config {config.get("ds_id", "")}'
+
+        configs = []
+        for step in range(n_steps):
+            c = deepcopy(config)
+            c['files'] = {k: v[step if len(v) > 1 else 0] if isinstance(v, list) else v
+                          for k, v in expanded_files.items()}
+            c['id'] = self._files_id(c['files'])
+            configs.append(c)
+        return configs
+
+    @staticmethod
+    def _expand_file_value(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str) and glob.has_magic(value):
+            files = sorted(glob.glob(value))
+            assert len(files) > 0, f'No files found for pattern {value}'
+            return files
+        return value
+
+    @staticmethod
+    def _resolve_placeholders(value, context):
+        if isinstance(value, dict):
+            return {k: SphericalSeriesDataModule._resolve_placeholders(v, context)
+                    for k, v in value.items()}
+        if isinstance(value, list):
+            return [SphericalSeriesDataModule._resolve_placeholders(v, context) for v in value]
+        if not isinstance(value, str):
+            return value
+
+        def replace(match):
+            keys = match.group(1).split('.')
+            resolved = context[keys[0]]
+            for key in keys[1:]:
+                resolved = resolved[key]
+            return str(resolved)
+
+        return re.sub(r'<<([^<>]+)>>', replace, value)
+
+    @staticmethod
+    def _files_id(files):
+        if 'Br' in files:
+            return os.path.basename(files['Br']).split('.')[-3]
+        return None
+
+    @staticmethod
+    def _step_id(train_configs, step):
+        for config in train_configs:
+            if 'id' in config and config['id'] is not None:
+                return config['id']
+            if config.get('type') == 'map' and 'files' in config:
+                config_id = SphericalSeriesDataModule._files_id(config['files'])
+                if config_id is not None:
+                    return config_id
+        return f'step_{step:06d}'
+
+    @property
+    def current_id(self):
+        return self._step_id(self.train_configs[self.step], self.step)
+
+    def _get_data_module(self, step):
+        return self.data_modules[step]
+
+    def _load_data_modules(self, data_module_workers):
+        n_workers = data_module_workers if data_module_workers is not None else (os.cpu_count() or 1)
+        n_workers = max(1, min(n_workers, self.total_steps))
+
+        print(f'Loading data modules... (total: {self.total_steps}, workers: {n_workers})')
+        worker_args = [(step, self.total_steps, train_configs, self.args, self.kwargs)
+                       for step, train_configs in enumerate(self.train_configs)]
+        if n_workers == 1:
+            self.data_modules = [_load_spherical_data_module(args) for args in worker_args]
+            return
+
+        start_method = 'fork' if 'fork' in mp.get_all_start_methods() else None
+        context = mp.get_context(start_method) if start_method is not None else mp.get_context()
+        with context.Pool(processes=n_workers) as pool:
+            self.data_modules = pool.map(_load_spherical_data_module, worker_args)
+
+    @property
+    def config(self):
+        return self._get_data_module(self.step).config
+
+    @property
+    def validation_datasets(self):
+        return self._get_data_module(self.step).validation_datasets
+
+    @property
+    def validation_dataset_mapping(self):
+        return self._get_data_module(self.step).validation_dataset_mapping
 
     def train_dataloader(self):
-        # skip reload if already initialized - for initial epoch
-        if self.initialized:
-            self.initialized = False
-            print('Currently loaded:', self.current_id)
-            return super().train_dataloader()
-        # update ID
-        self.current_id = os.path.basename(self.fits_paths[0]['Br']).split('.')[-3]
-        # re-initialize
-        train_configs = self._build_config(self.fits_paths[0])
-        super().__init__(train_configs, *self.args, **self.kwargs)
-        # continue with next file in list
-        del self.fits_paths[0]
         print('Currently loaded:', self.current_id)
-        return super().train_dataloader()
+        return self._get_data_module(self.step).train_dataloader()
+
+    def val_dataloader(self):
+        return self._get_data_module(self.step).val_dataloader()

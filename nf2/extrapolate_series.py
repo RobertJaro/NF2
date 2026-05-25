@@ -68,7 +68,9 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     # reload model training
     ckpts = sorted(glob.glob(os.path.join(base_path, '*.nf2')))
     current_step = len(ckpts)
-    ckpt_path = 'last' if current_step > 0 else meta_path  # reload last savepoint
+    last_ckpt_path = os.path.join(base_path, 'last.ckpt')
+    ckpt_path = last_ckpt_path if os.path.exists(last_ckpt_path) else None
+    meta_state_path = None if ckpt_path is not None else meta_path
 
     # initialize data module
     data_module_save_path = os.path.join(work_directory, 'data_module.pkl')
@@ -92,10 +94,13 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
-                    model_kwargs=model, loss_config=loss, transforms=transforms, loss_scaling=loss_scaling)
+                    model_kwargs=model, loss_config=loss, transforms=transforms, loss_scaling=loss_scaling,
+                    meta_path=meta_state_path)
 
     reload_dataloaders_interval = training[
         'reload_dataloaders_every_n_epochs'] if 'reload_dataloaders_every_n_epochs' in training else 1
+    max_epochs = data_module.total_steps * reload_dataloaders_interval if ckpt_path is not None else \
+        (data_module.total_steps - data_module.step) * reload_dataloaders_interval
 
     # callback
     config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
@@ -116,7 +121,7 @@ def run(base_path, data, meta_path, work_directory=None, callbacks=[], logging={
     callback_modules += [checkpoint_callback, save_callback, advance_data_module_callback]
 
     val_check_interval = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else 1
-    trainer = Trainer(max_epochs=-1,
+    trainer = Trainer(max_epochs=max_epochs,
                       logger=wandb_logger,
                       devices=n_gpus if n_gpus > 0 else None,
                       accelerator='gpu' if n_gpus >= 1 else None,

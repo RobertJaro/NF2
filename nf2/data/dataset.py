@@ -1,4 +1,5 @@
 import os
+import uuid
 
 import numpy as np
 import torch
@@ -8,36 +9,64 @@ from torch.utils.data import Dataset
 from nf2.data.util import spherical_to_cartesian
 
 
-class BatchesDataset(Dataset):
+class NF2Dataset(Dataset):
 
-    def __init__(self, batches_file_paths, batch_size, **kwargs):
-        """Data set for lazy loading a pre-batched numpy data array.
+    def __init__(self, requires_jacobian=True):
+        super().__init__()
+        self.requires_jacobian = bool(requires_jacobian)
 
-        :param batches_path: path to the numpy array.
-        """
-        self.batches_file_paths = batches_file_paths
+
+class TensorsDataset(NF2Dataset):
+
+    def __init__(self, tensors, batch_size, work_directory, filter_nans=True, shuffle=True, ds_name=None,
+                 requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
+        if len(tensors) == 0:
+            raise ValueError('TensorsDataset requires at least one tensor.')
+        n_samples = {v.shape[0] for v in tensors.values()}
+        if len(n_samples) != 1:
+            raise ValueError(f'All tensors must have the same first dimension, got {sorted(n_samples)}.')
+
+        nan_mask = np.any([np.all(np.isnan(t), axis=tuple(range(1, t.ndim))) for t in tensors.values()], axis=0)
+        if nan_mask.sum() > 0 and filter_nans:
+            print(f'Filtering {nan_mask.sum()} nan entries')
+            tensors = {k: v[~nan_mask] for k, v in tensors.items()}
+
+        if shuffle:
+            r = np.random.permutation(list(tensors.values())[0].shape[0])
+            tensors = {k: v[r] for k, v in tensors.items()}
+
+        ds_name = uuid.uuid4() if ds_name is None else ds_name
+        os.makedirs(work_directory, exist_ok=True)
+        self.file_paths = {}
+        for k, v in tensors.items():
+            file_path = os.path.join(work_directory, f'{ds_name}_{k}.npy')
+            np.save(file_path, v.astype(np.float32))
+            self.file_paths[k] = file_path
+
         self.batch_size = int(batch_size)
 
     def __len__(self):
-        ref_file = list(self.batches_file_paths.values())[0]
+        ref_file = list(self.file_paths.values())[0]
         n_batches = np.ceil(np.load(ref_file, mmap_mode='r').shape[0] / self.batch_size)
         return n_batches.astype(np.int32)
 
     def __getitem__(self, idx):
-        # lazy load data
-        data = {k: np.copy(np.load(bf, mmap_mode='r')[idx * self.batch_size: (idx + 1) * self.batch_size])
-                for k, bf in self.batches_file_paths.items()}
-        return data
+        start = idx * self.batch_size
+        stop = (idx + 1) * self.batch_size
+        return {k: np.copy(np.load(file_path, mmap_mode='r')[start:stop])
+                for k, file_path in self.file_paths.items()}
 
     def clear(self):
-        for f in self.batches_file_paths.values():
-            if os.path.exists(f):
-                os.remove(f)
+        for file_path in self.file_paths.values():
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
 
-class CubeDataset(Dataset):
+class CubeDataset(NF2Dataset):
 
-    def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13, **kwargs):
+    def __init__(self, coord_range, ds_per_pixel=1 / 128, batch_size=2 ** 13, requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
         y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
         z_resolution = int((coord_range[2, 1] - coord_range[2, 0]) / ds_per_pixel)
@@ -59,11 +88,12 @@ class CubeDataset(Dataset):
         return {'coords': coord}
 
 
-class RandomSphericalCoordinateDataset(Dataset):
+class RandomSphericalCoordinateDataset(NF2Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
                  latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
-                 volume_uniform_sampling=True, **kwargs):
+                 volume_uniform_sampling=True, length=None, requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to colatitude
@@ -75,9 +105,10 @@ class RandomSphericalCoordinateDataset(Dataset):
         self.batch_size = batch_size
         self.float_tensor = torch.FloatTensor
         self.volume_uniform_sampling = volume_uniform_sampling
+        self.length = int(length) if length is not None else 1
 
     def __len__(self):
-        return 1
+        return self.length
 
     def __getitem__(self, item):
         random_coords = self.float_tensor(self.batch_size, 3).uniform_()
@@ -106,11 +137,13 @@ class RandomSphericalCoordinateDataset(Dataset):
         return {'coords': random_coords}
 
 
-class RandomRadialGroupedCoordinateDataset(Dataset):
+class RandomRadialGroupedCoordinateDataset(NF2Dataset):
 
     def __init__(self, radius_range, batch_size, Mm_per_ds,
-                 n_lat_lon_sample=128, volume_uniform_sampling=True,
-                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg', length=None, **kwargs):
+                 n_lat_lon_sample=128, radial_sampling_exponent=1,
+                 latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg', length=None,
+                 requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to colatitude
@@ -132,7 +165,9 @@ class RandomRadialGroupedCoordinateDataset(Dataset):
                 f'batch_size ({self.batch_size}) must be divisible by '
                 f'n_lat_lon_sample ({self.n_lat_lon_sample}).')
         self.radial_sample = self.batch_size // self.n_lat_lon_sample
-        self.volume_uniform_sampling = volume_uniform_sampling
+        self.radial_sampling_exponent = float(radial_sampling_exponent)
+        if self.radial_sampling_exponent <= 0:
+            raise ValueError('radial_sampling_exponent must be positive.')
 
     def __len__(self):
         return self.length
@@ -141,21 +176,16 @@ class RandomRadialGroupedCoordinateDataset(Dataset):
         # radial coordinates
         h_r = self.radius_range
         r_coords = self.float_tensor(self.radial_sample, 1).uniform_()
-        if self.volume_uniform_sampling:
-            r_min, r_max = np.min(h_r), np.max(h_r)
-            r_coords = (r_min ** 3 + r_coords * (r_max ** 3 - r_min ** 3)) ** (1 / 3)
-        else:
-            r_coords = h_r[0] + r_coords * (h_r[1] - h_r[0])
+        r_coords = r_coords ** self.radial_sampling_exponent
+        r_min, r_max = np.min(h_r), np.max(h_r)
+        r_coords = (r_min ** 3 + r_coords * (r_max ** 3 - r_min ** 3)) ** (1 / 3)
 
         # latitude coordinates
         lat_coords = self.float_tensor(self.n_lat_lon_sample, self.radial_sample, 1).uniform_()
         lat_r = self.colatitude_range
-        if self.volume_uniform_sampling:
-            v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
-            lat_coords = v_min + lat_coords * (v_max - v_min)
-            lat_coords = torch.arccos(lat_coords)
-        else:
-            lat_coords = lat_r[0] + lat_coords * (lat_r[1] - lat_r[0])
+        v_min, v_max = np.min(np.cos(lat_r)), np.max(np.cos(lat_r))
+        lat_coords = v_min + lat_coords * (v_max - v_min)
+        lat_coords = torch.arccos(lat_coords)
 
         # longitude coordinates
         lon_coords = self.float_tensor(self.n_lat_lon_sample, self.radial_sample, 1).uniform_()
@@ -176,11 +206,12 @@ class RandomRadialGroupedCoordinateDataset(Dataset):
         return {'coords': coords, 'grouped_coords': grouped_cartesian_coords}
 
 
-class SphereDataset(Dataset):
+class SphereDataset(NF2Dataset):
 
     def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024,
                  latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
-                 **kwargs):
+                 requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to spherical coordinates
@@ -208,11 +239,12 @@ class SphereDataset(Dataset):
         return {'coords': coord}
 
 
-class SphereSlicesDataset(Dataset):
+class SphereSlicesDataset(NF2Dataset):
 
     def __init__(self, radius_range, Mm_per_ds,
                  latitude_range=(-90, 90), longitude_range=(0, 360), unit='deg',
-                 longitude_resolution=256, batch_size=1024, n_slices=5, **kwargs):
+                 longitude_resolution=256, batch_size=1024, n_slices=5, requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         longitude_range = u.Quantity(longitude_range, unit).to_value(u.rad)
         latitude_range = u.Quantity(latitude_range, unit).to_value(u.rad)
         colatitude_range = sorted(np.pi / 2 - latitude_range)  # convert to spherical coordinates
@@ -242,9 +274,10 @@ class SphereSlicesDataset(Dataset):
         return {'coords': coord}
 
 
-class SlicesDataset(Dataset):
+class SlicesDataset(NF2Dataset):
 
-    def __init__(self, coord_range, ds_per_pixel, n_slices=10, batch_size=4096, **kwargs):
+    def __init__(self, coord_range, ds_per_pixel, n_slices=10, batch_size=4096, requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian)
         x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
         y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
         if coord_range[2, 0] == 0:
@@ -272,10 +305,11 @@ class SlicesDataset(Dataset):
         return {'coords': coord}
 
 
-class RandomCoordinateDataset(Dataset):
+class RandomCoordinateDataset(NF2Dataset):
 
-    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None, z_sampling_exponent=1, length=None):
-        super().__init__()
+    def __init__(self, coord_range, batch_size=2 ** 14, buffer=None, z_sampling_exponent=1, length=None,
+                 requires_jacobian=True):
+        super().__init__(requires_jacobian=requires_jacobian)
         if buffer:
             buffer_x = (coord_range[0, 1] - coord_range[0, 0]) * buffer
             buffer_y = (coord_range[1, 1] - coord_range[1, 0]) * buffer
@@ -304,10 +338,11 @@ class RandomCoordinateDataset(Dataset):
         return {'coords': random_coords}
 
 
-class RandomHeightCoordinateDataset(Dataset):
+class RandomHeightCoordinateDataset(NF2Dataset):
 
-    def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, z_sampling_exponent=2, length=None):
-        super().__init__()
+    def __init__(self, coord_range, batch_size=2 ** 14, z_sample=128, z_sampling_exponent=2, length=None,
+                 requires_jacobian=True):
+        super().__init__(requires_jacobian=requires_jacobian)
         self.coord_range = coord_range
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor

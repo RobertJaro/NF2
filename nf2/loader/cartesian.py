@@ -10,9 +10,10 @@ from astropy.nddata import block_reduce
 from pytorch_lightning import LightningDataModule
 from sunpy.map import Map
 
-from nf2.data.dataset import RandomCoordinateDataset, CubeDataset, SlicesDataset, RandomHeightCoordinateDataset
+from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, RandomHeightCoordinateDataset, SlicesDataset, \
+    TensorsDataset
 from nf2.data.loader import load_potential_field_boundary
-from nf2.loader.base import TensorsDataset, BaseDataModule, MapDataset
+from nf2.loader.base import BaseDataModule, MapDataset
 from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
 
 
@@ -46,10 +47,13 @@ class CartesianDataModule(BaseDataModule):
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
         random_config = copy.deepcopy(random_config) if random_config is not None else {'batch_size': 2 ** 14}
         random_type = random_config.pop('type', 'default')
+        random_requires_jacobian = random_config.pop('requires_jacobian', True)
         if random_type == 'default':
-            random_dataset = RandomCoordinateDataset(coord_range, length=iterations, **random_config)
+            random_dataset = RandomCoordinateDataset(coord_range, length=iterations,
+                                                     requires_jacobian=random_requires_jacobian, **random_config)
         elif random_type == 'height':
-            random_dataset = RandomHeightCoordinateDataset(coord_range, length=iterations, **random_config)
+            random_dataset = RandomHeightCoordinateDataset(coord_range, length=iterations,
+                                                           requires_jacobian=random_requires_jacobian, **random_config)
         else:
             raise ValueError(f'Unknown random dataset type: {random_type}')
 
@@ -78,6 +82,7 @@ class CartesianDataModule(BaseDataModule):
             {'type': 'potential', 'strides': 4}
         boundary_config = deepcopy(boundary_config)
         boundary_batch_size = boundary_config.pop('batch_size', batch_size // 4)
+        boundary_requires_jacobian = boundary_config.pop('requires_jacobian', False)
         boundary_type = boundary_config.pop('type')
         if boundary_type == 'none':
             pass
@@ -89,6 +94,7 @@ class CartesianDataModule(BaseDataModule):
                                                    coord_range=coord_range,
                                                    ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
                                                    work_directory=work_directory,
+                                                   requires_jacobian=boundary_requires_jacobian,
                                                    batch_size=boundary_batch_size, **boundary_config)
             training_datasets['potential'] = boundary_ds
         elif boundary_type == 'potential_top':
@@ -99,6 +105,7 @@ class CartesianDataModule(BaseDataModule):
                                                       coord_range=coord_range,
                                                       ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
                                                       work_directory=work_directory,
+                                                      requires_jacobian=boundary_requires_jacobian,
                                                       batch_size=boundary_batch_size, **boundary_config)
             training_datasets['potential'] = boundary_ds
         else:
@@ -165,9 +172,10 @@ class CartesianDataModule(BaseDataModule):
         config = deepcopy(config)
         ds_type = config['type']
         ds_id = config.pop('ds_id', f'train_{ds_type}')
+        requires_jacobian = config.pop('requires_jacobian', False)
         config['batch_size'] = config.pop('batch_size', self.ds_batch_size)  # default batch size
         dataset = self.init_dataset(**config, Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
-                                    work_directory=self.work_directory)
+                                    work_directory=self.work_directory, requires_jacobian=requires_jacobian)
         return ds_id, dataset
 
     def _load_valid_ds_config(self, config):

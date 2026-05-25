@@ -3,7 +3,7 @@ import torch
 import wandb
 from astropy import units as u
 from matplotlib import pyplot as plt
-from matplotlib.colors import LogNorm
+from matplotlib.colors import LogNorm, Normalize
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from pytorch_lightning import Callback
 from pytorch_lightning.utilities import rank_zero_only
@@ -98,7 +98,7 @@ class SphericalSlicesCallback(Callback):
             im = self._plot_spherical_map(plot_axs[i], j[i, :, :], coords[i], cmap='plasma', norm=norm)
             plot_axs[i].set_xlabel('Longitude [deg]')
             if i == 0:
-                plot_axs[i].set_ylabel(r'$\sin(\mathrm{latitude})$')
+                plot_axs[i].set_ylabel('Latitude [deg]')
             else:
                 plot_axs[i].tick_params(labelleft=False)
             plot_axs[i].set_title(f'{height:.02f} $R_\\odot$ - $|J|$')
@@ -133,15 +133,12 @@ class SphericalSlicesCallback(Callback):
             latitude = radius_Mm * latitude_rad
             aspect = 'equal'
         else:
-            latitude = np.sin(latitude_rad)
-            aspect = 180 / np.pi
+            aspect = 'auto'
 
         extent = [np.nanmin(longitude), np.nanmax(longitude),
                   np.nanmin(latitude), np.nanmax(latitude)]
 
         im = ax.imshow(np.flipud(values), origin='lower', extent=extent, aspect=aspect, **kwargs)
-        if not physical_units:
-            ax.set_ylim(-1, 1)
         return im
 
     def _integrate_radial_current(self, j, coords):
@@ -149,6 +146,91 @@ class SphericalSlicesCallback(Callback):
             return j[0], r'$|J|$ [G/Mm]'
 
         radius_Mm = coords[..., 0] * (1 * u.solRad).to_value(u.Mm)
+        integrated_j = _trapezoid(j, x=radius_Mm, axis=0)
+        return integrated_j, r'$\int |J|\,dr$ [G]'
+
+
+class SphericalFITSComparisonCallback(Callback):
+
+    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
+        self.name = name
+        self.cube_shape = cube_shape
+        self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
+
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
+        if self.name not in pl_module.validation_outputs:
+            return
+        outputs = pl_module.validation_outputs[self.name]
+
+        b = outputs['b'] * self.gauss_per_dB
+        j = outputs['j'] * self.gauss_per_dB / self.Mm_per_ds
+
+        b_cube = b.reshape([*self.cube_shape, 3]).cpu().numpy()
+        j_cube = j.reshape([*self.cube_shape, 3]).cpu().numpy()
+        if 'spherical_coords' in outputs:
+            spherical_coords = outputs['spherical_coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
+        else:
+            coords = outputs['coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
+            coords = coords * self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
+            spherical_coords = cartesian_to_spherical(coords)
+
+        model_br = vector_cartesian_to_spherical(b_cube, spherical_coords)[0, ..., 0]
+        reference_br = outputs['reference_br'].reshape(self.cube_shape).cpu().numpy()[0]
+        reference_lon = outputs['reference_lon'].reshape(self.cube_shape).cpu().numpy()[0]
+        reference_lat = outputs['reference_lat'].reshape(self.cube_shape).cpu().numpy()[0]
+
+        j_cube = np.linalg.norm(j_cube, axis=-1)
+        integrated_current, current_label = self._integrate_radial_current(j_cube, spherical_coords)
+
+        self.plot_comparison(reference_br, model_br, integrated_current,
+                             reference_lon, reference_lat, current_label)
+
+    def plot_comparison(self, reference_br, model_br, integrated_current, longitude, latitude, current_label):
+        extent = [np.nanmin(longitude), np.nanmax(longitude),
+                  np.nanmin(latitude), np.nanmax(latitude)]
+        br_norm_value = np.nanmax(np.abs([reference_br, model_br]))
+        br_norm_value = max(min(br_norm_value, 1000), 1)
+        br_norm = Normalize(vmin=-br_norm_value, vmax=br_norm_value)
+        current_norm = _log_norm(integrated_current)
+
+        fig, axs = plt.subplots(1, 3, figsize=(13, 4), sharex=True, sharey=True)
+
+        im = axs[0].imshow(reference_br, origin='lower', extent=extent, cmap='gray', norm=br_norm)
+        axs[0].set_title('Reference Br')
+        self._add_colorbar(fig, axs[0], im, 'Br [G]')
+
+        im = axs[1].imshow(model_br, origin='lower', extent=extent, cmap='gray', norm=br_norm)
+        axs[1].set_title('Model Br')
+        self._add_colorbar(fig, axs[1], im, 'Br [G]')
+
+        im = axs[2].imshow(integrated_current, origin='lower', extent=extent, cmap='inferno', norm=current_norm)
+        axs[2].set_title('Integrated Current Density')
+        self._add_colorbar(fig, axs[2], im, current_label)
+
+        for i, ax in enumerate(axs):
+            ax.set_xlabel('Carrington Longitude [deg]')
+            if i == 0:
+                ax.set_ylabel('Carrington Latitude [deg]')
+            else:
+                ax.tick_params(labelleft=False)
+
+        fig.tight_layout()
+        wandb.log({f"{self.name} - FITS Comparison": fig})
+        plt.close('all')
+
+    @staticmethod
+    def _add_colorbar(fig, ax, im, label):
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax, orientation='vertical', label=label)
+
+    def _integrate_radial_current(self, j, spherical_coords):
+        if j.shape[0] < 2:
+            return j[0], r'$|J|$ [G/Mm]'
+
+        radius_Mm = spherical_coords[..., 0] * (1 * u.solRad).to_value(u.Mm)
         integrated_j = _trapezoid(j, x=radius_Mm, axis=0)
         return integrated_j, r'$\int |J|\,dr$ [G]'
 

@@ -132,9 +132,10 @@ class BHeightLossScalingModule(BaseScalingModule):
     Loss scaling based on magnetic field B.
     """
 
-    def __init__(self, power=2, *args, **kwargs):
+    def __init__(self, power=2, detach=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.power = power
+        self.detach = detach
 
     def forward(self, loss, state):
         """
@@ -150,9 +151,11 @@ class BHeightLossScalingModule(BaseScalingModule):
         b = b.reshape(grouped_coords.shape[0], grouped_coords.shape[1], b.shape[-1])
         loss = loss.reshape(grouped_coords.shape[0], grouped_coords.shape[1])
 
-        b_norm = b.norm(dim=-1).pow(self.power)  # (angular samples, radial samples)
+        b_norm = (b.norm(dim=-1) + 1e-6).pow(self.power)  # (angular samples, radial samples)
         scaling = b_norm.mean(0, keepdim=True)  # mean across angular samples
-        scaled_loss = loss / (scaling + 1e-6)  # Avoid division by zero
+        if self.detach:
+            scaling = scaling.detach()  # No gradient through scaling
+        scaled_loss = loss / scaling
 
         scaled_loss = scaled_loss.reshape(-1)
 
