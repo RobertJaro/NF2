@@ -1,6 +1,6 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/comparison/377_v25"
-work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v25"
+base_path: "/glade/work/rjarolim/nf2/spherical/comparison/377_v27"
+work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v27"
 logging:
   project: spherical
   name: '377 spherical'
@@ -103,15 +103,15 @@ loss:
     ds_id: [full_disk, synoptic]
   - type: force_free
     name: force_free
-    lambda: 1.0e-3
+    lambda: {start: 1.0e-4, end: 1.0e-2, iterations: 5.0e+4} #1.0e-2
     ds_id: [ random ]
   - type: potential
     name: potential_top
-    lambda: 1.0e-3
+    lambda: {start: 1.0e-4, end: 1.0e-2, iterations: 5.0e+4} #1.0e-2
     ds_id: [ random ]
   - type: energy_gradient
     name: energy_gradient
-    lambda: 1.0e-3
+    lambda: {start: 1.0e-4, end: 1.0e-2, iterations: 5.0e+4} #1.0e-2
     ds_id: [ random ]
 
 loss_scaling:
