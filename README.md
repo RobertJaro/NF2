@@ -2,10 +2,16 @@
 
 [![Documentation Status](https://readthedocs.org/projects/nf2/badge/?version=latest)](https://nf2.readthedocs.io/en/latest/?badge=latest)
 [![PyPI version](https://img.shields.io/pypi/v/nf2.svg)](https://pypi.org/project/nf2/)
-[![Python versions](https://img.shields.io/pypi/pyversions/nf2.svg)](https://pypi.org/project/nf2/)
+[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/pypi/l/nf2.svg)](LICENSE)
 
 <img src="https://github.com/RobertJaro/NF2/blob/main/images/logo.jpg" width="150" height="150">
+
+---
+
+[![Quickstart](https://img.shields.io/badge/Quickstart-README-blue)](#quick-start)
+[![SHARP CEA Colab](https://img.shields.io/badge/SHARP%20CEA-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/sharp_cea_cartesian.ipynb)
+[![HMI Spherical Colab](https://img.shields.io/badge/HMI%20Spherical-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/spherical_hmi.ipynb)
 
 NF2 is a Python framework for neural non-linear force-free magnetic-field extrapolations. It supports Cartesian and spherical geometries, single-boundary and multi-height observations, extrapolation series, standard NLFF quality metrics, and exports for scientific analysis and visualization.
 
@@ -128,7 +134,7 @@ Example configurations live in [examples/configs](examples/configs):
 - `benchmark/analytical_case1.yaml`
 - `benchmark/analytical_case2.yaml`
 
-Notebook workflows live in [examples/notebooks](examples/notebooks) for SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
+Notebook are available in [examples/notebooks](examples/notebooks) for SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
 
 ## Documentation
 
