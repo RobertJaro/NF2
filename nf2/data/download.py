@@ -151,7 +151,7 @@ def _parse_time(value):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Download data for NF2 workflows.')
+    parser = argparse.ArgumentParser(description='Download data for NF2 runs.')
     parser.add_argument(
         '--source',
         choices=['hmi_sharp', 'hmi_synoptic', 'hmi_full_disk'],

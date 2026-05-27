@@ -26,6 +26,20 @@ def _trapezoid(y, x, axis):
     return integrate(y, x=x, axis=axis)
 
 
+def _cartesian_extent(coords):
+    return [np.nanmin(coords[..., 0]), np.nanmax(coords[..., 0]),
+            np.nanmin(coords[..., 1]), np.nanmax(coords[..., 1])]
+
+
+def _cartesian_extent_title(coords):
+    x_min, x_max, y_min, y_max = _cartesian_extent(coords)
+    x_center = (x_min + x_max) / 2
+    y_center = (y_min + y_max) / 2
+    return (f'X: {x_min:.2f} to {x_max:.2f} Mm, '
+            f'Y: {y_min:.2f} to {y_max:.2f} Mm; '
+            f'center: ({x_center:.2f}, {y_center:.2f}) Mm')
+
+
 class SphericalSlicesCallback(Callback):
 
     def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
@@ -392,11 +406,11 @@ class BoundaryCallback(Callback):
             transformed_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
             self.plot_b_coords(b, b_true, original_coords, transformed_coords)
         else:
-            original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            self.plot_b(b, b_true)
+            coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+            self.plot_b(b, b_true, coords)
 
-    def plot_b(self, b, b_true):
-        extent = None
+    def plot_b(self, b, b_true, coords=None):
+        extent = _cartesian_extent(coords) if coords is not None else None
 
         fig, axs = plt.subplots(3, 3, figsize=(8.4, 8),
                                 gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
@@ -414,13 +428,19 @@ class BoundaryCallback(Callback):
                                        origin='lower', extent=extent)
             plot_axs[i, 1].set_title(f'True $B_{label}$')
             fig.colorbar(im, cax=cbar_axs[i], label='[G]')
+            if coords is not None:
+                for ax in plot_axs[i]:
+                    ax.set_xlabel('X [Mm]')
+                    ax.set_ylabel('Y [Mm]')
+
+        if coords is not None:
+            fig.suptitle(_cartesian_extent_title(coords))
 
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
     def plot_b_coords(self, b, b_true, original_coords, transformed_coords):
-        extent = [original_coords[..., 0].min(), original_coords[..., 0].max(),
-                  original_coords[..., 1].min(), original_coords[..., 1].max()]
+        extent = _cartesian_extent(original_coords)
 
         fig, axs = plt.subplots(4, 3, figsize=(8.4, 8),
                                 gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
@@ -438,6 +458,9 @@ class BoundaryCallback(Callback):
                                        origin='lower', extent=extent)
             plot_axs[i, 1].set_title(f'True $B_{label}$')
             fig.colorbar(im, cax=cbar_axs[i], label='[G]')
+            for ax in plot_axs[i]:
+                ax.set_xlabel('X [Mm]')
+                ax.set_ylabel('Y [Mm]')
 
         ax = plot_axs[3, 0]
         im = ax.imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
@@ -451,6 +474,7 @@ class BoundaryCallback(Callback):
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
         fig.colorbar(im, cax=cbar_axs[3], label='Z [Mm]')
+        fig.suptitle(_cartesian_extent_title(original_coords))
 
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')

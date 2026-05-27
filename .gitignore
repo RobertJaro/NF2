@@ -128,7 +128,20 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
-/results/
-/evaluation/
-/data/
+
+# Generated NF2 outputs and downloaded data
+results/
+evaluation/
+data/
+
+# Keep package source directories with these names visible.
+!/nf2/evaluation/
+!/nf2/evaluation/**
+!/nf2/data/
+!/nf2/data/**
+nf2/evaluation/**/__pycache__/
+nf2/evaluation/**/*.py[cod]
+nf2/data/**/__pycache__/
+nf2/data/**/*.py[cod]
+
 /scripts/

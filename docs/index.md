@@ -4,7 +4,7 @@ NF2 is a Python framework for neural non-linear magnetic-field extrapolations in
 
 ## Start Here
 
-New users should begin with the installation guide, run the quickstart workflow, then choose the extrapolation geometry and training settings for their data.
+New users should begin with the installation guide, run the quickstart example, then choose the extrapolation geometry and training settings for their data.
 
 - [Installation](installation.md) covers package installation and optional dependencies.
 - [Quickstart](quickstart.md) walks through the shortest path from input data to an extrapolation.
@@ -12,11 +12,11 @@ New users should begin with the installation guide, run the quickstart workflow,
 
 ## Main Guides
 
-The main guides collect the common workflow pages into a shorter top-level menu.
+The main guides collect the common run and analysis pages into a shorter top-level menu.
 
-- [Extrapolations](extrapolations.md) groups Cartesian, spherical, analytical, and series workflows.
+- [Extrapolations](extrapolations.md) groups Cartesian, spherical, analytical, and series runs.
 - [Training](training.md) explains losses, loss schedules, height scaling, batch sizes, validation resolution, and memory handling.
-- [Evaluation](evaluation.md) groups export and quality-metric workflows.
+- [Evaluation](evaluation.md) groups export and quality-metric procedures.
 - [FAQ](faq.md) answers recurring operational questions.
 
 ## Reference Material

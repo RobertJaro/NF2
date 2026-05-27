@@ -15,9 +15,10 @@ data:
       case: 2
       boundary: full
       resolution: [80, 80, 72]
+      batch_size: 512
   sampler:
     type: height
-    batch_size: 16384
+    batch_size: 1024
   potential_boundary:
     type: none
   validation:
@@ -26,8 +27,14 @@ data:
       case: 2
       boundary: bottom
       resolution: [80, 80, 72]
-  iterations: 10000
+      batch_size: 512
+    - id: slices
+      type: slices
+      n_slices: 5
+      batch_size: 1024
+  iterations: 1000
   z_range: [0, 2]
+  validation_pixel_per_ds: 32
 training:
   epochs: 10
 losses:
@@ -39,6 +46,9 @@ losses:
     name: force_free
     weight: 1.0e-3
     datasets: [random]
+loss_scaling: []
 callbacks:
   - type: boundary
     dataset: boundary
+  - type: slices
+    dataset: slices

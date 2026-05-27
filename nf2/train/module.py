@@ -375,7 +375,7 @@ class NF2Module(LightningModule):
         self.validation_outputs = {}
 
     @torch.enable_grad()
-    def validation_step(self, batch, batch_nb, dataloader_idx):
+    def validation_step(self, batch, batch_nb, dataloader_idx=0):
         coords = batch['coords']
         coords.requires_grad = True
 

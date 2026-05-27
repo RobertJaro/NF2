@@ -255,7 +255,7 @@ CLI_COMMANDS = [
             ("--segments", "source default", "Comma-separated JSOC segments."),
             ("--carrington_rotation", "none", "Required for hmi_synoptic."),
             ("--carrington_rotation_end", "same as start", "Optional inclusive final Carrington rotation."),
-            ("--include_mr_polfil", "false", "Also download hmi.synoptic_mr_polfil_720s for synoptic workflows."),
+            ("--include_mr_polfil", "false", "Also download hmi.synoptic_mr_polfil_720s for synoptic-map runs."),
             ("--no_convert_ptr", "false", "Disable HmiB2ptr conversion for full-disk vector data."),
             ("--keep_coordinates", "false", "Keep generated latitude/longitude files after full-disk conversion."),
         ],

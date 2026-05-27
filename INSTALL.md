@@ -10,12 +10,20 @@ Install from PyPI:
 pip install nf2
 ```
 
-Install optional dependency groups:
+## PyTorch And CUDA
+
+For GPU-enabled PyTorch installs, use the official PyTorch selector at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). Select your CUDA version and run the generated command before installing or running NF2.
+
+For CUDA 12.6:
 
 ```bash
-pip install "nf2[wandb]"
-pip install "nf2[jsoc,pfss]"
-pip install "nf2[docs]"
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
+For the most recent default PyTorch build:
+
+```bash
+pip3 install torch torchvision
 ```
 
 Install from a local checkout:
@@ -27,7 +35,7 @@ python -m pip install .
 Install for development:
 
 ```bash
-python -m pip install -e ".[wandb,jsoc,pfss,docs,dev]"
+python -m pip install -r requirements.txt
 ```
 
 Build release artifacts:
@@ -73,7 +81,7 @@ conda env create -f environment.yml
 conda activate nf2
 ```
 
-The environment installs compiled scientific dependencies through conda and installs NF2 itself in editable mode with `pip --no-deps`.
+The environment uses conda for Python isolation and installs the NF2 runtime, documentation, and development stack with pip. The pip section is explicit so key packages such as PyTorch, Lightning, and SunPy are visible, while avoiding conda channel availability issues for pinned Python packages.
 
 ## Conda Package Recipe
 
@@ -109,6 +117,10 @@ import lightning
 print("NF2:", nf2.__version__)
 print("Torch:", torch.__version__)
 print("Lightning:", lightning.__version__)
+print("CUDA:", torch.cuda.is_available())
+print("CUDA device count:", torch.cuda.device_count())
+for idx in range(torch.cuda.device_count()):
+    print(f"CUDA device {idx}:", torch.cuda.get_device_name(idx))
 PY
 
 nf2-export --help

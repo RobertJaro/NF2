@@ -1,6 +1,6 @@
 # API Reference
 
-The top-level `nf2` package exposes the stable public access points. Lower-level modules remain available for advanced workflows, but user code should prefer these helpers.
+The top-level `nf2` package exposes the stable public access points. Lower-level modules remain available for advanced use cases, but user code should prefer these helpers.
 
 ```{eval-rst}
 .. automodule:: nf2

@@ -10,22 +10,13 @@
 ---
 
 [![Quickstart](https://img.shields.io/badge/Quickstart-README-blue)](#quick-start)
+[![SHARP CEA Colab Tutorial](https://img.shields.io/badge/SHARP%20CEA%20Tutorial-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/colab_sharp_cea.ipynb)
 [![SHARP CEA Colab](https://img.shields.io/badge/SHARP%20CEA-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/sharp_cea_cartesian.ipynb)
 [![HMI Spherical Colab](https://img.shields.io/badge/HMI%20Spherical-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/spherical_hmi.ipynb)
 
 NF2 is a Python framework for neural non-linear force-free magnetic-field extrapolations. It supports Cartesian and spherical geometries, single-boundary and multi-height observations, extrapolation series, standard NLFF quality metrics, and exports for scientific analysis and visualization.
 
-The framework is designed for solar-physics workflows with HMI/SHARP, full-disk, synoptic, and benchmark data, while keeping the training, export, and evaluation interfaces consistent across geometries.
-
-## Highlights
-
-- Unified Cartesian and spherical extrapolation workflows
-- YAML-based configuration with explicit defaults
-- SIREN-based neural-field model for all geometries
-- Single-run and series extrapolations
-- HMI SHARP, full-disk, and synoptic download helpers
-- VTK, NumPy, and metric exports
-- Standard NLFF quality metrics through `nf2-metrics`
+The framework is designed for solar-physics analyses with HMI/SHARP, full-disk, synoptic, and benchmark data, while keeping the training, export, and evaluation interfaces consistent across geometries.
 
 ## Installation
 
@@ -43,12 +34,18 @@ Install with conda:
 conda install nf2
 ```
 
+For GPU-enabled PyTorch installs, select your CUDA version at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). For CUDA 12.6, run:
+
+```bash
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
 For development or source installs:
 
 ```bash
 git clone https://github.com/RobertJaro/NF2.git
 cd NF2
-python -m pip install -e ".[wandb,jsoc,pfss,docs,dev]"
+python -m pip install -r requirements.txt
 ```
 
 The recommended conda environment for local development is:
@@ -139,7 +136,7 @@ Example configurations live in [examples/configs](examples/configs):
 - `benchmark/analytical_case1.yaml`
 - `benchmark/analytical_case2.yaml`
 
-Notebook are available in [examples/notebooks](examples/notebooks) for SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
+Notebooks are available in [examples/notebooks](examples/notebooks), including a Colab SHARP CEA tutorial, local SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
 
 ## Documentation
 
@@ -150,7 +147,7 @@ The documentation includes:
 - Installation instructions for pip, conda, local checkouts, and development setups
 - Quickstart and usage overview
 - YAML configuration reference
-- Cartesian, spherical, analytical, and series extrapolation workflows
+- Cartesian, spherical, analytical, and series extrapolation runs
 - Training guidance for losses, schedules, height scaling, validation resolution, and memory use
 - Evaluation guidance for exports and quality metrics
 - Dataset, sampler, and normalization options
@@ -183,7 +180,7 @@ Core NF2 method and tool-development papers:
   "Magnetic Reconnection in a Compact Magnetic Dome: Chromospheric Emissions and High-velocity Plasma Flows."  
   DOI: [10.3847/1538-4357/adcf23](https://doi.org/10.3847/1538-4357/adcf23)
 
-See [docs/publications.md](docs/publications.md) for selected applications and related PINN NLFFF work.
+See [docs/publications.md](docs/publications.md) for selected applications.
 
 ## License
 

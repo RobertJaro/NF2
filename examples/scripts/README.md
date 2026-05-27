@@ -1,6 +1,6 @@
 # Running NF2 Examples
 
-This directory documents the command-line workflow for the primary example configurations. The YAML files use `<<...>>` placeholders so the same template can be reused with local data paths, scratch paths, and active-region selections.
+This directory documents the command-line runs for the primary example configurations. The YAML files use `<<...>>` placeholders so the same template can be reused with local data paths, scratch paths, and active-region selections.
 
 Run commands from an activated environment:
 
@@ -67,7 +67,7 @@ nf2-extrapolate \
 
 ## Multi-Height Cartesian
 
-Multi-height examples assume you already prepared matching photospheric and chromospheric FITS files. No data download command is provided for this workflow because the source instruments and preprocessing are project-specific.
+Multi-height examples assume you already prepared matching photospheric and chromospheric FITS files. No data download command is provided for this data path because the source instruments and preprocessing are project-specific.
 
 Run a single multi-height extrapolation:
 

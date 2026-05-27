@@ -11,7 +11,8 @@ path: ./runs/sharp_cea
 data:
   geometry: cartesian
   boundaries:
-    - type: sharp
+    - type: fits
+      load_map: false
       files:
         Br: ./data/Br.fits
         Bt: ./data/Bt.fits

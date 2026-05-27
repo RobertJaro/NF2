@@ -1,6 +1,6 @@
 # Cartesian Extrapolations
 
-Cartesian runs use `data.geometry: cartesian`.
+Cartesian runs use `data.geometry: cartesian` and train a local Cartesian volume above one or more planar boundary maps. This is the usual choice for active-region cutouts, SHARP CEA data, generic FITS vector maps, LOS/transverse/azimuth inputs, and multi-height observations.
 
 Primary examples:
 
@@ -10,34 +10,193 @@ Primary examples:
 - `examples/configs/cartesian/multi_height.yaml`
 - `examples/configs/cartesian/multi_height_series.yaml`
 
-The primary output helper is:
+## How The YAML Is Configured
 
-```python
-from nf2 import CartesianOutput
-
-out = CartesianOutput("extrapolation_result.nf2")
-cube = out.load_cube(height_range=[0, 80], Mm_per_pixel=0.72, metrics=["j"])
-slice0 = out.load_slice()
-```
-
-## Minimal Configuration
+The minimal Cartesian YAML needs a run path, the Cartesian geometry, and a boundary dataset:
 
 ```yaml
 path: "<<run_path>>"
 data:
   geometry: cartesian
   boundaries:
-    - type: sharp
+    - id: boundary
+      type: fits
+      load_map: false
       files:
         Br: "<<Br>>"
         Bt: "<<Bt>>"
         Bp: "<<Bp>>"
 ```
 
-This keeps the default SIREN model, normalization, random sampler, potential boundary, losses, callbacks, and training options.
+The placeholders are filled from the command line:
+
+```bash
+nf2-extrapolate \
+  --config examples/configs/cartesian/minimal_fits.yaml \
+  --run_path ./runs/ar377 \
+  --Br ./data/ar377/Br.fits \
+  --Bt ./data/ar377/Bt.fits \
+  --Bp ./data/ar377/Bp.fits
+```
+
+For a project-specific config, replace the placeholders with literal file paths:
+
+```yaml
+path: ./runs/ar377
+data:
+  geometry: cartesian
+  boundaries:
+    - id: boundary
+      type: fits
+      load_map: false
+      files:
+        Br: ./data/ar377/Br.fits
+        Bt: ./data/ar377/Bt.fits
+        Bp: ./data/ar377/Bp.fits
+```
+
+The `type` selects how NF2 reads the data. Common Cartesian boundary types are:
+
+- `sharp`: SHARP CEA `Br`, `Bt`, and `Bp` FITS files.
+- `fits`: generic Cartesian `Br`, `Bt`, and `Bp` FITS files.
+- `los_trv_azi`: line-of-sight, transverse-field, and azimuth FITS files.
+- `los`: line-of-sight-only boundary data.
+- `analytical`: generated benchmark fields.
+
+## Domain, Sampling, And Validation
+
+Cartesian configs commonly set `z_range`, a random volume sampler, a potential boundary, and validation datasets:
+
+```yaml
+data:
+  geometry: cartesian
+  z_range: [0, 80]
+  sampler:
+    type: height
+    batch_size: 16384
+  potential_boundary:
+    type: potential
+    strides: 4
+  validation:
+    - id: boundary
+      type: sharp
+      files:
+        Br: "<<Br>>"
+        Bt: "<<Bt>>"
+        Bp: "<<Bp>>"
+    - id: cube
+      type: cube
+    - id: slices
+      type: slices
+```
+
+`z_range` is measured in Mm. The random sampler provides volume points for force-free and divergence-related losses. The potential boundary adds side/top boundary constraints by default; set `type: none` to disable it. Validation datasets drive callbacks and metrics during training.
+
+## Losses
+
+Explicit losses make the training objective clear:
+
+```yaml
+losses:
+  - type: boundary
+    name: boundary
+    weight: 1.0
+    datasets: [boundary]
+  - type: force_free
+    name: force_free
+    weight: 1.0e-4
+    datasets: [random]
+  - type: potential
+    name: potential
+    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    datasets: [random]
+```
+
+The `datasets` entries refer to dataset ids from `data.boundaries`, `data.sampler`, or generated defaults such as `random` and `potential`.
+
+## Python API
+
+Use `nf2.run(...)` for programmatic Cartesian runs:
+
+```python
+import nf2
+
+nf2.run(
+    path="./runs/ar377",
+    data={
+        "geometry": "cartesian",
+        "boundaries": [
+            {
+                "id": "boundary",
+                "type": "fits",
+                "load_map": False,
+                "files": {
+                    "Br": "./data/ar377/Br.fits",
+                    "Bt": "./data/ar377/Bt.fits",
+                    "Bp": "./data/ar377/Bp.fits",
+                },
+            }
+        ],
+        "z_range": [0, 80],
+    },
+    training={"epochs": 30},
+)
+```
+
+The primary output helper for trained Cartesian results is:
+
+```python
+import nf2
+
+out = nf2.load("./runs/ar377/extrapolation_result.nf2")
+cube = out.load_cube(height_range=[0, 80], Mm_per_pixel=0.72, metrics=["j"])
+slice0 = out.load_slice()
+```
 
 ## Multi-Height Data
 
-Multi-height configurations use multiple boundary entries with distinct ids. They can also be used in series runs when each component pattern expands to the same number of files.
+Multi-height configurations use multiple boundary entries with distinct ids. Each boundary can point to its own custom files and define its own plate scale and placement:
+
+```yaml
+data:
+  geometry: cartesian
+  boundaries:
+    - id: photosphere
+      type: los_trv_azi
+      Mm_per_pixel: 0.09
+      files:
+        B_los: "<<photosphere_B_los>>"
+        B_trv: "<<photosphere_B_trv>>"
+        B_azi: "<<photosphere_B_azi>>"
+      ambiguous_azimuth: true
+      load_map: false
+    - id: chromosphere
+      type: los_trv_azi
+      Mm_per_pixel: 0.09
+      files:
+        B_los: "<<chromosphere_B_los>>"
+        B_trv: "<<chromosphere_B_trv>>"
+        B_azi: "<<chromosphere_B_azi>>"
+      height_mapping: { z: 2.0, z_min: 0.0, z_max: 20.0 }
+      ambiguous_azimuth: true
+      load_map: false
+```
+
+Run this config by passing custom files for each placeholder:
+
+```bash
+nf2-extrapolate \
+  --config examples/configs/cartesian/multi_height.yaml \
+  --run_path ./runs/multi_height_initial \
+  --work_path ./runs/multi_height_initial/work \
+  --photosphere_B_los ./data/photosphere/B_los.fits \
+  --photosphere_B_trv ./data/photosphere/B_trv.fits \
+  --photosphere_B_azi ./data/photosphere/B_azi.fits \
+  --chromosphere_B_los ./data/chromosphere/B_los.fits \
+  --chromosphere_B_trv ./data/chromosphere/B_trv.fits \
+  --chromosphere_B_azi ./data/chromosphere/B_azi.fits
+```
 
 Each boundary can define its own `Mm_per_pixel` and `coordinate_center`. The default center is `[0, 0]` Mm, matching the previous centered-coordinate behavior. When several boundaries are provided, NF2 builds the Cartesian training domain from the union of their XY coordinate ranges, so offset instruments can be combined consistently.
+
+Multi-height configs can also be used in [series runs](series.md) when each component pattern expands to the same number of files.

@@ -44,30 +44,6 @@ dependencies = [
   "python-dateutil>=2.8",
   "wandb>=0.27,<0.28",
   "drms>=0.7",
-]
-
-[project.optional-dependencies]
-wandb = ["wandb>=0.27,<0.28"]
-jsoc = ["drms>=0.7"]
-pfss = ["pfsspy>=1.2"]
-docs = [
-  "sphinx>=7.2",
-  "myst-parser>=2",
-  "sphinx-autodoc-typehints>=2",
-  "sphinx-copybutton>=0.5",
-  "pydata-sphinx-theme>=0.15",
-]
-dev = [
-  "build>=1.2",
-  "pytest>=8",
-  "ruff>=0.5",
-  "mypy>=1.10",
-  "pre-commit>=3.7",
-  "twine>=5",
-]
-all = [
-  "wandb>=0.27,<0.28",
-  "drms>=0.7",
   "pfsspy>=1.2",
 ]
 

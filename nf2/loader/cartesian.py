@@ -525,8 +525,16 @@ def _load_config(config):
         if error_paths is None:
             error_paths = [{} for _ in fits_paths]
         ids = [_series_id(fp) for fp in fits_paths]
-        configs = [{**config, 'id': config.get('id', id), 'step_id': id, 'fits_path': {**fp, **ep}}
-                   for id, fp, ep in zip(ids, fits_paths, error_paths)]
+        configs = [
+            {
+                **config,
+                'id': config.get('id', id),
+                'step_id': id,
+                'fits_path': fp,
+                **({'error_path': ep} if ep else {}),
+            }
+            for id, fp, ep in zip(ids, fits_paths, error_paths)
+        ]
     elif c_type == 'muram_slice':
         data_path = config.pop('data_path')
         slices = sorted(glob.glob(data_path))

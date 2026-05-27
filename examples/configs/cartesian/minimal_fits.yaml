@@ -3,7 +3,8 @@ path: "<<run_path>>"
 data:
   geometry: cartesian
   boundaries:
-    - type: sharp
+    - type: fits
+      load_map: false
       files:
         Br: "<<Br>>"
         Bt: "<<Bt>>"

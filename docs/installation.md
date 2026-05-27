@@ -8,12 +8,20 @@ Install NF2 from PyPI:
 pip install nf2
 ```
 
-Install optional dependency groups when you need W&B logging, JSOC downloads, PFSS support, documentation tools, or development tools:
+## PyTorch And CUDA
+
+For GPU-enabled PyTorch installs, use the official PyTorch selector at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). Select your operating system, package manager, Python version, and CUDA version, then run the generated command before installing or running NF2.
+
+For CUDA 12.6:
 
 ```bash
-pip install "nf2[wandb]"
-pip install "nf2[jsoc,pfss]"
-pip install "nf2[docs]"
+pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+```
+
+For the most recent default PyTorch build:
+
+```bash
+pip3 install torch torchvision
 ```
 
 ## Conda Installation
@@ -45,21 +53,13 @@ conda activate nf2
 Install NF2 from the checkout:
 
 ```bash
-python -m pip install -e ".[wandb,jsoc,pfss,docs,dev]"
+python -m pip install -e .
 ```
 
-For a regular pip install from a local checkout:
+Install the documentation, test, lint, and packaging tools used by this repository:
 
 ```bash
-python -m pip install .
-```
-
-Optional dependency groups:
-
-```bash
-python -m pip install ".[wandb]"
-python -m pip install ".[docs]"
-python -m pip install ".[wandb,jsoc,pfss]"
+python -m pip install -r requirements.txt
 ```
 
 NF2 targets Python 3.11/3.12 with current PyTorch, Lightning, and W&B releases.
@@ -76,6 +76,9 @@ print("NF2:", nf2.__version__)
 print("Torch:", torch.__version__)
 print("Lightning:", lightning.__version__)
 print("CUDA:", torch.cuda.is_available())
+print("CUDA device count:", torch.cuda.device_count())
+for idx in range(torch.cuda.device_count()):
+    print(f"CUDA device {idx}:", torch.cuda.get_device_name(idx))
 PY
 ```
 
@@ -94,7 +97,7 @@ Create the development environment and install the package in editable mode:
 ```bash
 conda env create -f environment.yml
 conda activate nf2
-python -m pip install -e ".[wandb,jsoc,pfss,docs,dev]"
+python -m pip install -r requirements.txt
 ```
 
 Keep your fork current with upstream:

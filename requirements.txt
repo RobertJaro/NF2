@@ -1,1 +1,16 @@
--e .[wandb,jsoc,pfss,docs,dev]
+-e .
+
+# Documentation dependencies
+sphinx>=7.2
+myst-parser>=2
+sphinx-autodoc-typehints>=2
+sphinx-copybutton>=0.5
+pydata-sphinx-theme>=0.15
+
+# Development and packaging dependencies
+build>=1.2
+pytest>=8
+ruff>=0.5
+mypy>=1.10
+pre-commit>=3.7
+twine>=5
