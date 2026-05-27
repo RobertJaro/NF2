@@ -67,16 +67,16 @@ class PotentialFitLossScalingModule(BaseScalingModule):
     Loss scaling based on magnetic field B.
     """
 
-    def __init__(self, ref_file, Mm_per_pixel, Mm_per_ds, G_per_dB, binning=4, power=1, *args, **kwargs):
+    def __init__(self, ref_file, Mm_per_pixel, Mm_per_ds, Gauss_per_dB, binning=4, power=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        coeffs = self._fit_coeffs(ref_file, binning, Mm_per_pixel, Mm_per_ds, G_per_dB)
+        coeffs = self._fit_coeffs(ref_file, binning, Mm_per_pixel, Mm_per_ds, Gauss_per_dB)
         print(f'Fitted coefficients from {ref_file}:', coeffs)
         self.a = coeffs[0]
         self.b = coeffs[1]
         self.c = coeffs[2]
         self.power = power
 
-    def _fit_coeffs(self, ref_file, binning, Mm_per_pixel, Mm_per_ds, G_per_dB):
+    def _fit_coeffs(self, ref_file, binning, Mm_per_pixel, Mm_per_ds, Gauss_per_dB):
         bz = self._load_data(ref_file)
 
         bz = block_reduce(bz, block_size=(binning, binning), func=np.mean)
@@ -84,7 +84,7 @@ class PotentialFitLossScalingModule(BaseScalingModule):
 
         print('Loading reference potential field for loss scaling fit...')
         potential_field = get_fft_potential_field(bz, max(bz.shape))
-        potential_field = potential_field / G_per_dB  # normalize to model units
+        potential_field = potential_field / Gauss_per_dB  # normalize to model units
 
         # Convert to Mm
         z = np.linspace(0, potential_field.shape[2] - 1, potential_field.shape[2]) * Mm_per_pixel

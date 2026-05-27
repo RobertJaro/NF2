@@ -17,6 +17,11 @@ from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel
 
 
 class BaseOutput:
+    """Base evaluator for NF2 checkpoints.
+
+    Users normally construct geometry-specific helpers through :func:`nf2.load`
+    instead of instantiating this class directly.
+    """
 
     def __init__(self, checkpoint, device=None):
         if device is None:
@@ -30,14 +35,29 @@ class BaseOutput:
         self.c = constants.c
 
     @property
-    def G_per_dB(self):
-        return self.state['data']['G_per_dB'] * u.G
+    def Gauss_per_dB(self):
+        return self.state['data']['Gauss_per_dB'] * u.G
 
     @property
     def m_per_ds(self):
         return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
     def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True, metrics=None):
+        """Evaluate the neural field at normalized model coordinates.
+
+        Parameters
+        ----------
+        coords:
+            Array with final dimension ``(x, y, z)`` in model coordinates.
+        batch_size:
+            Number of coordinates evaluated per model call.
+        progress:
+            Show a progress bar.
+        compute_jacobian:
+            Include the magnetic-field Jacobian in the output.
+        metrics:
+            Optional metric names from ``nf2.evaluation.output_metrics``.
+        """
         batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
         metrics = metrics if metrics is not None else []
 
@@ -64,11 +84,11 @@ class BaseOutput:
             model_out = {k: torch.cat(v) for k, v in model_out.items()}
             model_out = {k: v.reshape(*coords_shape[:-1], *v.shape[1:]).numpy() for k, v in model_out.items()}
 
-            model_out['b'] = model_out['b'] * self.G_per_dB
+            model_out['b'] = model_out['b'] * self.Gauss_per_dB
             if 'a' in model_out:
-                model_out['a'] = model_out['a'] * self.G_per_dB * self.m_per_ds
+                model_out['a'] = model_out['a'] * self.Gauss_per_dB * self.m_per_ds
             if 'p' in model_out:
-                model_out['p'] = model_out['p'] * self.G_per_dB ** 2
+                model_out['p'] = model_out['p'] * self.Gauss_per_dB ** 2
             return model_out
 
         if self._requires_grad or compute_jacobian:
@@ -76,7 +96,7 @@ class BaseOutput:
 
             if compute_jacobian:
                 jac_matrix = model_out['jac_matrix']
-                jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
+                jac_matrix = jac_matrix * self.Gauss_per_dB / self.m_per_ds
                 model_out['jac_matrix'] = jac_matrix
         else:
             with torch.no_grad():
@@ -94,6 +114,7 @@ class BaseOutput:
 
 
 class CartesianOutput(BaseOutput):
+    """Evaluate Cartesian NF2 extrapolation checkpoints."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -112,6 +133,11 @@ class CartesianOutput(BaseOutput):
         self.data_config = self.state['data']
 
     def load_cube(self, height_range=None, x_range=None, y_range=None, Mm_per_pixel=None, **kwargs):
+        """Load a regularly sampled Cartesian volume.
+
+        Ranges are specified in megameters. Additional keyword arguments are
+        forwarded to :meth:`BaseOutput.load_coords`.
+        """
         x_min, x_max = self.coord_range[0] if x_range is None else np.array(x_range) / self.Mm_per_ds
         y_min, y_max = self.coord_range[1] if y_range is None else np.array(y_range) / self.Mm_per_ds
         z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None \
@@ -133,6 +159,7 @@ class CartesianOutput(BaseOutput):
         return {**model_out, 'coords': coords_Mm, 'Mm_per_pixel': Mm_per_pixel}
 
     def load_slice(self, z=0 * u.Mm, Mm_per_pixel=None, **kwargs):
+        """Load one horizontal Cartesian slice at height ``z``."""
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
 
@@ -149,6 +176,7 @@ class CartesianOutput(BaseOutput):
         return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
 
     def load_maps(self, **kwargs):
+        """Load SunPy maps for integrated field strength, current, and energy."""
         model_out = self.load_cube(**kwargs)
 
         j_map = np.linalg.norm(model_out['j'], axis=-1).sum(axis=-1)
@@ -371,17 +399,25 @@ class DisambiguationOutput(CartesianOutput):
 
 
 class SphericalOutput(BaseOutput):
+    """Evaluate spherical NF2 extrapolation checkpoints."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.state['data']['type'] == 'spherical', 'Requires spherical NF2 data!'
 
         self.radius_range = self.state['data']['radius_range']
+        if not hasattr(self.radius_range, 'unit'):
+            self.radius_range = self.radius_range * u.solRad
 
     def load_spherical(self, radius_range: u.Quantity = None,
                        latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
+        """Load a regularly sampled spherical volume.
+
+        ``sampling`` is ordered as radius, latitude, longitude. Ranges should
+        use Astropy units.
+        """
         radius_range = radius_range if radius_range is not None else self.radius_range
         colatitude_range = sorted(np.pi / 2 * u.rad - latitude_range)
         spherical_coords = np.stack(
@@ -400,6 +436,7 @@ class SphericalOutput(BaseOutput):
              latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, nan_value=0, **kwargs):
+        """Load a Cartesian cube covering a spherical shell selection."""
         radius_range = radius_range if radius_range is not None else self.radius_range
 
         # convert latitude to colatitude
@@ -471,6 +508,7 @@ class SphericalOutput(BaseOutput):
         return spherical_out
 
     def load_spherical_coords(self, spherical_coords: SkyCoord, **kwargs):
+        """Evaluate the model at explicit SkyCoord positions."""
         cartesian_coords, spherical_coords = self._skycoords_to_cartesian(spherical_coords)
         scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         model_out = self.load_coords(scaled_coords, **kwargs)

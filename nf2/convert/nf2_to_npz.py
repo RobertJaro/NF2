@@ -8,7 +8,7 @@ from nf2.evaluation.output import CartesianOutput
 
 def convert(nf2_path, out_path=None, Mm_per_pixel=None, progress=True, **kwargs):
     out_path = out_path if out_path is not None \
-        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.npy')
+        else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.npz')
 
     nf2_out = CartesianOutput(nf2_path)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, progress=progress, **kwargs)
@@ -20,9 +20,9 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, progress=True, **kwargs)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Convert NF2 file to VTK.')
+    parser = argparse.ArgumentParser(description='Convert NF2 file to NPZ.')
     parser.add_argument('--nf2_path', type=str, help='path to the source NF2 file')
-    parser.add_argument('--out_path', type=str, help='path to the target NPY file', required=False, default=None)
+    parser.add_argument('--out_path', type=str, help='path to the target NPZ file', required=False, default=None)
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False,
                         default=None)
     parser.add_argument('--height_range', type=float, nargs=2, help='height range in Mm', required=False, default=None)
@@ -37,8 +37,8 @@ def main():
     out_path = args.out_path
     height_range = args.height_range
 
-    dirname = os.path.dirname(out_path)
-    if not os.path.exists(dirname):
+    dirname = os.path.dirname(out_path) if out_path is not None else None
+    if dirname and not os.path.exists(dirname):
         os.makedirs(dirname, exist_ok=True)
 
     convert(nf2_path, out_path, Mm_per_pixel,

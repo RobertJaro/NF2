@@ -7,55 +7,81 @@ import numpy as np
 from astropy import units as u
 from astropy.io import fits
 from astropy.nddata import block_reduce
-from pytorch_lightning import LightningDataModule
+from lightning.pytorch import LightningDataModule
 from sunpy.map import Map
 
 from nf2.data.dataset import CubeDataset, RandomCoordinateDataset, RandomHeightCoordinateDataset, SlicesDataset, \
     TensorsDataset
+from nf2.data.analytical_field import get_analytic_b_field
 from nf2.data.loader import load_potential_field_boundary
 from nf2.loader.base import BaseDataModule, MapDataset
-from nf2.loader.muram import MURaMDataset, MURaMCubeDataset, MURaMPressureDataset
+from nf2.loader.muram import MURaMDataset, MURaMCubeDataset
+
+
+def _combined_xy_range(datasets):
+    ranges = [dataset.coord_range for dataset in datasets if hasattr(dataset, 'coord_range')]
+    if not ranges:
+        raise ValueError('At least one Cartesian boundary dataset must provide coord_range.')
+    return np.array([
+        [min(r[0, 0] for r in ranges), max(r[0, 1] for r in ranges)],
+        [min(r[1, 0] for r in ranges), max(r[1, 1] for r in ranges)],
+    ], dtype=np.float32)
+
+
+def _potential_coord_range(bottom_boundary_dataset, domain_coord_range):
+    coord_range = np.array(domain_coord_range, dtype=np.float32, copy=True)
+    coord_range[:2] = bottom_boundary_dataset.coord_range
+    return coord_range
 
 
 class CartesianDataModule(BaseDataModule):
 
-    def __init__(self, train_configs, work_directory, valid_configs=None,
-                 boundary_config=None, random_config=None,
-                 Mm_per_ds=.36 * 320, G_per_dB=2500, z_range=None, validation_batch_size=2 ** 14, log_shape=False,
+    def __init__(self, boundaries, work_path, validation=None,
+                 potential_boundary=None, sampler=None,
+                 Mm_per_ds=100, Gauss_per_dB=1000, z_range=None, validation_batch_size=2 ** 14, log_shape=False,
                  batch_size=2 ** 13, validation_pixel_per_ds=128, iterations=None,
-                 num_workers=None, **kwargs):
+                 num_workers=None, type=None, geometry=None, **kwargs):
         self.Mm_per_ds = Mm_per_ds
-        self.G_per_dB = G_per_dB
-        self.work_directory = work_directory
+        self.Gauss_per_dB = Gauss_per_dB
+        self.work_path = work_path
         self.batch_size = batch_size
-        self.ds_batch_size = batch_size // len(train_configs)
         self.validation_batch_size = validation_batch_size
         self.validation_pixel_per_ds = validation_pixel_per_ds
         # wrap data if only one slice is provided
-        train_configs = train_configs if isinstance(train_configs, list) else [train_configs]
+        boundaries = boundaries if isinstance(boundaries, list) else [boundaries]
+        self.ds_batch_size = batch_size // len(boundaries)
         # boundary dataset
         num_workers = num_workers if num_workers is not None else os.cpu_count()
-        training_datasets = [self._load_ds_config(config) for config in train_configs]
+        training_datasets = [self._load_ds_config(config) for config in boundaries]
         training_datasets = dict(training_datasets)  # convert to dict
 
         bottom_boundary_dataset = list(training_datasets.values())[0]
 
         # random sampling dataset
-        coord_range = bottom_boundary_dataset.coord_range
+        coord_range = _combined_xy_range(training_datasets.values())
         z_range = [0, 100] if z_range is None else z_range
         z_range_arr = np.array([z_range]) / Mm_per_ds
         coord_range = np.concatenate([coord_range, z_range_arr], axis=0)
-        random_config = copy.deepcopy(random_config) if random_config is not None else {'batch_size': 2 ** 14}
-        random_type = random_config.pop('type', 'default')
-        random_requires_jacobian = random_config.pop('requires_jacobian', True)
+        sampler = copy.deepcopy(sampler) if sampler is not None else {'batch_size': 2 ** 14}
+        sampler_state = deepcopy(sampler)
+        random_type = sampler.pop('type', 'default')
+        random_requires_jacobian = sampler.pop('requires_jacobian', True)
         if random_type == 'default':
             random_dataset = RandomCoordinateDataset(coord_range, length=iterations,
-                                                     requires_jacobian=random_requires_jacobian, **random_config)
+                                                     requires_jacobian=random_requires_jacobian, **sampler)
         elif random_type == 'height':
             random_dataset = RandomHeightCoordinateDataset(coord_range, length=iterations,
-                                                           requires_jacobian=random_requires_jacobian, **random_config)
+                                                           requires_jacobian=random_requires_jacobian, **sampler)
         else:
             raise ValueError(f'Unknown random dataset type: {random_type}')
+        random_dataset.config = {
+            'id': 'random',
+            'type': random_type,
+            'role': 'training',
+            'requires_jacobian': random_requires_jacobian,
+            'coord_range': coord_range,
+            **sampler_state,
+        }
 
         ds_per_pixel = bottom_boundary_dataset.ds_per_pixel
 
@@ -78,61 +104,92 @@ class CartesianDataModule(BaseDataModule):
         training_datasets['random'] = random_dataset
 
         # top and side boundaries
-        boundary_config = boundary_config if boundary_config is not None else \
+        potential_boundary = potential_boundary if potential_boundary is not None else \
             {'type': 'potential', 'strides': 4}
-        boundary_config = deepcopy(boundary_config)
-        boundary_batch_size = boundary_config.pop('batch_size', batch_size // 4)
-        boundary_requires_jacobian = boundary_config.pop('requires_jacobian', False)
-        boundary_type = boundary_config.pop('type')
+        potential_boundary = deepcopy(potential_boundary)
+        potential_boundary_state = deepcopy(potential_boundary)
+        boundary_batch_size = potential_boundary.pop('batch_size', batch_size // 4)
+        boundary_requires_jacobian = potential_boundary.pop('requires_jacobian', False)
+        boundary_type = potential_boundary.pop('type')
         if boundary_type == 'none':
             pass
         elif boundary_type == 'potential':
             bz = bottom_boundary_dataset.bz
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
+            potential_coord_range = _potential_coord_range(bottom_boundary_dataset, coord_range)
             boundary_ds = PotentialBoundaryDataset(bz=bz,
                                                    height_pixel=coord_range[2, -1] / ds_per_pixel,
-                                                   coord_range=coord_range,
-                                                   ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
-                                                   work_directory=work_directory,
+                                                   coord_range=potential_coord_range,
+                                                   ds_per_pixel=ds_per_pixel, Gauss_per_dB=Gauss_per_dB,
+                                                   work_path=work_path,
                                                    requires_jacobian=boundary_requires_jacobian,
-                                                   batch_size=boundary_batch_size, **boundary_config)
+                                                   batch_size=boundary_batch_size, **potential_boundary)
+            boundary_ds.config = {
+                'id': 'potential',
+                'type': boundary_type,
+                'role': 'training',
+                'requires_jacobian': boundary_requires_jacobian,
+                'batch_size': boundary_batch_size,
+                'coord_range': potential_coord_range,
+                **potential_boundary_state,
+            }
             training_datasets['potential'] = boundary_ds
         elif boundary_type == 'potential_top':
             bz = bottom_boundary_dataset.bz
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
+            potential_coord_range = _potential_coord_range(bottom_boundary_dataset, coord_range)
             boundary_ds = PotentialTopBoundaryDataset(bz=bz,
                                                       height_pixel=coord_range[2, -1] / ds_per_pixel,
-                                                      coord_range=coord_range,
-                                                      ds_per_pixel=ds_per_pixel, G_per_dB=G_per_dB,
-                                                      work_directory=work_directory,
+                                                      coord_range=potential_coord_range,
+                                                      ds_per_pixel=ds_per_pixel, Gauss_per_dB=Gauss_per_dB,
+                                                      work_path=work_path,
                                                       requires_jacobian=boundary_requires_jacobian,
-                                                      batch_size=boundary_batch_size, **boundary_config)
+                                                      batch_size=boundary_batch_size, **potential_boundary)
+            boundary_ds.config = {
+                'id': 'potential',
+                'type': boundary_type,
+                'role': 'training',
+                'requires_jacobian': boundary_requires_jacobian,
+                'batch_size': boundary_batch_size,
+                'coord_range': potential_coord_range,
+                **potential_boundary_state,
+            }
             training_datasets['potential'] = boundary_ds
         else:
-            raise ValueError(f'Unknown boundary type: {boundary_config["type"]}')
+            raise ValueError(f'Unknown boundary type: {potential_boundary["type"]}')
 
         # validation datasets
         validation_datasets = {}
-        if valid_configs is None:
-            valid_configs = train_configs
-            valid_configs.append({'type': "cube", 'ds_id': 'cube', })
-            valid_configs.append({'type': "slices", 'ds_id': 'slices', })
+        if validation is None:
+            validation = boundaries.copy()
+            validation.append({'type': "cube", 'id': 'cube', })
+            validation.append({'type': "slices", 'id': 'slices', })
 
-        validation_datasets = [self._load_valid_ds_config(config) for config in valid_configs]
+        validation_datasets = [self._load_valid_ds_config(config) for config in validation]
         validation_datasets = dict(validation_datasets)  # convert to dict
 
-        config = {'type': 'cartesian', 'max_height': z_range[1],
-                  'Mm_per_ds': Mm_per_ds, 'G_per_dB': G_per_dB,
+        config = {'schema_version': '0.4',
+                  'type': 'cartesian',
+                  'geometry': 'cartesian',
+                  'coordinate_system': 'cartesian',
+                  'field_components': ['Bx', 'By', 'Bz'],
+                  'field_unit': 'G',
+                  'length_unit': 'Mm',
+                  'max_height': z_range[1],
+                  'z_range': z_range,
+                  'z_range_ds': coord_range[2],
+                  'Mm_per_ds': Mm_per_ds, 'Gauss_per_dB': Gauss_per_dB,
+                  'normalization': {'Mm_per_ds': Mm_per_ds, 'Gauss_per_dB': Gauss_per_dB},
                   'coord_range': [], 'ds_per_pixel': [], 'height_mapping': [], 'wcs': [],
                   'cube_shape': []}
         for dataset in training_datasets.values():
-            if not isinstance(dataset, MapDataset):
+            if not all(hasattr(dataset, attr) for attr in ['coord_range', 'cube_shape', 'ds_per_pixel']):
                 continue
             config['coord_range'].append(dataset.coord_range)
             config['cube_shape'].append(dataset.cube_shape)
             config['ds_per_pixel'].append(dataset.ds_per_pixel)
-            config['height_mapping'].append(dataset.height_mapping)
-            config['wcs'].append(dataset.wcs)
+            config['height_mapping'].append(getattr(dataset, 'height_mapping', None))
+            config['wcs'].append(getattr(dataset, 'wcs', None))
 
         super().__init__(training_datasets, validation_datasets, config, num_workers=num_workers, **kwargs)
 
@@ -149,19 +206,19 @@ class CartesianDataModule(BaseDataModule):
             return FldIncAziFITSDataset(**kwargs)
         elif type == 'numpy':
             return NumpyDataset(**kwargs)
+        elif type == 'analytical':
+            return AnalyticalBoundaryDataset(**kwargs)
         elif type == 'muram_slice':
             return MURaMDataset(**kwargs)
         elif type == 'muram_cube':
             return MURaMCubeDataset(**kwargs)
-        elif type == 'muram_pressure':
-            return MURaMPressureDataset(**kwargs)
         elif type == 'slices':
             return SlicesDataset(**kwargs)
         elif type == 'cube':
             return CubeDataset(**kwargs)
         else:
             raise ValueError(f'Unknown boundary type: {type}. Supported types: '
-                             f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muarm_cube')
+                             f'fits, los_trv_azi, los, sharp, fld_inc_azi, numpy, muram_slice, muram_cube')
 
     def _load_ds_config(self, config):
         """
@@ -171,12 +228,19 @@ class CartesianDataModule(BaseDataModule):
         """
         config = deepcopy(config)
         ds_type = config['type']
-        ds_id = config.pop('ds_id', f'train_{ds_type}')
+        dataset_id = config.pop('id', f'train_{ds_type}')
         requires_jacobian = config.pop('requires_jacobian', False)
         config['batch_size'] = config.pop('batch_size', self.ds_batch_size)  # default batch size
-        dataset = self.init_dataset(**config, Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
-                                    work_directory=self.work_directory, requires_jacobian=requires_jacobian)
-        return ds_id, dataset
+        dataset = self.init_dataset(**config, Mm_per_ds=self.Mm_per_ds, Gauss_per_dB=self.Gauss_per_dB,
+                                    work_path=self.work_path, requires_jacobian=requires_jacobian)
+        dataset.config = {
+            'id': dataset_id,
+            'type': ds_type,
+            'role': 'training',
+            'requires_jacobian': requires_jacobian,
+            **deepcopy(config),
+        }
+        return dataset_id, dataset
 
     def _load_valid_ds_config(self, config):
         """
@@ -186,15 +250,22 @@ class CartesianDataModule(BaseDataModule):
         """
         config = deepcopy(config)
         ds_type = config['type']
-        ds_id = config.pop('ds_id', f'valid_{ds_type}')
+        dataset_id = config.pop('id', f'valid_{ds_type}')
         config['batch_size'] = config.pop('batch_size', self.validation_batch_size)
         plot = config.pop('plot', False)
         dataset = self.init_dataset(**config,
-                                    Mm_per_ds=self.Mm_per_ds, G_per_dB=self.G_per_dB,
+                                    Mm_per_ds=self.Mm_per_ds, Gauss_per_dB=self.Gauss_per_dB,
                                     shuffle=False, filter_nans=False,
-                                    work_directory=self.work_directory, plot=plot,
+                                    work_path=self.work_path, plot=plot,
                                     ds_per_pixel=1 / self.validation_pixel_per_ds, coord_range=self.coord_range)
-        return ds_id, dataset
+        dataset.config = {
+            'id': dataset_id,
+            'type': ds_type,
+            'role': 'validation',
+            'plot': plot,
+            **deepcopy(config),
+        }
+        return dataset_id, dataset
 
 
 class FITSDataset(MapDataset):
@@ -400,24 +471,24 @@ class FldIncAziFITSDataset(MapDataset):
 
 class CartesianSeriesDataModule(LightningDataModule):
 
-    def __init__(self, train_configs, current_step, *args, **kwargs):
+    def __init__(self, boundaries, current_step, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-        train_configs = [_load_config(c) for c in train_configs]
-        assert all([len(c) == len(train_configs[0]) for c in train_configs]), \
+        expanded_boundaries = [_load_config(c) for c in boundaries]
+        assert all([len(c) == len(expanded_boundaries[0]) for c in expanded_boundaries]), \
             'Inconsistent number of training files in configurations. Check your configurations.'
-        train_configs = list(zip(*train_configs))
+        boundaries = list(zip(*expanded_boundaries))
 
         # remove already extrapolated files
-        assert current_step < len(train_configs), \
+        assert current_step < len(boundaries), \
             'Not enough data files found to continue training. Training completed or configuration is incorrect.'
 
         self.step = current_step
-        self.train_configs = train_configs
+        self.boundaries = boundaries
 
-        print(f'Loading data modules... (total: {len(self.train_configs)})')
-        self.data_modules = [CartesianDataModule(train_configs=list(c), *args, **kwargs) for c in train_configs]
-        self.total_steps = len(self.train_configs)
+        print(f'Loading data modules... (total: {len(self.boundaries)})')
+        self.data_modules = [CartesianDataModule(boundaries=list(c), *args, **kwargs) for c in boundaries]
+        self.total_steps = len(self.boundaries)
         super().__init__()
 
     @property
@@ -434,7 +505,7 @@ class CartesianSeriesDataModule(LightningDataModule):
 
     @property
     def current_id(self):
-        return self.train_configs[self.step][0]['id']
+        return self.boundaries[self.step][0].get('step_id', self.boundaries[self.step][0]['id'])
 
     def train_dataloader(self):
         return self.data_modules[self.step].train_dataloader()
@@ -446,11 +517,15 @@ class CartesianSeriesDataModule(LightningDataModule):
 def _load_config(config):
     config = deepcopy(config)
     c_type = config['type']
-    if c_type == 'fits':
-        data_path = config.pop('data_path')
-        fits_paths, error_paths = _load_paths(data_path)
-        ids = [os.path.basename(fp['Br']).split('.')[-3] for fp in fits_paths]
-        configs = [{**config, 'id': id, 'data_path': {**fp, **ep}}
+    if c_type in {'fits', 'sharp', 'los_trv_azi', 'los', 'fld_inc_azi'}:
+        path_config = config.pop('fits_path', config.pop('data_path', None))
+        if path_config is None:
+            raise ValueError(f"Series dataset '{config.get('id', c_type)}' requires files or data_path.")
+        fits_paths, error_paths = _load_paths(path_config, c_type)
+        if error_paths is None:
+            error_paths = [{} for _ in fits_paths]
+        ids = [_series_id(fp) for fp in fits_paths]
+        configs = [{**config, 'id': config.get('id', id), 'step_id': id, 'fits_path': {**fp, **ep}}
                    for id, fp, ep in zip(ids, fits_paths, error_paths)]
     elif c_type == 'muram_slice':
         data_path = config.pop('data_path')
@@ -462,56 +537,75 @@ def _load_config(config):
     return configs
 
 
-def _load_paths(data_path):
+def _series_id(files):
+    file_path = files.get('Br') or files.get('B_los') or next(iter(files.values()))
+    stem = os.path.basename(file_path)
+    if stem.endswith('.fits'):
+        stem = stem[:-5]
+    for suffix in ['.Br', '.Bt', '.Bp', '.B_los', '.B_trv', '.B_azi', '_Br', '_Bt', '_Bp',
+                   '_B_los', '_B_trv', '_B_azi']:
+        if stem.endswith(suffix):
+            return stem[:-len(suffix)]
+    return stem
+
+
+def _load_paths(data_path, data_type='fits'):
+    if data_type == 'los_trv_azi':
+        return _load_component_paths(data_path, ['B_los', 'B_trv', 'B_azi'], [])
+    if data_type == 'los':
+        return _load_component_paths(data_path, ['B_los'], [])
+    if data_type == 'fld_inc_azi':
+        return _load_component_paths(data_path, ['B_fld', 'B_inc', 'B_azi'], [])
+    return _load_component_paths(data_path, ['Bp', 'Bt', 'Br'], ['Bp_err', 'Bt_err', 'Br_err'])
+
+
+def _load_component_paths(data_path, component_keys, error_keys):
     if isinstance(data_path, list):
-        results = [_load_paths(d) for d in data_path]
+        results = [_load_component_paths(d, component_keys, error_keys) for d in data_path]
         fits_paths = [f for r in results for f in r[0]]
         error_paths = [f for r in results for f in r[1]] if all([r[1] is not None for r in results]) else None
     elif isinstance(data_path, str):
-        p_files = sorted(glob.glob(os.path.join(data_path, '*Bp.fits')))  # x
-        t_files = sorted(glob.glob(os.path.join(data_path, '*Bt.fits')))  # y
-        r_files = sorted(glob.glob(os.path.join(data_path, '*Br.fits')))  # z
-        err_p_files = sorted(glob.glob(os.path.join(data_path, '*Bp_err.fits')))  # x
-        err_t_files = sorted(glob.glob(os.path.join(data_path, '*Bt_err.fits')))  # y
-        err_r_files = sorted(glob.glob(os.path.join(data_path, '*Br_err.fits')))  # z
+        files_by_key = {
+            key: sorted(glob.glob(os.path.join(data_path, f'*{key}.fits')))
+            for key in component_keys
+        }
+        n_files = _assert_component_lengths(files_by_key, data_path)
+        fits_paths = [{key: files_by_key[key][i] for key in component_keys} for i in range(n_files)]
 
-        assert len(p_files) == len(t_files) == len(r_files), f'Number of files in data path {data_path} does not match'
-        fits_paths = list(zip(p_files, t_files, r_files))
-        fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
-
-        if len(err_p_files) > 0 or len(err_t_files) > 0 or len(err_r_files) > 0:
-            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
-                err_r_files), \
-                f'Number of files in data path {data_path} does not match'
-            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
-            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2]} for d in error_paths]
+        error_files_by_key = {
+            key: sorted(glob.glob(os.path.join(data_path, f'*{key}.fits')))
+            for key in error_keys
+        }
+        if error_keys and any(len(files) > 0 for files in error_files_by_key.values()):
+            _assert_component_lengths(error_files_by_key, data_path, expected_length=n_files)
+            error_paths = [{key: error_files_by_key[key][i] for key in error_keys} for i in range(n_files)]
         else:
             error_paths = None
     elif isinstance(data_path, dict):
-        p_files = sorted(glob.glob(data_path['Bp']))  # x
-        t_files = sorted(glob.glob(data_path['Bt']))  # y
-        r_files = sorted(glob.glob(data_path['Br']))  # z
-        err_p_files = sorted(glob.glob(data_path['Bp_err'])) if 'Bp_err' in data_path else None  # x
-        err_t_files = sorted(glob.glob(data_path['Bt_err'])) if 'Bt_err' in data_path else None  # y
-        err_r_files = sorted(glob.glob(data_path['Br_err'])) if 'Br_err' in data_path else None  # z
+        files_by_key = {key: sorted(glob.glob(data_path[key])) for key in component_keys}
+        n_files = _assert_component_lengths(files_by_key, data_path)
+        fits_paths = [{key: files_by_key[key][i] for key in component_keys} for i in range(n_files)]
 
-        if err_p_files is not None and err_t_files is not None and err_r_files is not None:
-            assert len(p_files) == len(err_p_files) == len(t_files) == len(err_t_files) == len(r_files) == len(
-                err_r_files), \
-                f'Number of files in data path {data_path} does not match'
-            fits_paths = list(zip(p_files, t_files, r_files))
-            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2], } for d in fits_paths]
-            error_paths = list(zip(err_p_files, err_t_files, err_r_files))
-            error_paths = [{'Bp_err': d[0], 'Bt_err': d[1], 'Br_err': d[2], } for d in error_paths]
+        if error_keys and all(key in data_path for key in error_keys):
+            error_files_by_key = {key: sorted(glob.glob(data_path[key])) for key in error_keys}
+            _assert_component_lengths(error_files_by_key, data_path, expected_length=n_files)
+            error_paths = [{key: error_files_by_key[key][i] for key in error_keys} for i in range(n_files)]
         else:
-            assert len(p_files) == len(t_files) == len(r_files), \
-                f'Number of files in data path {data_path} does not match'
-            fits_paths = list(zip(p_files, t_files, r_files))
-            fits_paths = [{'Bp': d[0], 'Bt': d[1], 'Br': d[2]} for d in fits_paths]
             error_paths = None
     else:
         raise NotImplementedError(f'Unknown data path type {type(data_path)}')
     return fits_paths, error_paths
+
+
+def _assert_component_lengths(files_by_key, source, expected_length=None):
+    lengths = {key: len(files) for key, files in files_by_key.items()}
+    if expected_length is None:
+        expected_length = next(iter(lengths.values()))
+    if any(length != expected_length for length in lengths.values()):
+        raise AssertionError(f'Number of files in data path {source} does not match: {lengths}')
+    if expected_length == 0:
+        raise AssertionError(f'No files found in data path {source}')
+    return expected_length
 
 
 class SHARPDataset(FITSDataset):
@@ -539,13 +633,76 @@ class NumpyDataset(MapDataset):
         super().__init__(b=b, b_err=b_err, **kwargs)
 
 
+class AnalyticalBoundaryDataset(TensorsDataset):
+
+    def __init__(self, case, boundary='bottom', resolution=64, bounds=None,
+                 batch_size=2 ** 13, Gauss_per_dB=1000, Mm_per_ds=100,
+                 work_path=None, **kwargs):
+        bounds = [-1, 1, -1, 1, 0, 2] if bounds is None else bounds
+        if case == 1:
+            b_cube = get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4,
+                                          resolution=resolution, bounds=bounds)
+        elif case == 2:
+            res = resolution if isinstance(resolution, list) else [80, 80, 72]
+            b_cube = get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi * 0.15,
+                                          resolution=res, bounds=bounds)
+        else:
+            raise ValueError(f'Invalid analytical case {case}. Available cases: 1, 2')
+
+        coord_cube = np.stack(np.meshgrid(
+            np.linspace(bounds[0], bounds[1], b_cube.shape[0], dtype=np.float32),
+            np.linspace(bounds[2], bounds[3], b_cube.shape[1], dtype=np.float32),
+            np.linspace(bounds[4], bounds[5], b_cube.shape[2], dtype=np.float32),
+            indexing='ij'), -1)
+
+        if boundary == 'bottom':
+            coords = coord_cube[:, :, 0].reshape((-1, 3))
+            values = b_cube[:, :, 0].reshape((-1, 3))
+        elif boundary == 'full':
+            coords = np.concatenate([
+                coord_cube[:, :, 0].reshape((-1, 3)),
+                coord_cube[:, :, -1].reshape((-1, 3)),
+                coord_cube[:, 0, :].reshape((-1, 3)),
+                coord_cube[:, -1, :].reshape((-1, 3)),
+                coord_cube[0, :, :].reshape((-1, 3)),
+                coord_cube[-1, :, :].reshape((-1, 3)),
+            ])
+            values = np.concatenate([
+                b_cube[:, :, 0].reshape((-1, 3)),
+                b_cube[:, :, -1].reshape((-1, 3)),
+                b_cube[:, 0, :].reshape((-1, 3)),
+                b_cube[:, -1, :].reshape((-1, 3)),
+                b_cube[0, :, :].reshape((-1, 3)),
+                b_cube[-1, :, :].reshape((-1, 3)),
+            ])
+        else:
+            raise ValueError("Analytical boundary must be 'bottom' or 'full'.")
+
+        b_scale = np.nanmax(np.abs(b_cube))
+        b_scale = 1 if b_scale == 0 else b_scale
+        values = values / b_scale
+
+        self.bz = b_cube[:, :, 0, 2] / b_scale * Gauss_per_dB
+        self.ds_per_pixel = (bounds[1] - bounds[0]) / max(b_cube.shape[0] - 1, 1)
+        self.coord_range = np.array([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], dtype=np.float32)
+        self.ds = np.array([self.ds_per_pixel, self.ds_per_pixel], dtype=np.float32)
+        self.cube_shape = b_cube.shape[:2]
+        self.los_trv_azi = False
+        self.height_mapping = None
+        self.wcs = None
+
+        super().__init__({'coords': coords, 'b_true': values.astype(np.float32)},
+                         batch_size=batch_size, work_path=work_path,
+                         ds_name=f'analytical_case_{case}', **kwargs)
+
+
 class PotentialBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, G_per_dB, strides=1, batch_size=2 ** 12, **kwargs):
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=1, batch_size=2 ** 12, **kwargs):
         coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides)
         coords = coords * ds_per_pixel
-        b_err = b_err / G_per_dB
-        b = b / G_per_dB
+        b_err = b_err / Gauss_per_dB
+        b = b / Gauss_per_dB
 
         # adjust coordinates in xy plane
         c_x_min, c_x_max = coords[..., 0].min(), coords[..., 0].max()
@@ -560,12 +717,12 @@ class PotentialBoundaryDataset(TensorsDataset):
 
 class PotentialTopBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, G_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
         coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
                                                          only_top=True, progress=False)
         coords = coords * ds_per_pixel
-        b_err = b_err / G_per_dB
-        b = b / G_per_dB
+        b_err = b_err / Gauss_per_dB
+        b = b / Gauss_per_dB
 
         # adjust coordinates in xy plane
         c_x_min, c_x_max = coords[..., 0].min(), coords[..., 0].max()

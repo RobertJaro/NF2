@@ -1,20 +1,19 @@
 import copy
+from importlib.metadata import PackageNotFoundError, version
 import logging
 
 import numpy as np
 import torch
 import torch.distributed as dist
-from pytorch_lightning.utilities import rank_zero_only
-from pytorch_lightning import LightningModule
+from lightning.pytorch.utilities import rank_zero_only
+from lightning.pytorch import LightningModule
 from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, VectorPotentialModel, MagnetoStaticModel, VectorPotentialDomainModel, BDomainModel, \
-    MultiDomainModel, BScaledModel, \
-    VectorPotentialScaledModel, GaugedVectorPotentialModel
+from nf2.train.model import BModel, VectorPotentialModel
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     HeightTransformModel
 
@@ -32,15 +31,12 @@ class NF2Module(LightningModule):
             data_config (dict): Configuration dictionary containing data parameters like coordinate ranges,
                               dataset-specific parameters, and data preprocessing settings.
             model_kwargs (dict, optional): Model configuration dictionary containing:
-                - type (str): Model type, one of ['b', 'vector_potential', 'magneto_static', 
-                            'vector_potential_domain', 'b_domain', 'multi_domain', 'b_scaled', 
-                            'vector_potential_scaled']
+                - type (str): Model type, one of ['b', 'vector_potential']
                 - dim (int): Hidden dimension size of the neural network
-                - encoding_config (dict): Configuration for coordinate encoding
                 Additional model-specific parameters
             loss_config (list, optional): List of dictionaries containing loss configurations:
                 - type (str): Loss type (e.g., 'boundary', 'force_free', 'divergence')
-                - lambda (float or dict): Loss weight value or schedule configuration
+                - weight (float or dict): Loss weight value or schedule configuration
                 - ds_id (str or list): Dataset ID(s) to apply the loss to
                 - Additional loss-specific parameters
             lr_params (dict): Learning rate scheduler configuration containing:
@@ -53,7 +49,7 @@ class NF2Module(LightningModule):
         """
         super().__init__()
         Mm_per_ds = data_config['Mm_per_ds']
-        G_per_dB = data_config['G_per_dB']
+        Gauss_per_dB = data_config['Gauss_per_dB']
         self.Mm_per_ds = Mm_per_ds
 
         if 'coord_range' in data_config:
@@ -72,23 +68,8 @@ class NF2Module(LightningModule):
             model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
-        elif model_type == 'gauged_vector_potential':
-            model = GaugedVectorPotentialModel(**model_kwargs)
-        elif model_type == 'magneto_static':
-            model = MagnetoStaticModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
-        elif model_type == 'vector_potential_domain':
-            model = VectorPotentialDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
-        elif model_type == 'b_domain':
-            model = BDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
-        elif model_type == 'multi_domain':
-            model = MultiDomainModel(Mm_per_ds=Mm_per_ds, **model_kwargs)
-        elif model_type == 'b_scaled':
-            model = BScaledModel(**model_kwargs)
-        elif model_type == 'vector_potential_scaled':
-            model = VectorPotentialScaledModel(**model_kwargs)
         else:
-            valid_options = ['b', 'vector_potential', 'flux', 'magneto_static', 'vector_potential_domain', 'b_domain',
-                             'multi_domain', 'b_scaled', 'vector_potential_scaled', 'gauged_vector_potential']
+            valid_options = ['b', 'vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -115,16 +96,16 @@ class NF2Module(LightningModule):
         if loss_config is None:
             logging.info('Using default loss configuration')
             loss_config = [
-                {"type": "boundary", "lambda": {"start": 1e3, "end": 1, "iterations": 1e5},
+                {"type": "boundary", "weight": {"start": 1e3, "end": 1, "iterations": 1e5},
                  'ds_id': ['boundary_01', 'potential']},
-                {"type": "force_free", "lambda": 1e-1},
-                {"type": "divergence", "lambda": 1e-1},
+                {"type": "force_free", "weight": 1e-1},
+                {"type": "divergence", "weight": 1e-1},
             ]
-        # init lambdas and loss modules
-        loss_modules, lambdas, scheduled_lambdas = self.load_loss_config(data_config, loss_config)
+        # init loss weights and loss modules
+        loss_modules, weights, scheduled_weights = self.load_loss_config(data_config, loss_config)
         self.loss_modules = nn.ModuleDict(loss_modules)
-        self.scheduled_lambdas = nn.ParameterDict(scheduled_lambdas)
-        self.lambdas = nn.ParameterDict(lambdas)
+        self.scheduled_weights = scheduled_weights
+        self.weights = nn.ParameterDict(weights)
 
         self.model = model
         self.validation_mapping = validation_mapping
@@ -140,7 +121,7 @@ class NF2Module(LightningModule):
             elif scaling_type == 'potential_fit':
                 name = 'potential_fit_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
                 loss_scaling_modules[name] = PotentialFitLossScalingModule(**scaling_config, name=name,
-                                                                           Mm_per_ds=Mm_per_ds, G_per_dB=G_per_dB)
+                                                                           Mm_per_ds=Mm_per_ds, Gauss_per_dB=Gauss_per_dB)
             elif scaling_type == 'b_height':
                 name = 'B_height_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
                 loss_scaling_modules[name] = BHeightLossScalingModule(**scaling_config, name=name)
@@ -180,13 +161,15 @@ class NF2Module(LightningModule):
         return transform_modules
 
     def load_loss_config(self, data_config, loss_config):
-        scheduled_lambdas = {}
-        lambdas = {}
+        scheduled_weights = {}
+        weights = {}
         loss_modules = {}
         loss_config = copy.deepcopy(loss_config)
         for config in loss_config:
             k = config.pop('type')
-            l = config.pop('lambda')
+            if 'lambda' in config:
+                raise ValueError("Loss key 'lambda' was removed in v0.4. Use 'weight'.")
+            l = config.pop('weight')
             # update dataset id
             ds_id = config.pop('ds_id', 'all')
             config['ds_id'] = ds_id
@@ -200,27 +183,27 @@ class NF2Module(LightningModule):
                 value = torch.tensor(l['start'], dtype=torch.float32)
                 lt = 'exponential' if 'type' not in l else l['type']
                 if lt == 'exponential':
-                    gamma = torch.tensor((l['end'] / l['start']) ** (1 / l['iterations']), dtype=torch.float32)
-                    end = torch.tensor(l['end'], dtype=torch.float32)
-                    scheduled_lambdas[name] = {'gamma': gamma, 'end': end, 'type': lt}
+                    gamma = (l['end'] / l['start']) ** (1 / l['iterations'])
+                    end = l['end']
+                    scheduled_weights[name] = {'gamma': gamma, 'end': end, 'type': lt}
                 elif lt == 'linear':
-                    gamma = torch.tensor((l['end'] - l['start']) / l['iterations'], dtype=torch.float32)
-                    end = torch.tensor(l['end'], dtype=torch.float32)
-                    scheduled_lambdas[name] = {'gamma': gamma, 'end': end, 'type': lt}
+                    gamma = (l['end'] - l['start']) / l['iterations']
+                    end = l['end']
+                    scheduled_weights[name] = {'gamma': gamma, 'end': end, 'type': lt}
                 elif lt == 'step':
-                    steps = torch.tensor((l['steps']), dtype=torch.float32)
-                    end = torch.tensor(l['end'], dtype=torch.float32)
-                    scheduled_lambdas[name] = {'steps': steps, 'end': end, 'type': lt}
+                    steps = l['steps']
+                    end = l['end']
+                    scheduled_weights[name] = {'steps': steps, 'end': end, 'type': lt}
                 else:
-                    raise ValueError(f"Invalid lambda type: {lt}, must be in ['exponential', 'linear', 'step']")
+                    raise ValueError(f"Invalid weight schedule type: {lt}, must be in ['exponential', 'linear', 'step']")
             else:
                 value = torch.tensor(l, dtype=torch.float32)
-            assert name not in lambdas, f"Duplicate name for loss: {name}"
-            lambdas[name] = value
+            assert name not in weights, f"Duplicate name for loss: {name}"
+            weights[name] = value
             # additional kwargs
             loss_module = {name: loss_module_mapping[k](**config, **data_config)}
             loss_modules.update(loss_module)
-        return loss_modules, lambdas, scheduled_lambdas
+        return loss_modules, weights, scheduled_weights
 
     def configure_optimizers(self):
         parameters = list(self.model.parameters())
@@ -327,7 +310,7 @@ class NF2Module(LightningModule):
             except Exception as e:
                 logging.error(f"Error in loss module: {name}")
                 raise e
-        total_loss = sum([self.lambdas[k] * loss_dict[k] for k in loss_dict.keys()])
+        total_loss = sum([self.weights[k] * loss_dict[k] for k in loss_dict.keys()])
 
         return {**{k: v.detach() for k, v in loss_dict.items()}, 'loss': total_loss}
 
@@ -354,28 +337,28 @@ class NF2Module(LightningModule):
 
     @torch.no_grad()
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:
-        # update lambda parameters and log
-        for k in self.scheduled_lambdas.keys():
-            param = self.lambdas[k]
-            schedule_type = self.scheduled_lambdas[k]['type']
+        # update scheduled loss weights and log
+        for k in self.scheduled_weights.keys():
+            param = self.weights[k]
+            schedule_type = self.scheduled_weights[k]['type']
             if schedule_type == 'exponential':
-                gamma = self.scheduled_lambdas[k]['gamma']
-                if (gamma < 1 and param > self.scheduled_lambdas[k]['end']) or \
-                        (gamma > 1 and param < self.scheduled_lambdas[k]['end']):
-                    new_lambda = param * gamma
-                    param.copy_(new_lambda)
+                gamma = self.scheduled_weights[k]['gamma']
+                if (gamma < 1 and param > self.scheduled_weights[k]['end']) or \
+                        (gamma > 1 and param < self.scheduled_weights[k]['end']):
+                    new_weight = param * gamma
+                    param.copy_(new_weight)
             if schedule_type == 'linear':
-                gamma = self.scheduled_lambdas[k]['gamma']
-                if (gamma > 0 and param < self.scheduled_lambdas[k]['end']) or \
-                        (gamma < 0 and param > self.scheduled_lambdas[k]['end']):
-                    new_lambda = param + gamma
-                    param.copy_(new_lambda)
+                gamma = self.scheduled_weights[k]['gamma']
+                if (gamma > 0 and param < self.scheduled_weights[k]['end']) or \
+                        (gamma < 0 and param > self.scheduled_weights[k]['end']):
+                    new_weight = param + gamma
+                    param.copy_(new_weight)
             if schedule_type == 'step':
-                steps = self.scheduled_lambdas[k]['steps']
+                steps = self.scheduled_weights[k]['steps']
                 if self.global_step > steps:
-                    new_lambda = self.scheduled_lambdas[k]['end']
-                    param.copy_(new_lambda)
-            self.log('lambda_' + k, self.lambdas[k])
+                    new_weight = self.scheduled_weights[k]['end']
+                    param.copy_(new_weight)
+            self.log('weight_' + k, self.weights[k])
         # update learning rate
         scheduler = self.lr_schedulers()
         if scheduler.get_last_lr()[0] > self.lr_params['end']:
@@ -482,29 +465,25 @@ class NF2Module(LightningModule):
 
     def on_load_checkpoint(self, checkpoint):
         state_dict = checkpoint['state_dict']
-        # keep new lambdas
-        for k, v in self.lambdas.items():
-            if f"lambdas.{k}" not in state_dict:
-                print(f'Add lambda {k}: {v.data}')
-                state_dict[f'lambdas.{k}'] = v
+        # keep new loss weights
+        for k, v in self.weights.items():
+            if f"weights.{k}" not in state_dict:
+                print(f'Add weight {k}: {v.data}')
+                state_dict[f'weights.{k}'] = v
                 continue
-            checkpoint_v = state_dict[f"lambdas.{k}"]
-            if k in self.scheduled_lambdas or checkpoint_v == v:  # skip scheduled lambdas or same values
+            checkpoint_v = state_dict[f"weights.{k}"]
+            if k in self.scheduled_weights or checkpoint_v == v:  # skip scheduled weights or same values
                 continue
-            print(f'Update lambda {k}: {checkpoint_v} --> {v.data}')
-            state_dict[f'lambdas.{k}'] = v
-        # remove old lambdas
+            print(f'Update weight {k}: {checkpoint_v} --> {v.data}')
+            state_dict[f'weights.{k}'] = v
+        # remove old loss weights
         remove_keys = []
         for k, v in state_dict.items():
-            if 'lambdas' in k and k.split('.')[1] not in self.lambdas.keys():
-                print(f'Remove lambda: {k}')
+            if 'lambdas' in k or 'scheduled_lambdas' in k:
+                print(f'Remove legacy weight key: {k}')
                 remove_keys.append(k)
-        [state_dict.pop(k) for k in remove_keys]
-        # remove old scheduled lambdas
-        remove_keys = []
-        for k, v in state_dict.items():
-            if 'scheduled_lambdas' in k and k.split('.')[1] not in self.scheduled_lambdas.keys():
-                print(f'Remove scheduled lambda: {k}')
+            elif 'weights' in k and k.split('.')[1] not in self.weights.keys():
+                print(f'Remove weight: {k}')
                 remove_keys.append(k)
         [state_dict.pop(k) for k in remove_keys]
 
@@ -513,8 +492,22 @@ class NF2Module(LightningModule):
 
 @rank_zero_only
 def save(save_path, nf2, data_module, config):
-    save_state = {'model': nf2.model,
+    import lightning
+
+    try:
+        nf2_version = version('nf2')
+    except PackageNotFoundError:
+        nf2_version = 'unknown'
+
+    save_state = {'format_version': '0.4',
+                  'software': {
+                      'nf2': nf2_version,
+                      'torch': torch.__version__,
+                      'lightning': lightning.__version__,
+                  },
+                  'model': nf2.model,
                   'config': config,
                   'data': data_module.config,
+                  'validation_dataset_mapping': data_module.validation_dataset_mapping,
                   'transforms': nf2.transform_modules, }
     torch.save(save_state, save_path)

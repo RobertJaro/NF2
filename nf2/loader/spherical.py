@@ -11,8 +11,8 @@ from astropy import units as u
 from astropy.coordinates import SkyCoord
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pytorch_lightning import LightningDataModule
-from pytorch_lightning.utilities import rank_zero_only
+from lightning.pytorch import LightningDataModule
+from lightning.pytorch.utilities import rank_zero_only
 from sunpy.coordinates import frames
 from sunpy.map import Map, all_coordinates_from_map
 
@@ -73,7 +73,7 @@ def _reference_map_coordinate_bounds(reference_map, mu_filter=None, name='refere
 
 class SphericalSliceDataset(TensorsDataset):
 
-    def __init__(self, b, coords, spherical_coords, G_per_dB, Mm_per_ds,
+    def __init__(self, b, coords, spherical_coords, Gauss_per_dB, Mm_per_ds,
                  b_err=None, transform=None,
                  plot_overview=True, strides=1, **kwargs):
         ds_name = kwargs.get('ds_name')
@@ -95,8 +95,8 @@ class SphericalSliceDataset(TensorsDataset):
             transform = transform.reshape((-1, 3, 3))
 
         # normalize data
-        b /= G_per_dB
-        b_err = b_err / G_per_dB if b_err is not None else None
+        b /= Gauss_per_dB
+        b_err = b_err / Gauss_per_dB if b_err is not None else None
         coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
         nan_mask = np.isnan(b).any(-1)
@@ -430,11 +430,11 @@ class SphericalFITSReferenceDataset(TensorsDataset):
 
 class SphericalDataModule(BaseDataModule):
 
-    def __init__(self, train_configs, validation_configs,
+    def __init__(self, boundaries, validation, samplers=None,
                  max_radius=1.3,
                  Mm_per_ds=100,
-                 G_per_dB=None, work_directory=None,
-                 batch_size=4096, **kwargs):
+                 Gauss_per_dB=1000, work_path=None,
+                 batch_size=4096, type=None, geometry=None, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
                            'fits_reference': SphericalFITSReferenceDataset,
@@ -444,22 +444,34 @@ class SphericalDataModule(BaseDataModule):
                            'spherical_slices': SphereSlicesDataset}
 
         # data parameters
-        self.G_per_dB = G_per_dB
+        self.Gauss_per_dB = Gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
         self.cube_shape = [1, max_radius]
         self.spatial_norm = 1 * u.solRad
 
         # init boundary datasets
-        general_config = {'work_directory': work_directory, 'batch_size': batch_size, 'G_per_dB': G_per_dB,
+        general_config = {'work_path': work_path, 'batch_size': batch_size, 'Gauss_per_dB': Gauss_per_dB,
                           'radius_range': [1, max_radius], 'Mm_per_ds': Mm_per_ds}
 
-        config = {'type': 'spherical',
+        config = {'schema_version': '0.4',
+                  'type': 'spherical',
+                  'geometry': 'spherical',
+                  'coordinate_system': 'heliographic_carrington',
+                  'boundary_field_components': ['Br', 'Btheta', 'Bphi'],
+                  'model_field_components': ['Bx', 'By', 'Bz'],
+                  'field_unit': 'G',
+                  'length_unit': 'Mm',
+                  'radius_unit': 'solRad',
+                  'max_radius': max_radius,
                   'radius_range': [1, max_radius],
-                  'G_per_dB': G_per_dB,
-                  'Mm_per_ds': Mm_per_ds}
+                  'spatial_norm_Mm': (1 * u.solRad).to_value(u.Mm),
+                  'Gauss_per_dB': Gauss_per_dB,
+                  'Mm_per_ds': Mm_per_ds,
+                  'normalization': {'Mm_per_ds': Mm_per_ds, 'Gauss_per_dB': Gauss_per_dB}}
 
-        training_datasets = self.load_config(train_configs, general_config, prefix='train')
-        validation_datasets = self.load_config(validation_configs, general_config, prefix='validation')
+        training_configs = list(boundaries) + list(samplers or [])
+        training_datasets = self.load_config(training_configs, general_config, prefix='train')
+        validation_datasets = self.load_config(validation, general_config, prefix='validation')
 
         super().__init__(training_datasets, validation_datasets, config, **kwargs)
 
@@ -468,7 +480,7 @@ class SphericalDataModule(BaseDataModule):
         for i, config in enumerate(configs):
             config = deepcopy(config)
             c_type = config.pop('type')
-            c_name = config.pop('ds_id') if 'ds_id' in config else f'{prefix}_{c_type}_{i}'
+            c_name = config.pop('id') if 'id' in config else f'{prefix}_{c_type}_{i}'
             requires_jacobian = config.pop('requires_jacobian', True)
             config['ds_name'] = c_name
             # update config with general config
@@ -478,8 +490,14 @@ class SphericalDataModule(BaseDataModule):
             if c_type in ['random_spherical', 'random_radial_grouped']:
                 self._apply_random_reference_map(config)
             config['requires_jacobian'] = requires_jacobian
-            os.makedirs(config['work_directory'], exist_ok=True)
+            os.makedirs(config['work_path'], exist_ok=True)
             dataset = self.ds_mapping[c_type](**config)
+            dataset.config = {
+                'id': c_name,
+                'type': c_type,
+                'role': prefix,
+                **deepcopy(config),
+            }
             datasets[c_name] = dataset
         return datasets
 
@@ -508,22 +526,22 @@ class SphericalDataModule(BaseDataModule):
 
 
 def _load_spherical_data_module(worker_args):
-    step, total_steps, train_configs, args, kwargs = worker_args
+    step, total_steps, boundaries, args, kwargs = worker_args
     print(f'Loading data module {step + 1:03d}/{total_steps:03d}; '
-          f'ID: {SphericalSeriesDataModule._step_id(train_configs, step)}')
-    return SphericalDataModule(train_configs, *args, **kwargs)
+          f'ID: {SphericalSeriesDataModule._step_id(boundaries, step)}')
+    return SphericalDataModule(boundaries=boundaries, *args, **kwargs)
 
 
 class SphericalSeriesDataModule(LightningDataModule):
 
-    def __init__(self, train_configs, current_step=0, iterations=None, data_module_workers=None, *args, **kwargs):
+    def __init__(self, boundaries, samplers=None, current_step=0, iterations=None, data_module_workers=None, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
         self.iterations = iterations
 
-        self.train_configs = self._expand_train_configs(train_configs)
+        self.boundaries = self._expand_boundaries(list(boundaries) + list(samplers or []))
         self.step = current_step
-        self.total_steps = len(self.train_configs)
+        self.total_steps = len(self.boundaries)
 
         assert self.step < self.total_steps, \
             'Not enough data files found to continue training. Training completed or configuration is incorrect.'
@@ -532,8 +550,8 @@ class SphericalSeriesDataModule(LightningDataModule):
         super().__init__()
         self._load_data_modules(data_module_workers)
 
-    def _expand_train_configs(self, train_configs):
-        expanded_configs = [self._expand_config(config) for config in train_configs]
+    def _expand_boundaries(self, boundaries):
+        expanded_configs = [self._expand_config(config) for config in boundaries]
         total_steps = max(len(configs) for configs in expanded_configs)
         assert all(len(configs) in (1, total_steps) for configs in expanded_configs), \
             'Inconsistent number of training files in configurations. Check your configurations.'
@@ -542,7 +560,7 @@ class SphericalSeriesDataModule(LightningDataModule):
         for step in range(total_steps):
             step_configs = [deepcopy(configs[step] if len(configs) > 1 else configs[0])
                             for configs in expanded_configs]
-            context = {config.get('ds_id', f'train_{i}'): config
+            context = {config.get('id', f'train_{i}'): config
                        for i, config in enumerate(step_configs)}
             configs_by_step.append([self._resolve_placeholders(config, context) for config in step_configs])
         return configs_by_step
@@ -580,7 +598,7 @@ class SphericalSeriesDataModule(LightningDataModule):
 
         n_steps = max(series_lengths)
         assert all(length in (1, n_steps) for length in series_lengths), \
-            f'Inconsistent number of files in spherical map config {config.get("ds_id", "")}'
+            f'Inconsistent number of files in spherical map config {config.get("id", "")}'
 
         configs = []
         for step in range(n_steps):
@@ -627,8 +645,8 @@ class SphericalSeriesDataModule(LightningDataModule):
         return None
 
     @staticmethod
-    def _step_id(train_configs, step):
-        for config in train_configs:
+    def _step_id(boundaries, step):
+        for config in boundaries:
             if 'id' in config and config['id'] is not None:
                 return config['id']
             if config.get('type') == 'map' and 'files' in config:
@@ -639,7 +657,7 @@ class SphericalSeriesDataModule(LightningDataModule):
 
     @property
     def current_id(self):
-        return self._step_id(self.train_configs[self.step], self.step)
+        return self._step_id(self.boundaries[self.step], self.step)
 
     def _get_data_module(self, step):
         return self.data_modules[step]
@@ -649,8 +667,8 @@ class SphericalSeriesDataModule(LightningDataModule):
         n_workers = max(1, min(n_workers, self.total_steps))
 
         print(f'Loading data modules... (total: {self.total_steps}, workers: {n_workers})')
-        worker_args = [(step, self.total_steps, train_configs, self.args, self.kwargs)
-                       for step, train_configs in enumerate(self.train_configs)]
+        worker_args = [(step, self.total_steps, boundaries, self.args, self.kwargs)
+                       for step, boundaries in enumerate(self.boundaries)]
         if n_workers == 1:
             self.data_modules = [_load_spherical_data_module(args) for args in worker_args]
             return

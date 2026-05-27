@@ -2,14 +2,10 @@ import glob
 import os
 
 import numpy as np
-import wandb
 from astropy import units as u
 from astropy.nddata import block_reduce
-from matplotlib import pyplot as plt
-from matplotlib.colors import LogNorm
 from tqdm import tqdm
 
-from nf2.data.dataset import TensorsDataset
 from nf2.data.util import img_to_los_trv_azi
 from nf2.loader.base import MapDataset
 
@@ -20,8 +16,6 @@ muram_variables = {'Bz': {'id': 'result_prim_5', 'unit': u.Gauss},
                    # 'vy': {'id': 'result_prim_2', 'unit': u.cm / u.s},
                    # 'vz': {'id': 'result_prim_3', 'unit': u.cm / u.s},
                    'tau': {'id': 'tau', 'unit': 1},
-                   # 'P': {'id': 'eosP', 'unit': u.erg / u.cm ** 3},
-                   # 'rho': {'id': 'result_prim_0', 'unit': u.g / u.cm ** 3},
                    }
 
 
@@ -62,122 +56,6 @@ class MURaMCubeDataset(MapDataset):
             raise ValueError('Either base_height or tau must be provided')
 
         super().__init__(b, Mm_per_pixel=0.192, *args, **kwargs)
-
-
-class MURaMPressureDataset(TensorsDataset):
-    def __init__(self, data_path, iteration, G_per_dB, Mm_per_ds, slice_config=None, wcs=None, **kwargs):
-        slice_config = slice_config if slice_config is not None else {'type': 'full', 'tau': 0.1}
-        assert 'base_height' in slice_config or 'tau' in slice_config, 'Either base_height or tau must be provided in slice_config'
-
-        # Load pressure cube from MURaM snapshot
-        snapshot = MURaMSnapshot(data_path, iteration)
-        if 'base_height' in slice_config:
-            base_height = slice_config['base_height']
-            p = snapshot.P
-            p = p[:, :, base_height:, None]
-        elif 'tau' in slice_config:
-            tau = slice_config['tau']
-            muram_out = snapshot.load_cube(target_tau=tau)
-            p = muram_out['P'][..., None]
-        else:
-            raise ValueError('Either base_height or tau must be provided in slice_config')
-
-        # Normalize pressure
-        p = p / G_per_dB ** 2
-
-        # Extract boundary or use full cube
-        if slice_config['type'] == 'full':
-            dx, dy, dz = snapshot.ds
-            x_dim, y_dim, z_dim = p.shape[:3]
-            coords = np.stack(np.meshgrid(np.arange(x_dim, dtype=np.float32),
-                                          np.arange(y_dim, dtype=np.float32),
-                                          np.arange(z_dim, dtype=np.float32), indexing='ij'), axis=-1)
-            coords = coords.reshape(-1, 3)
-            p = p.reshape(-1, 1)
-        elif slice_config['type'] == 'boundary':
-            # Extract spatial resolution
-            dx, dy, dz = snapshot.ds
-            # Define boundary coordinates
-            x_dim, y_dim, z_dim = p.shape[:3]
-            coords = self._generate_boundary_coords(x_dim, y_dim, z_dim)
-            # Extract pressure values at boundaries
-            p = self._extract_boundary_pressure(p)
-        else:
-            raise ValueError('Invalid slice type')
-
-        # Scale to physical units
-        coords[:, 0] *= dx.to_value(u.Mm / u.pix) / Mm_per_ds
-        coords[:, 1] *= dy.to_value(u.Mm / u.pix) / Mm_per_ds
-        coords[:, 2] *= dz.to_value(u.Mm / u.pix) / Mm_per_ds
-
-        # Initialize class attributes
-        self.coord_range = np.array([
-            [coords[:, 0].min(), coords[:, 0].max()],
-            [coords[:, 1].min(), coords[:, 1].max()]
-        ])
-        self.cube_shape = p.shape[:-1]
-        self.wcs = wcs
-        self.ds_per_pixel = dx.to_value(u.Mm / u.pix) / Mm_per_ds
-        self.height_mapping = None
-
-        # Create tensors dictionary
-        tensors = {'p_true': p, 'coords': coords}
-
-        # Call superclass constructor
-        super().__init__(tensors, **kwargs)
-
-        # Plotting (Optional)
-        # self._plot_pressure(p, G_per_dB)
-
-    def _generate_boundary_coords(self, x_dim, y_dim, z_dim):
-        """Generate coordinates for boundary planes in physical units."""
-
-        # Create boundary planes
-        coords_x_bottom = np.stack(np.meshgrid(0, np.arange(y_dim), np.arange(z_dim), indexing='ij'), axis=-1).reshape(
-            -1, 3)
-        coords_x_top = np.stack(np.meshgrid(x_dim - 1, np.arange(y_dim), np.arange(z_dim), indexing='ij'),
-                                axis=-1).reshape(-1, 3)
-
-        coords_y_bottom = np.stack(np.meshgrid(np.arange(x_dim), 0, np.arange(z_dim), indexing='ij'), axis=-1).reshape(
-            -1, 3)
-        coords_y_top = np.stack(np.meshgrid(np.arange(x_dim), y_dim - 1, np.arange(z_dim), indexing='ij'),
-                                axis=-1).reshape(-1, 3)
-
-        coords_z_bottom = np.stack(np.meshgrid(np.arange(x_dim), np.arange(y_dim), 0, indexing='ij'), axis=-1).reshape(
-            -1, 3)
-        coords_z_top = np.stack(np.meshgrid(np.arange(x_dim), np.arange(y_dim), z_dim - 1, indexing='ij'),
-                                axis=-1).reshape(-1, 3)
-
-        # Combine and remove duplicates
-        boundary_coords = np.concatenate(
-            [coords_x_bottom, coords_x_top, coords_y_bottom, coords_y_top, coords_z_bottom, coords_z_top],
-            dtype=np.float32)
-
-        return boundary_coords
-
-    def _extract_boundary_pressure(self, p):
-        """Extract pressure values at the boundary planes."""
-        return np.concatenate([
-            p[0, :, :].reshape(-1, 1),  # x = 0
-            p[-1, :, :].reshape(-1, 1),  # x = -1
-            p[:, 0, :].reshape(-1, 1),  # y = 0
-            p[:, -1, :].reshape(-1, 1),  # y = -1
-            p[:, :, 0].reshape(-1, 1),  # z = 0
-            p[:, :, -1].reshape(-1, 1)  # z = -1
-        ])
-
-    def _plot_pressure(self, p, G_per_dB):
-        """Plot pressure and coordinate projections for verification."""
-        fig, ax = plt.subplots(1, 1, figsize=(12, 8))
-
-        # Plot pressure slice at z=0
-        im = ax.imshow(p[:, :, 0, 0].T * G_per_dB ** 2, origin='lower', cmap='viridis', norm=LogNorm())
-        ax.set_title('Pressure at z=0')
-        fig.colorbar(im, ax=ax, orientation='vertical')
-
-        fig.tight_layout()
-        wandb.log({'Pressure': wandb.Image(fig)})
-        plt.close(fig)
 
 
 class MURaMSnapshot():

@@ -1,0 +1,97 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nf2"
+version = "0.4.0"
+description = "Neural non-linear force-free magnetic field extrapolation framework"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+license = "GPL-3.0-only"
+authors = [
+  { name = "Robert Jarolim" }
+]
+keywords = [
+  "solar physics",
+  "magnetic fields",
+  "NLFFF",
+  "neural fields",
+  "physics-informed neural networks"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Astronomy",
+  "Topic :: Scientific/Engineering :: Physics"
+]
+dependencies = [
+  "torch>=2.12,<2.13",
+  "lightning==2.6.4",
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "astropy>=6",
+  "sunpy[all]>=6",
+  "scikit-image>=0.22",
+  "scikit-learn>=1.3",
+  "matplotlib>=3.8",
+  "tqdm>=4.66",
+  "h5py>=3.10",
+  "PyYAML>=6",
+  "python-dateutil>=2.8",
+  "wandb>=0.27,<0.28",
+  "drms>=0.7",
+]
+
+[project.optional-dependencies]
+wandb = ["wandb>=0.27,<0.28"]
+jsoc = ["drms>=0.7"]
+pfss = ["pfsspy>=1.2"]
+docs = [
+  "sphinx>=7.2",
+  "myst-parser>=2",
+  "sphinx-autodoc-typehints>=2",
+  "sphinx-copybutton>=0.5",
+  "pydata-sphinx-theme>=0.15",
+]
+dev = [
+  "build>=1.2",
+  "pytest>=8",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "pre-commit>=3.7",
+  "twine>=5",
+]
+all = [
+  "wandb>=0.27,<0.28",
+  "drms>=0.7",
+  "pfsspy>=1.2",
+]
+
+[project.urls]
+Homepage = "https://github.com/RobertJaro/NF2"
+Documentation = "https://nf2.readthedocs.io/"
+Repository = "https://github.com/RobertJaro/NF2"
+
+[project.scripts]
+nf2-extrapolate = "nf2.extrapolate:main"
+nf2-extrapolate-series = "nf2.extrapolate_series:main"
+nf2-export = "nf2.export:main"
+nf2-metrics = "nf2.metrics:main"
+nf2-download = "nf2.data.download:main"
+nf2-noaa-to-sharp = "nf2.data.noaa_to_sharp:main"
+
+[tool.setuptools.packages.find]
+include = ["nf2*"]
+exclude = ["config_yaml*", "docs*", "examples*", "notebooks*", "scripts*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

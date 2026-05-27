@@ -18,7 +18,7 @@ class NF2Dataset(Dataset):
 
 class TensorsDataset(NF2Dataset):
 
-    def __init__(self, tensors, batch_size, work_directory, filter_nans=True, shuffle=True, ds_name=None,
+    def __init__(self, tensors, batch_size, work_path, filter_nans=True, shuffle=True, ds_name=None,
                  requires_jacobian=True, **kwargs):
         super().__init__(requires_jacobian=requires_jacobian)
         if len(tensors) == 0:
@@ -37,10 +37,10 @@ class TensorsDataset(NF2Dataset):
             tensors = {k: v[r] for k, v in tensors.items()}
 
         ds_name = uuid.uuid4() if ds_name is None else ds_name
-        os.makedirs(work_directory, exist_ok=True)
+        os.makedirs(work_path, exist_ok=True)
         self.file_paths = {}
         for k, v in tensors.items():
-            file_path = os.path.join(work_directory, f'{ds_name}_{k}.npy')
+            file_path = os.path.join(work_path, f'{ds_name}_{k}.npy')
             np.save(file_path, v.astype(np.float32))
             self.file_paths[k] = file_path
 

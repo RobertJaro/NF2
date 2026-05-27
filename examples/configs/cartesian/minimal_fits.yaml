@@ -1,0 +1,10 @@
+---
+path: "<<run_path>>"
+data:
+  geometry: cartesian
+  boundaries:
+    - type: sharp
+      files:
+        Br: "<<Br>>"
+        Bt: "<<Bt>>"
+        Bp: "<<Bp>>"

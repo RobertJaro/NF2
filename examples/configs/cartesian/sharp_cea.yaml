@@ -1,0 +1,70 @@
+---
+path: "<<run_path>>"
+work_path: "<<work_path>>"
+logging:
+  project: nf2
+  name: "Cartesian SHARP CEA"
+data:
+  geometry: cartesian
+  normalization:
+    Mm_per_ds: 100
+    Gauss_per_dB: 1000
+  boundaries:
+    - id: boundary
+      type: sharp
+      files:
+        Br: "<<Br>>"
+        Bt: "<<Bt>>"
+        Bp: "<<Bp>>"
+      slice: null
+  sampler:
+    type: height
+    batch_size: 16384
+  potential_boundary:
+    id: potential
+    type: potential
+    strides: 4
+  validation:
+    - id: boundary
+      type: sharp
+      files:
+        Br: "<<Br>>"
+        Bt: "<<Bt>>"
+        Bp: "<<Bp>>"
+      slice: null
+    - id: cube
+      type: cube
+    - id: slices
+      type: slices
+  iterations: 10000
+  z_range: [0, 80]
+training:
+  epochs: 30
+losses:
+  - type: boundary
+    name: boundary
+    weight: 1.0
+    datasets: [boundary]
+  - type: boundary
+    name: potential_boundary
+    weight: 10.0
+    datasets: potential
+  - type: force_free
+    name: force_free
+    weight: 1.0e-4
+    datasets: [random]
+  - type: potential
+    name: potential
+    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    datasets: [random]
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [force_free, potential]
+callbacks:
+  - type: boundary
+    dataset: boundary
+  - type: metrics
+    dataset: cube
+  - type: slices
+    dataset: slices
