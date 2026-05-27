@@ -125,7 +125,7 @@ from nf2 import CartesianOutput, SphericalOutput, run, run_series
 
 ## Examples
 
-Example configurations live in [examples/configs](examples/configs):
+Example configurations live in [examples/configs](examples/configs); see the [examples overview](examples/README.md) for guidance by run type:
 
 - `cartesian/sharp_cea.yaml`
 - `cartesian/minimal_fits.yaml`
@@ -136,7 +136,7 @@ Example configurations live in [examples/configs](examples/configs):
 - `benchmark/analytical_case1.yaml`
 - `benchmark/analytical_case2.yaml`
 
-Notebooks are available in [examples/notebooks](examples/notebooks), including a Colab SHARP CEA tutorial, local SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
+Notebooks are available in [examples/notebooks](examples/notebooks), including a Colab SHARP CEA tutorial, local SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are split by topic under [examples/scripts](examples/scripts).
 
 ## Documentation
 

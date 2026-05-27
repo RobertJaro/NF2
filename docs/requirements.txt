@@ -1,0 +1,6 @@
+-e .
+sphinx>=7.2
+myst-parser>=2
+sphinx-autodoc-typehints>=2
+sphinx-copybutton>=0.5
+pydata-sphinx-theme>=0.15
