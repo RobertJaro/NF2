@@ -4,7 +4,7 @@ from astropy.nddata import block_reduce
 from tqdm import tqdm
 
 from nf2.data.util import cartesian_to_spherical
-from nf2.evaluation.energy import get_free_mag_energy
+from nf2.evaluation.energy import get_free_mag_energy, get_free_mag_energy_direct, get_free_mag_energy_fft
 from nf2.train.model import calculate_current_from_jacobian
 
 
@@ -77,7 +77,7 @@ def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
     p = coords_spherical[..., 2]
     dE_dr = (np.sin(t) * np.cos(p)) * dE_dx + \
             (np.sin(t) * np.sin(p)) * dE_dy + \
-            np.cos(p) * dE_dz
+            np.cos(t) * dE_dz
 
     return {'dE_dr': dE_dr}
 
@@ -101,11 +101,23 @@ def los_trv_azi(b, **kwargs):
     b_los_trv_azi = np.stack([b_los, b_trv, azimuth], -1)
     return {'b_los_trv_azi': b_los_trv_azi}
 
+def energy(b, **kwargs):
+    # E = 0.5 * b^2
+    energy = (b ** 2).sum(-1) / (8 * np.pi)
+    energy = energy.to_value(u.G**2) * u.erg * u.cm ** -3  # convert to erg/cm^3
+    return {'energy': energy}
 
 def free_energy(b, **kwargs):
     free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
     return {'free_energy': free_energy}
 
+def free_energy_fft(b, **kwargs):
+    free_energy = get_free_mag_energy_fft(b.to_value(u.G)) * u.erg * u.cm ** -3
+    return {'free_energy': free_energy}
+
+def free_energy_direct(b, **kwargs):
+    free_energy = get_free_mag_energy_direct(b.to_value(u.G)) * u.erg * u.cm ** -3
+    return {'free_energy': free_energy}
 
 def squashing_factor(b, interp_ratio = 3, x_range=None, y_range=None, z_range=None, **kwargs):
     # local imports for optional dependency
@@ -324,5 +336,8 @@ metric_mapping = {
     'magnetic_helicity': magnetic_helicity,
     'los_trv_azi': los_trv_azi,
     'free_energy': free_energy,
+    'free_energy_fft': free_energy_fft,
+    'free_energy_direct': free_energy_direct,
+    'energy': energy,
     'squashing_factor': squashing_factor
 }

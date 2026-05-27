@@ -1,0 +1,18 @@
+include LICENSE
+include README.md
+include INSTALL.md
+include pyproject.toml
+include environment.yml
+include requirements.txt
+include .readthedocs.yaml
+
+recursive-include docs *.md *.py
+recursive-include examples *.md *.yaml *.ipynb
+recursive-include images *.jpg *.jpeg
+recursive-include conda-recipe *.yaml
+
+prune docs/_build
+prune build
+prune dist
+
+global-exclude __pycache__ *.py[cod]

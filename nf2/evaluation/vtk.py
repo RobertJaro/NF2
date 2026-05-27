@@ -1,51 +1,73 @@
+import os
+
 import numpy as np
-from tvtk.api import tvtk, write_data
 
 
-def save_vtk(path, coords=None, vectors={}, scalars={}, Mm_per_pix=720e-3):
-    """Save numpy array as VTK file
+def _as_array(value):
+    if hasattr(value, "to_value"):
+        value = value.to_value()
+    return np.asarray(value)
 
-    :param vectors: numpy array of the vector field (x, y, z, c)
-    :param path: path to the target VTK file
-    :param name: label of the vector field (e.g., B)
-    :param Mm_per_pix: pixel size in Mm. 360e-3 for original HMI resolution. (default bin2 pixel scale)
+
+def _vtk_name(name):
+    return str(name).replace(" ", "_")
+
+
+def save_vtk(path, coords=None, vectors=None, scalars=None, Mm_per_pix=720e-3):
+    """Save a structured grid as a legacy ASCII VTK file.
+
+    This lightweight writer intentionally avoids the old Mayavi/TVTK dependency.
+    Arrays are expected in NF2 order ``(x, y, z[, component])`` and are written
+    in the point order used by VTK structured grids.
     """
-    # Unpack
+    vectors = vectors if vectors is not None else {}
+    scalars = scalars if scalars is not None else {}
+
     if len(vectors) > 0:
-        dim = list(vectors.values())[0].shape[:-1]
+        dim = _as_array(next(iter(vectors.values()))).shape[:-1]
     elif len(scalars) > 0:
-        dim = list(scalars.values())[0].shape
+        dim = _as_array(next(iter(scalars.values()))).shape
     else:
-        raise ValueError('No data to save')
+        raise ValueError("No data to save.")
 
     if coords is None:
-        # Generate the grid
-        pts = np.stack(np.mgrid[0:dim[0], 0:dim[1], 0:dim[2]], -1).astype(np.int64) * Mm_per_pix
-        # reorder the points and vectors in agreement with VTK
-        pts = pts.transpose(2, 1, 0, 3)
-        pts = pts.reshape((-1, 3))
+        pts = np.stack(np.mgrid[0:dim[0], 0:dim[1], 0:dim[2]], -1).astype(np.float32) * Mm_per_pix
+        pts[..., 0] -= dim[0] * Mm_per_pix / 2
+        pts[..., 1] -= dim[1] * Mm_per_pix / 2
     else:
-        pts = coords
-        # reorder the points and vectors in agreement with VTK
-        pts = pts.transpose(2, 1, 0, 3)
-        pts = pts.reshape((-1, 3))
+        pts = _as_array(coords).astype(np.float32)
 
+    points = pts.transpose(2, 1, 0, 3).reshape((-1, 3))
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
 
-    sg = tvtk.StructuredGrid(dimensions=dim, points=pts)
-    i = 0
-    for v_name, v in vectors.items():
-        v = v.transpose(2, 1, 0, 3)
-        v = v.reshape((-1, 3))
-        sg.point_data.add_array(v)
-        sg.point_data.get_array(i).name = v_name
-        sg.point_data.update()
-        i += 1
-    for s_name, s in scalars.items():
-        s = s.transpose(2, 1, 0)
-        s = s.reshape((-1))
-        sg.point_data.add_array(s)
-        sg.point_data.get_array(i).name = s_name
-        sg.point_data.update()
-        i += 1
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("# vtk DataFile Version 3.0\n")
+        f.write("NF2 structured grid\n")
+        f.write("ASCII\n")
+        f.write("DATASET STRUCTURED_GRID\n")
+        f.write(f"DIMENSIONS {dim[0]} {dim[1]} {dim[2]}\n")
+        f.write(f"POINTS {points.shape[0]} float\n")
+        np.savetxt(f, points, fmt="%.8e")
+        f.write(f"\nPOINT_DATA {points.shape[0]}\n")
 
-    write_data(sg, path)
+        for name, values in vectors.items():
+            values = _as_array(values).astype(np.float32)
+            expected = tuple(dim) + (3,)
+            if values.shape != expected:
+                raise ValueError(f"Vector {name!r} has incompatible shape {values.shape}; expected {expected}.")
+            flat = values.transpose(2, 1, 0, 3).reshape((-1, 3))
+            f.write(f"VECTORS {_vtk_name(name)} float\n")
+            np.savetxt(f, flat, fmt="%.8e")
+            f.write("\n")
+
+        for name, values in scalars.items():
+            values = _as_array(values).astype(np.float32)
+            if values.shape != tuple(dim):
+                raise ValueError(f"Scalar {name!r} has incompatible shape {values.shape}; expected {dim}.")
+            flat = values.transpose(2, 1, 0).reshape((-1,))
+            f.write(f"SCALARS {_vtk_name(name)} float 1\n")
+            f.write("LOOKUP_TABLE default\n")
+            np.savetxt(f, flat, fmt="%.8e")
+            f.write("\n")

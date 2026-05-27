@@ -13,10 +13,15 @@ from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping
 from nf2.train.model import VectorPotentialModel
-from nf2.train.transform import HeightTransformModel
+from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, HeightTransformModel
 
 
 class BaseOutput:
+    """Base evaluator for NF2 checkpoints.
+
+    Users normally construct geometry-specific helpers through :func:`nf2.load`
+    instead of instantiating this class directly.
+    """
 
     def __init__(self, checkpoint, device=None):
         if device is None:
@@ -30,14 +35,29 @@ class BaseOutput:
         self.c = constants.c
 
     @property
-    def G_per_dB(self):
-        return self.state['data']['G_per_dB'] * u.G
+    def Gauss_per_dB(self):
+        return self.state['data']['Gauss_per_dB'] * u.G
 
     @property
     def m_per_ds(self):
         return (self.state['data']['Mm_per_ds'] * u.Mm).to(u.m)
 
     def load_coords(self, coords, batch_size=int(2 ** 12), progress=False, compute_jacobian=True, metrics=None):
+        """Evaluate the neural field at normalized model coordinates.
+
+        Parameters
+        ----------
+        coords:
+            Array with final dimension ``(x, y, z)`` in model coordinates.
+        batch_size:
+            Number of coordinates evaluated per model call.
+        progress:
+            Show a progress bar.
+        compute_jacobian:
+            Include the magnetic-field Jacobian in the output.
+        metrics:
+            Optional metric names from ``nf2.evaluation.output_metrics``.
+        """
         batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
         metrics = metrics if metrics is not None else []
 
@@ -64,9 +84,11 @@ class BaseOutput:
             model_out = {k: torch.cat(v) for k, v in model_out.items()}
             model_out = {k: v.reshape(*coords_shape[:-1], *v.shape[1:]).numpy() for k, v in model_out.items()}
 
-            model_out['b'] = model_out['b'] * self.G_per_dB
+            model_out['b'] = model_out['b'] * self.Gauss_per_dB
             if 'a' in model_out:
-                model_out['a'] = model_out['a'] * self.G_per_dB * self.m_per_ds
+                model_out['a'] = model_out['a'] * self.Gauss_per_dB * self.m_per_ds
+            if 'p' in model_out:
+                model_out['p'] = model_out['p'] * self.Gauss_per_dB ** 2
             return model_out
 
         if self._requires_grad or compute_jacobian:
@@ -74,7 +96,7 @@ class BaseOutput:
 
             if compute_jacobian:
                 jac_matrix = model_out['jac_matrix']
-                jac_matrix = jac_matrix * self.G_per_dB / self.m_per_ds
+                jac_matrix = jac_matrix * self.Gauss_per_dB / self.m_per_ds
                 model_out['jac_matrix'] = jac_matrix
         else:
             with torch.no_grad():
@@ -92,6 +114,7 @@ class BaseOutput:
 
 
 class CartesianOutput(BaseOutput):
+    """Evaluate Cartesian NF2 extrapolation checkpoints."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -104,29 +127,39 @@ class CartesianOutput(BaseOutput):
         self.ds_per_pixel = self.ds_per_pixel[0] if isinstance(self.ds_per_pixel, list) else self.ds_per_pixel
         self.Mm_per_ds = self.state['data']['Mm_per_ds']
         self.Mm_per_pixel = self.ds_per_pixel * self.Mm_per_ds
-        self.wcs = self.state['data']['wcs'] if 'wcs' in self.state['data'] else None
-        self.time = None if self.wcs is None or len(self.wcs) >= 1 else parse(self.wcs[0].wcs.dateobs)
+        self.wcs = [wcs for wcs in self.state['data']['wcs'] if wcs is not None] if 'wcs' in self.state[
+            'data'] else None
+        self.time = None if self.wcs is None or len(self.wcs) == 0 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
-    def load_cube(self, height_range=None, Mm_per_pixel=None, **kwargs):
-        x_min, x_max = self.coord_range[0]
-        y_min, y_max = self.coord_range[1]
-        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None else (h / self.Mm_per_ds for h in
-                                                                                           height_range)
+    def load_cube(self, height_range=None, x_range=None, y_range=None, Mm_per_pixel=None, **kwargs):
+        """Load a regularly sampled Cartesian volume.
+
+        Ranges are specified in megameters. Additional keyword arguments are
+        forwarded to :meth:`BaseOutput.load_coords`.
+        """
+        x_min, x_max = self.coord_range[0] if x_range is None else np.array(x_range) / self.Mm_per_ds
+        y_min, y_max = self.coord_range[1] if y_range is None else np.array(y_range) / self.Mm_per_ds
+        z_min, z_max = (0, self.max_height / self.Mm_per_ds) if height_range is None \
+            else (h / self.Mm_per_ds for h in height_range)
 
         Mm_per_pixel = self.Mm_per_pixel if Mm_per_pixel is None else Mm_per_pixel
         ds_per_pixel = Mm_per_pixel / self.Mm_per_ds
 
-        coords = np.stack(
-            np.meshgrid(np.linspace(x_min, x_max, np.round((x_max - x_min) / ds_per_pixel + 1).astype(int)),
-                        np.linspace(y_min, y_max, np.round((y_max - y_min) / ds_per_pixel + 1).astype(int)),
-                        np.linspace(z_min, z_max, np.round((z_max - z_min) / ds_per_pixel + 1).astype(int)),
-                        indexing='ij'), -1)
+        n_x_pix = np.round((x_max - x_min) / ds_per_pixel).astype(int)
+        n_y_pix = np.round((y_max - y_min) / ds_per_pixel).astype(int)
+        n_z_pix = np.round((z_max - z_min) / ds_per_pixel).astype(int)
+
+        coords = np.stack(np.mgrid[:n_x_pix, :n_y_pix, :n_z_pix], -1)
+        coords = coords * ds_per_pixel + np.array([x_min, y_min, z_min]).reshape((1, 1, 1, 3))
+
         model_out = self.load_coords(coords, **kwargs)
 
-        return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
+        coords_Mm = coords / ds_per_pixel * Mm_per_pixel
+        return {**model_out, 'coords': coords_Mm, 'Mm_per_pixel': Mm_per_pixel}
 
     def load_slice(self, z=0 * u.Mm, Mm_per_pixel=None, **kwargs):
+        """Load one horizontal Cartesian slice at height ``z``."""
         x_min, x_max = self.coord_range[0]
         y_min, y_max = self.coord_range[1]
 
@@ -143,6 +176,7 @@ class CartesianOutput(BaseOutput):
         return {**model_out, 'coords': coords, 'Mm_per_pixel': Mm_per_pixel}
 
     def load_maps(self, **kwargs):
+        """Load SunPy maps for integrated field strength, current, and energy."""
         model_out = self.load_cube(**kwargs)
 
         j_map = np.linalg.norm(model_out['j'], axis=-1).sum(axis=-1)
@@ -236,7 +270,8 @@ class HeightTransformOutput(CartesianOutput):
         super().__init__(*args, **kwargs)
 
         self.transforms = self.state['transforms']
-        height_transforms = [t for t in self.transforms if isinstance(t, HeightTransformModel)]
+        height_transforms = [t for t in self.transforms
+                             if isinstance(t, HeightRangeTransformModel) or isinstance(t, HeightTransformModel)]
 
         assert len(height_transforms) == 1, 'Requires transform module!'
         self.transform_module = height_transforms[0]
@@ -245,7 +280,7 @@ class HeightTransformOutput(CartesianOutput):
         self.height_mapping_list = self.state['data']['height_mapping']
         self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
 
-    def load_height_mapping(self, **kwargs):
+    def load_height_mapping(self, Mm_per_pixel=None, **kwargs):
         mapping_out = []
         for coord_range, height_mapping, ds_per_pixel in zip(self.coord_range_list, self.height_mapping_list,
                                                              self.ds_per_pixel_list):
@@ -255,31 +290,90 @@ class HeightTransformOutput(CartesianOutput):
             y_min, y_max = coord_range[1]
             z = height_mapping['z'] / self.Mm_per_ds
 
+            pixel_per_ds = self.Mm_per_ds / Mm_per_pixel if Mm_per_pixel is not None else 1 / ds_per_pixel
+            coords = np.stack(
+                np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
+                            np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds)),
+                            z, indexing='ij'), -1)
+            in_tensors = {'coords': coords}
+            if 'z_min' in height_mapping and 'z_max' in height_mapping:
+                height_range = np.zeros((*coords.shape[:-1], 2), dtype=np.float32)
+                height_range[..., 0] = height_mapping['z_min'] / self.Mm_per_ds
+                height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
+                in_tensors['height_range'] = height_range
+
+            in_tensors = {k: torch.tensor(v, dtype=torch.float32) for k, v in in_tensors.items()}
+            model_out = self.load_transformed_coords(in_tensors, **kwargs)
+            entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
+                     'original_coords': coords * self.Mm_per_ds * u.Mm,
+                     'Mm_per_pixel': self.Mm_per_ds / pixel_per_ds}
+            mapping_out.append(entry)
+        return mapping_out
+
+    @torch.no_grad()
+    def load_transformed_coords(self, in_tensors, batch_size=int(2 ** 12), progress=False):
+        cube_shape = list(in_tensors.values())[0].shape[:-1]
+        flattened_tensors = {k: v.reshape((-1, v.shape[-1])) for k, v in in_tensors.items()}
+
+        cube = {}
+        it = range(int(np.ceil(list(flattened_tensors.values())[0].shape[0] / batch_size)))
+        it = tqdm(it) if progress else it
+        for i in it:
+            self.transform_module.zero_grad()
+            batch = {k: v[i * batch_size: (i + 1) * batch_size].to(self.device) for k, v in flattened_tensors.items()}
+
+            transformed_coords = self.transform_module(batch)
+
+            for k, v in transformed_coords.items():
+                if k not in cube:
+                    cube[k] = []
+                cube[k] += [v.detach().cpu()]
+
+        cube = {k: torch.cat(v).reshape(*cube_shape, -1).numpy() for k, v in cube.items()}
+
+        return cube
+
+
+class DisambiguationOutput(CartesianOutput):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.transforms = self.state['transforms']
+        disambiguation_transforms = [t for t in self.transforms if isinstance(t, AzimuthTransformModel)]
+
+        assert len(disambiguation_transforms) == 1, 'Requires transform module!'
+        self.transform_module = disambiguation_transforms[0]
+
+        self.coord_range_list = self.state['data']['coord_range']
+        self.height_mapping_list = self.state['data']['height_mapping']
+        self.ds_per_pixel_list = self.state['data']['ds_per_pixel']
+
+    def load_slice(self, z=0 * u.Mm, coord_range=None, **kwargs):
+        disambiguation = []
+
+        for coord_range, ds_per_pixel in zip(self.coord_range_list, self.ds_per_pixel_list):
+            x_min, x_max = coord_range[0]
+            y_min, y_max = coord_range[1]
+            z = z.to_value(u.Mm) / self.Mm_per_ds
+
             pixel_per_ds = 1 / ds_per_pixel
             coords = np.stack(
                 np.meshgrid(np.linspace(x_min, x_max, int((x_max - x_min) * pixel_per_ds)),
                             np.linspace(y_min, y_max, int((y_max - y_min) * pixel_per_ds)),
                             z, indexing='ij'), -1)
-            height_range = np.zeros((*coords.shape[:-1], 2), dtype=np.float32)
-            height_range[..., 0] = height_mapping['z_min'] / self.Mm_per_ds
-            height_range[..., 1] = height_mapping['z_max'] / self.Mm_per_ds
 
-            model_out = self.load_transformed_coords(coords, height_range, **kwargs)
-            entry = {'height': z * self.Mm_per_ds, 'coords': model_out['coords'] * self.Mm_per_ds * u.Mm,
-                     'original_coords': coords * self.Mm_per_ds * u.Mm,
-                     'height_range': height_range * self.Mm_per_ds * u.Mm}
-            mapping_out.append(entry)
-        return mapping_out
+            model_out = self.load_transformed_coords(coords, **kwargs)
+            entry = {'coords': coords * self.Mm_per_ds * u.Mm, 'flip': model_out['flip']}
+            disambiguation.append(entry)
+        return disambiguation
 
-    def load_transformed_coords(self, coords, height_range, batch_size=int(2 ** 12), progress=False):
-        def _load(coords, height_range):
+    def load_transformed_coords(self, coords, batch_size=int(2 ** 12), progress=False):
+        def _load(coords):
             # normalize and to tensor
             coords = torch.tensor(coords, dtype=torch.float32)
             coords_shape = coords.shape
             coords = coords.reshape((-1, 3))
-
-            height_range = torch.tensor(height_range, dtype=torch.float32)
-            height_range = height_range.reshape((-1, 2))
 
             cube = {}
             it = range(int(np.ceil(coords.shape[0] / batch_size)))
@@ -289,41 +383,47 @@ class HeightTransformOutput(CartesianOutput):
                 coord = coords[k * batch_size: (k + 1) * batch_size]
                 coord = coord.to(self.device)
 
-                height_range_batch = height_range[k * batch_size: (k + 1) * batch_size]
-                height_range_batch = height_range_batch.to(self.device)
-
-                transformed_coords = self.transform_module({'coords': coord, 'height_range': height_range_batch})
+                transformed_coords = self.transform_module({'coords': coord})
 
                 for k, v in transformed_coords.items():
                     if k not in cube:
                         cube[k] = []
                     cube[k] += [v.detach().cpu()]
 
-            cube = {k: torch.cat(v).reshape(*coords_shape).numpy() for k, v in cube.items()}
+            cube = {k: torch.cat(v).reshape(*coords_shape[:-1]).numpy() for k, v in cube.items()}
 
             return cube
 
         with torch.no_grad():
-            return _load(coords, height_range)
+            return _load(coords)
 
 
 class SphericalOutput(BaseOutput):
+    """Evaluate spherical NF2 extrapolation checkpoints."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert self.state['data']['type'] == 'spherical', 'Requires spherical NF2 data!'
 
         self.radius_range = self.state['data']['radius_range']
+        if not hasattr(self.radius_range, 'unit'):
+            self.radius_range = self.radius_range * u.solRad
 
     def load_spherical(self, radius_range: u.Quantity = None,
-                       latitude_range: u.Quantity = (0, np.pi) * u.rad,
+                       latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
                        longitude_range: u.Quantity = (0, 2 * np.pi) * u.rad,
                        sampling=[100, 180, 360], **kwargs):
+        """Load a regularly sampled spherical volume.
+
+        ``sampling`` is ordered as radius, latitude, longitude. Ranges should
+        use Astropy units.
+        """
         radius_range = radius_range if radius_range is not None else self.radius_range
+        colatitude_range = sorted(np.pi / 2 * u.rad - latitude_range)
         spherical_coords = np.stack(
             np.meshgrid(
                 np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), sampling[0]),
-                np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), sampling[1]),
+                np.linspace(colatitude_range[0].to_value(u.rad), colatitude_range[1].to_value(u.rad), sampling[1]),
                 np.linspace(longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad), sampling[2]),
                 indexing='ij'), -1)
         cartesian_coords = spherical_to_cartesian(spherical_coords)
@@ -333,10 +433,15 @@ class SphericalOutput(BaseOutput):
 
     def load(self,
              radius_range: u.Quantity = None,
-             latitude_range: u.Quantity = (0, np.pi) * u.rad,
+             latitude_range: u.Quantity = (-np.pi / 2, np.pi / 2) * u.rad,
              longitude_range: u.Quantity = (0, 2 * np.pi),
              resolution: u.Quantity = 64 * u.pix / u.solRad, nan_value=0, **kwargs):
+        """Load a Cartesian cube covering a spherical shell selection."""
         radius_range = radius_range if radius_range is not None else self.radius_range
+
+        # convert latitude to colatitude
+        latitude_range = sorted(np.pi / 2 * u.rad - latitude_range)
+
         spherical_bounds = np.stack(
             np.meshgrid(np.linspace(radius_range[0].to_value(u.solRad), radius_range[1].to_value(u.solRad), 50),
                         np.linspace(latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad), 50),
@@ -355,18 +460,18 @@ class SphericalOutput(BaseOutput):
                         np.linspace(z_min, z_max, int((z_max - z_min) * res)), indexing='ij'), -1)
         # flipped z axis
         spherical_coords = cartesian_to_spherical(coords)
-        lat_coord = (spherical_coords[..., 1] % np.pi)
+        colatitude_coord = spherical_coords[..., 1]
         lon_coord = (spherical_coords[..., 2] % (2 * np.pi))
         rad_coord = spherical_coords[..., 0]
 
-        min_lat, max_lat = latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad)
+        min_colatitude, max_colatitude = latitude_range[0].to_value(u.rad), latitude_range[1].to_value(u.rad)
         min_lon, max_lon = (longitude_range[0].to_value(u.rad), longitude_range[1].to_value(u.rad))
 
         # only evaluate coordinates in simulation volume
-        if min_lat == max_lat:
-            lat_cond = np.ones_like(lat_coord, dtype=bool)
+        if min_colatitude == max_colatitude:
+            lat_cond = np.ones_like(colatitude_coord, dtype=bool)
         else:
-            lat_cond = (lat_coord >= min_lat) & (lat_coord < max_lat)
+            lat_cond = (colatitude_coord >= min_colatitude) & (colatitude_coord < max_colatitude)
         if min_lon == max_lon:
             lon_cond = np.ones_like(lon_coord, dtype=bool)
         else:
@@ -403,6 +508,7 @@ class SphericalOutput(BaseOutput):
         return spherical_out
 
     def load_spherical_coords(self, spherical_coords: SkyCoord, **kwargs):
+        """Evaluate the model at explicit SkyCoord positions."""
         cartesian_coords, spherical_coords = self._skycoords_to_cartesian(spherical_coords)
         scaled_coords = cartesian_coords * (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
         model_out = self.load_coords(scaled_coords, **kwargs)

@@ -1,0 +1,71 @@
+---
+path: "<<run_path>>"
+work_path: "<<work_path>>"
+logging:
+  project: nf2
+  name: "Cartesian automatic disambiguation"
+data:
+  geometry: cartesian
+  normalization:
+    Mm_per_ds: 100
+    Gauss_per_dB: 1000
+  boundaries:
+    - id: auto_disambiguation_boundary
+      type: los_trv_azi
+      Mm_per_pixel: 0.36
+      files:
+        B_los: "<<B_los>>"
+        B_trv: "<<B_trv>>"
+        B_azi: "<<B_azi>>"
+      ambiguous_azimuth: true
+      load_map: false
+  sampler:
+    type: height
+    batch_size: 16384
+  potential_boundary:
+    id: potential
+    type: potential
+    strides: 4
+  validation:
+    - id: auto_disambiguation_boundary
+      type: los_trv_azi
+      Mm_per_pixel: 0.36
+      files:
+        B_los: "<<B_los>>"
+        B_trv: "<<B_trv>>"
+        B_azi: "<<B_azi>>"
+      ambiguous_azimuth: true
+      load_map: false
+    - id: cube
+      type: cube
+    - id: slices
+      type: slices
+  iterations: 10000
+  z_range: [0, 80]
+training:
+  epochs: 30
+losses:
+  - type: boundary_los_trv_azi
+    name: auto_disambiguation_boundary
+    weight: 1.0
+    datasets: [auto_disambiguation_boundary]
+    ambiguous: true
+  - type: boundary
+    name: potential_boundary
+    weight: 10.0
+    datasets: potential
+  - type: force_free
+    name: force_free
+    weight: 1.0e-4
+    datasets: [random]
+  - type: potential
+    name: potential
+    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    datasets: [random]
+callbacks:
+  - type: los_trv_azi_boundary
+    dataset: auto_disambiguation_boundary
+  - type: metrics
+    dataset: cube
+  - type: slices
+    dataset: slices

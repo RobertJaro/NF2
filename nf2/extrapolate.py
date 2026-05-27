@@ -1,109 +1,143 @@
 import argparse
 import os
 import shutil
+from copy import deepcopy
 
 import torch
-from pytorch_lightning import Trainer
-from pytorch_lightning.callbacks import ModelCheckpoint, LambdaCallback
-from pytorch_lightning.loggers import WandbLogger
+from lightning.pytorch import Trainer
+from lightning.pytorch.callbacks import ModelCheckpoint, LambdaCallback
+from lightning.pytorch.loggers import WandbLogger
+from lightning.pytorch.strategies import DDPStrategy
+from lightning.pytorch.utilities import rank_zero_only
 
-from nf2.loader.analytical import AnalyticDataModule
-from nf2.loader.fits import FITSDataModule
-from nf2.loader.general import NumpyDataModule
-from nf2.loader.muram import MURaMDataModule
+from nf2.loader.cartesian import CartesianDataModule
 from nf2.loader.spherical import SphericalDataModule
-from nf2.loader.vsm import VSMDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config
 
 
-def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}, training={}, config=None):
+def run(path, data, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
+        transforms=None, loss_scaling=None, config=None, reload=False):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
-    The simulation is run with the given configuration and the results are stored in the base_path.
+    The simulation is run with the given configuration and the results are stored in path.
     Use the configurations for logging, model and training to overwrite the default settings.
 
     Args:
-        base_path: Path to the directory where the simulation results are stored.
+        path: Path to the directory where the simulation results are stored.
         data: Dictionary with the data loader configuration.
-        work_directory: Path to the directory where the data is stored. If None, the base_path is used.
+        work_path: Path to the directory where the data is stored. If None, the path is used.
         logging: Dictionary with the logging configuration.
         model: Dictionary with the model configuration.
         training: Dictionary with the training configuration.
         config: Dictionary with the configuration for the simulation.
     """
-    os.makedirs(base_path, exist_ok=True)
+    callbacks = [] if callbacks is None else callbacks
+    logging = {} if logging is None else logging
+    model = {} if model is None else model
+    training = {} if training is None else training
+    losses = [] if losses is None else losses
+    transforms = [] if transforms is None else transforms
+    loss_scaling = [] if loss_scaling is None else loss_scaling
 
-    if work_directory is None:
-        work_directory = os.path.join(base_path, 'work')
-    os.makedirs(work_directory, exist_ok=True)
-    data['work_directory'] = work_directory  # set work directory for data loaders
+    os.makedirs(path, exist_ok=True)
 
-    save_path = os.path.join(base_path, 'extrapolation_result.nf2')
+    if work_path is None:
+        work_path = os.path.join(path, 'work')
+    os.makedirs(work_path, exist_ok=True)
+    data_runtime = deepcopy(data)
+    data_runtime['work_path'] = work_path  # set work path for data loaders
+
+    save_path = os.path.join(path, 'extrapolation_result.nf2')
 
     # init logging
-    wandb_logger = WandbLogger(**logging, save_dir=work_directory)
-    config_dict = {'base_path': base_path, 'work_directory': work_directory, 'logging': logging,
-                   'model': model, 'training': training, 'config': config, 'data': data}
-    wandb_logger.experiment.config.update(config_dict, allow_val_change=True)
+    wandb_logger = WandbLogger(**logging, save_dir=work_path)
+    config_dict = {'path': path, 'work_path': work_path, 'logging': logging,
+                   'model': model, 'training': training, 'config': config, 'data': data,
+                   'losses': losses, 'transforms': transforms, 'loss_scaling': loss_scaling,
+                   'callbacks': callbacks}
+
+    @rank_zero_only
+    def _log_hparams(cfg):
+        wandb_logger.log_hyperparams(cfg)
+
+    _log_hparams(config_dict)
 
     # restore model checkpoint from wandb
     if 'id' in logging:
         checkpoint_reference = f"{logging['entity']}/{logging['project']}/model-{logging['id']}:latest"
         artifact = wandb_logger.use_artifact(checkpoint_reference, artifact_type="model")
-        artifact.download(root=base_path)
-        shutil.move(os.path.join(base_path, 'model.ckpt'), os.path.join(base_path, 'last.ckpt'))
-        data['plot_overview'] = False  # skip overview plot for restored model
+        artifact.download(root=path)
+        shutil.move(os.path.join(path, 'model.ckpt'), os.path.join(path, 'last.ckpt'))
+        data_runtime['plot_overview'] = False  # skip overview plot for restored model
 
-    if data["type"] == 'numpy':
-        data_module = NumpyDataModule(**data)
-    elif data["type"] == 'fits':
-        data_module = FITSDataModule(**data)
-    elif data["type"] == 'solis':
-        data_module = VSMDataModule(**data)
-    elif data["type"] == 'analytical':
-        data_module = AnalyticDataModule(**data)
-    elif data["type"] == 'spherical':
-        data_module = SphericalDataModule(**data)
-    elif data["type"] == 'muram':
-        data_module = MURaMDataModule(**data)
-    else:
-        raise NotImplementedError(f'Unknown data loader {data["type"]}')
+    # initialize data module
+    data_module_save_path = os.path.join(work_path, 'data_module.pkl')
+    @rank_zero_only
+    def _init_data_module():
+        data_module_config = deepcopy(data_runtime)
+        data_module_type = data_module_config.pop('type')
+        if data_module_type == 'cartesian':
+            data_module = CartesianDataModule(**data_module_config)
+        elif data_module_type == 'spherical':
+            data_module = SphericalDataModule(**data_module_config)
+        else:
+            raise NotImplementedError(f'Unknown data loader {data_module_type}')
+        torch.save(data_module, data_module_save_path)
+    _init_data_module()
+    # load data module for all ranks
+    data_module = torch.load(data_module_save_path, weights_only=False)
 
     # initialize callbacks
-    callback_modules = load_callbacks(data_module, additional_callbacks=callbacks)
+    callback_modules = load_callbacks(callbacks, data_module)
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
-                    model_kwargs=model, **training)
+                    model_kwargs=model, loss_config=losses, transforms=transforms, loss_scaling=loss_scaling,
+                    lr_params=training.get('optimizer', {"start": 5e-4, "end": 5e-5, "iterations": 1e5}))
 
-    config_dict = {'data': data, 'model': model, 'training': training, 'config': config}
+    config_dict = {'path': path, 'work_path': work_path, 'logging': logging,
+                   'data': data, 'model': model, 'training': training, 'config': config,
+                   'losses': losses, 'transforms': transforms, 'loss_scaling': loss_scaling,
+                   'callbacks': callbacks}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None
     val_every_n_epochs = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else None
     max_epochs = int(training['epochs']) if 'epochs' in training else 10
+    trainer_config = deepcopy(training.get('trainer', {}))
+    gradient_clip_val = trainer_config.pop('gradient_clip_val', training.get('gradient_clip_val', 0.1))
+    matmul_precision = trainer_config.pop('matmul_precision', training.get('matmul_precision', 'medium'))
 
     save_callback = LambdaCallback(
         on_validation_end=lambda *_: save(save_path, nf2, data_module, config_dict))
-    checkpoint_callback = ModelCheckpoint(dirpath=base_path,
+    checkpoint_callback = ModelCheckpoint(dirpath=path,
                                           every_n_train_steps=val_check_interval,
                                           every_n_epochs=val_every_n_epochs,
                                           save_last=True)
 
-    torch.set_float32_matmul_precision('medium')  # for A100 GPUs
+    torch.set_float32_matmul_precision(matmul_precision)
     n_gpus = torch.cuda.device_count()
     callback_modules += [checkpoint_callback, save_callback]
+    default_devices = n_gpus if n_gpus > 0 else 1
+    default_accelerator = 'gpu' if n_gpus >= 1 else 'cpu'
+    default_strategy = DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else 'auto'
 
-    trainer = Trainer(max_epochs=max_epochs,
-                      logger=wandb_logger,
-                      devices=n_gpus if n_gpus > 0 else None,
-                      accelerator='gpu' if n_gpus >= 1 else None,
-                      strategy='dp' if n_gpus > 1 else None,  # ddp breaks memory and wandb
-                      num_sanity_val_steps=0,
-                      val_check_interval=val_check_interval,
-                      check_val_every_n_epoch=val_every_n_epochs,
-                      gradient_clip_val=0.1,
-                      callbacks=callback_modules)
+    trainer_kwargs = {
+        'max_epochs': max_epochs,
+        'logger': wandb_logger,
+        'devices': trainer_config.pop('devices', default_devices),
+        'accelerator': trainer_config.pop('accelerator', default_accelerator),
+        'strategy': trainer_config.pop('strategy', default_strategy),
+        'num_sanity_val_steps': trainer_config.pop('num_sanity_val_steps', 0),
+        'gradient_clip_val': gradient_clip_val,
+        'callbacks': callback_modules,
+        **trainer_config,
+    }
+    if val_check_interval is not None:
+        trainer_kwargs['val_check_interval'] = val_check_interval
+    if val_every_n_epochs is not None:
+        trainer_kwargs['check_val_every_n_epoch'] = val_every_n_epochs
+    trainer = Trainer(**trainer_kwargs)
 
     trainer.fit(nf2, data_module, ckpt_path='last')
     save(save_path, nf2, data_module, config_dict)
@@ -113,8 +147,7 @@ def run(base_path, data, work_directory=None, callbacks=[], logging={}, model={}
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config', type=str, required=True,
-                        help='config file for the simulation')
+    parser.add_argument('--config', type=str, required=True, help='config file for the simulation')
     args, overwrite_args = parser.parse_known_args()
 
     yaml_config_file = args.config

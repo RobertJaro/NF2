@@ -1,14 +1,10 @@
-import glob
 import os
 
 import numpy as np
-import torch
 from astropy.nddata import block_reduce
 from matplotlib import pyplot as plt
-from sunpy.map import Map, all_coordinates_from_map
 
-from nf2.data.util import spherical_to_cartesian
-from nf2.potential.potential_field import get_potential_boundary, get_potential_top
+from nf2.potential.potential_field import get_potential_boundary, get_potential_top, get_fft_potential_field
 
 
 def prep_b_data(b_cube, error_cube, height,
@@ -21,7 +17,7 @@ def prep_b_data(b_cube, error_cube, height,
     mf_err = error_cube.reshape((-1, 3))
     # load potential field
     if potential_boundary:
-        pf_coords, pf_err, pf_values = load_potential_field_data(b_cube, height, potential_strides)
+        pf_coords, pf_err, pf_values = load_potential_field_boundary(b_cube, height, potential_strides)
         # concatenate pf data points
         coords = np.concatenate([pf_coords, mf_coords])
         values = np.concatenate([pf_values, mf_values])
@@ -37,18 +33,57 @@ def prep_b_data(b_cube, error_cube, height,
 
     return coords, values, err
 
-def load_potential_field_data(bz, height, reduce, only_top=False, pf_error=0.0, **kwargs):
+
+def load_potential_field_boundary(bz, height, reduce, only_top=False, pf_error=0.0, method='fft', **kwargs):
     if reduce > 1:
         bz = block_reduce(bz, (reduce, reduce), func=np.mean)
         height = height // reduce
+
+    method = method.lower()
+    if method == 'fft':
+        pf_coords, pf_err, pf_values = load_fft_potential_field_boundary(
+            bz, height, strides=1, pf_error=pf_error, only_top=only_top, **kwargs)
+        pf_coords = pf_coords * reduce
+        return pf_coords, pf_err, pf_values
+    if method not in {'direct', 'green', 'greens'}:
+        raise ValueError("Potential field method must be 'fft' or 'direct'.")
+
     pf_batch_size = int(1024 * 512 ** 2 / np.prod(bz.shape))  # adjust batch to AR size
-    pf_coords, pf_values = get_potential_top(bz, height, batch_size=pf_batch_size, **kwargs) \
-        if only_top else get_potential_boundary(bz, height, batch_size=pf_batch_size, **kwargs)
+    if only_top:
+        pf_coords, pf_values = get_potential_top(bz, height, batch_size=pf_batch_size, **kwargs)
+    else:
+        pf_coords, pf_values = get_potential_boundary(bz, height, batch_size=pf_batch_size, **kwargs)
     pf_values = np.array(pf_values, dtype=np.float32)
     pf_coords = np.array(pf_coords, dtype=np.float32) * reduce  # expand to original coordinate spacing
     pf_err = np.ones_like(pf_values) * pf_error
     return pf_coords, pf_err, pf_values
 
+def load_fft_potential_field_boundary(bz, height, strides=1, pf_error=0.0, only_top=False, **kwargs):
+    kwargs.pop('batch_size', None)
+    kwargs.pop('progress', None)
+    if strides > 1:
+        bz = block_reduce(bz, (strides, strides), func=np.mean)
+        height = height // strides
+    # load potential field
+    pf = get_fft_potential_field(bz, int(height), **kwargs)
+
+    boundaries = [pf[:, :, -1, :]]
+    coords = [np.stack(np.mgrid[:pf.shape[0], :pf.shape[1], pf.shape[2] - 1:pf.shape[2]], -1)]
+    if not only_top:
+        boundaries.extend([pf[0, :, :, :], pf[-1, :, :, :], pf[:, 0, :, :], pf[:, -1, :, :]])
+        coords.extend([
+            np.stack(np.mgrid[0:1, :pf.shape[1], :pf.shape[2]], -1),
+            np.stack(np.mgrid[pf.shape[0] - 1:pf.shape[0], :pf.shape[1], :pf.shape[2]], -1),
+            np.stack(np.mgrid[:pf.shape[0], 0:1, :pf.shape[2]], -1),
+            np.stack(np.mgrid[:pf.shape[0], pf.shape[1] - 1:pf.shape[1], :pf.shape[2]], -1),
+        ])
+
+    pf_boundaries = np.concatenate([b.reshape((-1, 3)) for b in boundaries])
+    coords = np.concatenate([c.reshape((-1, 3)) for c in coords])
+    coords *= strides
+
+    pf_err = np.ones_like(pf_boundaries) * pf_error
+    return coords, pf_err, pf_boundaries
 
 def _plot_data(error_cube, n_hmi_cube, plot_path, b_norm):
     fig, axs = plt.subplots(1, 3, figsize=(12, 4))

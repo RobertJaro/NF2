@@ -39,10 +39,10 @@ def main():
         d_type = '.hdf5'
         from nf2.convert import nf2_to_hdf5
         convert_f = nf2_to_hdf5.convert
-    elif conversion_type == 'npy':
-        d_type = '.npy'
-        from nf2.convert import nf2_to_npy
-        convert_f = nf2_to_npy.convert
+    elif conversion_type in ['npz', 'npy']:
+        d_type = '.npz'
+        from nf2.convert import nf2_to_npz
+        convert_f = nf2_to_npz.convert
     elif conversion_type == 'fits':
         d_type = '.fits'
         from nf2.convert import nf2_to_fits

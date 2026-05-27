@@ -1,4 +1,5 @@
 import torch
+import wandb
 from astropy import units as u
 from torch import nn
 
@@ -16,65 +17,8 @@ class BaseLoss(nn.Module):
 
 class ForceFreeLoss(BaseLoss):
 
-    def forward(self, b, jac_matrix, *args, **kwargs):
-        dBx_dx = jac_matrix[:, 0, 0]
-        dBy_dx = jac_matrix[:, 1, 0]
-        dBz_dx = jac_matrix[:, 2, 0]
-        dBx_dy = jac_matrix[:, 0, 1]
-        dBy_dy = jac_matrix[:, 1, 1]
-        dBz_dy = jac_matrix[:, 2, 1]
-        dBx_dz = jac_matrix[:, 0, 2]
-        dBy_dz = jac_matrix[:, 1, 2]
-        dBz_dz = jac_matrix[:, 2, 2]
-        #
-        rot_x = dBz_dy - dBy_dz
-        rot_y = dBx_dz - dBz_dx
-        rot_z = dBy_dx - dBx_dy
-        #
-        j = torch.stack([rot_x, rot_y, rot_z], -1)
-        jxb = torch.cross(j, b, -1)
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-        force_free_loss = torch.sum(jxb ** 2, dim=-1) / normalization
-        #
-        return force_free_loss.mean()
-
-
-class MagnetoStaticLoss(BaseLoss):
-
-    def forward(self, b, jac_matrix, *args, **kwargs):
-        dBx_dx = jac_matrix[:, 0, 0]
-        dBy_dx = jac_matrix[:, 1, 0]
-        dBz_dx = jac_matrix[:, 2, 0]
-        dP_dx = jac_matrix[:, 3, 0]
-        dBx_dy = jac_matrix[:, 0, 1]
-        dBy_dy = jac_matrix[:, 1, 1]
-        dBz_dy = jac_matrix[:, 2, 1]
-        dP_dy = jac_matrix[:, 3, 1]
-        dBx_dz = jac_matrix[:, 0, 2]
-        dBy_dz = jac_matrix[:, 1, 2]
-        dBz_dz = jac_matrix[:, 2, 2]
-        dP_dz = jac_matrix[:, 3, 2]
-        #
-        rot_x = dBz_dy - dBy_dz
-        rot_y = dBx_dz - dBz_dx
-        rot_z = dBy_dx - dBx_dy
-        #
-        j = torch.stack([rot_x, rot_y, rot_z], -1)
-        jxb = torch.cross(j, b, -1)
-        grad_P = torch.stack([dP_dx, dP_dy, dP_dz], -1)
-        #
-        equation = jxb - grad_P
-        # assure that the normalization does not influence the loss
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-        loss = torch.sum(equation ** 2, dim=-1) / normalization
-        #
-        return loss.mean()
-
-class ImplicitMagnetoStaticLoss(BaseLoss):
-
-    def __init__(self, divergence_regularization=True, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.divergence_regularization = divergence_regularization
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -92,77 +36,81 @@ class ImplicitMagnetoStaticLoss(BaseLoss):
         rot_z = dBy_dx - dBx_dy
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
+        normalization = b.pow(2).sum(-1) + 1e-7
         jxb = torch.cross(j, b, -1)
-        jac_matrix = jacobian(jxb, coords)
-        dJxBx_dx = jac_matrix[:, 0, 0]
-        dJxBy_dx = jac_matrix[:, 1, 0]
-        dJxBz_dx = jac_matrix[:, 2, 0]
-        dJxBx_dy = jac_matrix[:, 0, 1]
-        dJxBy_dy = jac_matrix[:, 1, 1]
-        dJxBz_dy = jac_matrix[:, 2, 1]
-        dJxBx_dz = jac_matrix[:, 0, 2]
-        dJxBy_dz = jac_matrix[:, 1, 2]
-        dJxBz_dz = jac_matrix[:, 2, 2]
+        force_free_loss = jxb.pow(2).sum(-1) / normalization
+
+        # check for NaNs
+        assert not torch.isnan(force_free_loss).any(), 'NaNs in force-free loss computation!'
+
+        return force_free_loss
+
+class SigmaJLoss(BaseLoss):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, b, jac_matrix, coords, *args, **kwargs):
+        dBx_dx = jac_matrix[:, 0, 0]
+        dBy_dx = jac_matrix[:, 1, 0]
+        dBz_dx = jac_matrix[:, 2, 0]
+        dBx_dy = jac_matrix[:, 0, 1]
+        dBy_dy = jac_matrix[:, 1, 1]
+        dBz_dy = jac_matrix[:, 2, 1]
+        dBx_dz = jac_matrix[:, 0, 2]
+        dBy_dz = jac_matrix[:, 1, 2]
+        dBz_dz = jac_matrix[:, 2, 2]
         #
-        rot_x = dJxBz_dy - dJxBy_dz
-        rot_y = dJxBx_dz - dJxBz_dx
-        rot_z = dJxBy_dx - dJxBx_dy
+        rot_x = dBz_dy - dBy_dz
+        rot_y = dBx_dz - dBz_dx
+        rot_z = dBy_dx - dBx_dy
         #
-        curl_JxB = torch.stack([rot_x, rot_y, rot_z], -1)
-        div_JxB = dJxBx_dx + dJxBy_dy + dJxBz_dz
-        # assure that the normalization does not influence the loss
-        normalization = (torch.sum(b ** 2, dim=-1) + 1e-7)
-        curl_JxB_loss = torch.sum(curl_JxB ** 2, dim=-1)
-        div_JxB_loss = div_JxB.pow(2)
-        if self.divergence_regularization:
-            loss = curl_JxB_loss + div_JxB_loss * (torch.exp(coords[:, 2] * 5) - 1)
-        else:
-            loss = curl_JxB_loss
-        loss =  loss / normalization
+        j = torch.stack([rot_x, rot_y, rot_z], -1)
         #
-        return loss.mean()
+        b_norm = torch.norm(b, dim=-1)
+        j_norm = torch.norm(j, dim=-1)
+        jxb = torch.cross(j, b, -1)
+
+        # current weighted loss of JxB/|J||B|
+        loss = torch.norm(jxb, dim=-1) / (b_norm + 1e-7)
+        loss = loss.sum() / j_norm.sum()
+
+        return loss
+
 
 class DivergenceLoss(BaseLoss):
 
-    def forward(self, jac_matrix, *args, **kwargs):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
         dBy_dy = jac_matrix[:, 1, 1]
         dBz_dz = jac_matrix[:, 2, 2]
 
         divergence_loss = (dBx_dx + dBy_dy + dBz_dz) ** 2
 
-        return divergence_loss.mean()
+        return divergence_loss
 
 
 class RadialLoss(BaseLoss):
 
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
-        super().__init__(**kwargs)
-        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-
     def forward(self, b, coords, *args, **kwargs):
-        # radial regularization --> vanishing phi and theta components
-        radius_weight = torch.norm(coords, dim=-1)
-        radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
+        eps = 1e-8
 
-        normalization = torch.norm(b, dim=-1) * torch.norm(coords, dim=-1) + 1e-7
-        radial_regularization = torch.norm(torch.cross(b, coords, dim=-1), dim=-1)
-        radial_regularization = radial_regularization / normalization
+        r_hat = coords / torch.linalg.norm(coords, dim=-1, keepdim=True).clamp_min(eps)
+        r_hat = r_hat.detach()
 
-        radial_regularization = (radial_regularization * radius_weight).mean()
+        b_cross_r = torch.cross(b, r_hat, dim=-1)
 
-        return radial_regularization
+        b2 = torch.sum(b**2, dim=-1).detach().clamp_min(eps)
+
+        radial_loss = torch.sum(b_cross_r**2, dim=-1) / b2
+
+        return radial_loss
 
 
 class PotentialLoss(BaseLoss):
-
-    def __init__(self, base_radius=None, Mm_per_ds=None, **kwargs):
-        super().__init__(**kwargs)
-        if base_radius is not None:
-            self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-            self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        else:
-            self.base_radius = None
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -180,24 +128,12 @@ class PotentialLoss(BaseLoss):
         rot_z = dBy_dx - dBx_dy
         #
         j = torch.stack([rot_x, rot_y, rot_z], -1)
-        potential_loss = torch.sum(j ** 2, dim=-1)
+        potential_loss = j.pow(2).sum(-1)
 
-        if self.base_radius is not None:
-            radius = coords.pow(2).sum(-1).pow(0.5) + 1e-7
-            radius_weight = torch.clip(radius - self.base_radius,
-                                       min=0) / self.solar_radius  # normalize to solar radius
-            potential_loss *= radius_weight ** 2
-
-        return potential_loss.mean()
+        return potential_loss
 
 
 class EnergyGradientLoss(BaseLoss):
-
-    def __init__(self, base_radius, Mm_per_ds, **kwargs):
-        super().__init__(**kwargs)
-        self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.solar_radius = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        # self.asinh_stretch = nn.Parameter(torch.tensor(np.arcsinh(1e3), dtype=torch.float32), requires_grad=False)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
         dBx_dx = jac_matrix[:, 0, 0]
@@ -217,19 +153,16 @@ class EnergyGradientLoss(BaseLoss):
         dE_dy = 2 * (b[:, 0] * dBx_dy + b[:, 1] * dBy_dy + b[:, 2] * dBz_dy)
         dE_dz = 2 * (b[:, 0] * dBx_dz + b[:, 1] * dBy_dz + b[:, 2] * dBz_dz)
 
+        # dE/dr = dE/dx * dx/dr + dE/dy * dy/dr + dE/dz * dz/dr
+        # theta is colatitude: x = r sin(t) cos(p), y = r sin(t) sin(p), z = r cos(t).
         coords_spherical = cartesian_to_spherical(coords, f=torch)
         t = coords_spherical[:, 1]
         p = coords_spherical[:, 2]
         dE_dr = (torch.sin(t) * torch.cos(p)) * dE_dx + \
                 (torch.sin(t) * torch.sin(p)) * dE_dy + \
-                torch.cos(p) * dE_dz
+                torch.cos(t) * dE_dz
 
-        radius_weight = torch.norm(coords, dim=-1)
-        radius_weight = torch.clip(radius_weight - self.base_radius,
-                                   min=0) / self.solar_radius  # normalize to solar radius
-
-        energy_gradient_regularization = torch.relu(dE_dr) * radius_weight ** 2
-        energy_gradient_regularization = energy_gradient_regularization.mean()
+        energy_gradient_regularization = torch.relu(dE_dr)
 
         return energy_gradient_regularization
 
@@ -241,13 +174,12 @@ class EnergyLoss(BaseLoss):
         self.base_radius = (base_radius * u.solRad).to_value(u.Mm) / Mm_per_ds
 
     def forward(self, b, coords, *args, **kwargs):
-        energy_loss = torch.norm(b, dim=-1).pow(2).mean()
+        energy_loss = torch.norm(b, dim=-1).pow(2)
 
         radius_weight = coords.pow(2).sum(-1).pow(0.5)
         radius_weight = torch.clip(radius_weight - self.base_radius, min=0)
 
         energy_regularization = energy_loss * radius_weight ** 2
-        energy_regularization = energy_regularization.mean()
 
         return energy_regularization
 
@@ -293,42 +225,40 @@ class AziBoundaryLoss(BaseLoss):
         b_azi_true = b_true[..., 2] % torch.pi
         b_azi_pred = b_pred[..., 2] % torch.pi
         b_diff = (b_azi_pred - b_azi_true).pow(2) * b_true[..., 1]  # weight by transverse field
-        b_diff = b_diff.mean()
+        b_diff = b_diff
 
         return b_diff
 
 
 class LosTrvAziBoundaryLoss(BaseLoss):
 
-    def __init__(self, **kwargs):
+    def __init__(self, ambiguous=False, los_weight=0.7, **kwargs):
         super().__init__(**kwargs)
+        self.ambiguous = ambiguous
+        assert los_weight >= 0 and los_weight <= 1, 'los_weight must be between 0 and 1'
+        self.los_weight = los_weight
 
-    def forward(self, b, b_true, flip=None, transform=None, *args, **kwargs):
+    def forward(self, b, b_true, transform=None, *args, **kwargs):
         # apply transforms
         bxyz_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         bxyz_true = los_trv_azi_to_img(b_true, f=torch)
 
-        if flip is not None:
-            # compute flipped B_xyz
-            flipped_azi = (b_true[..., 2:3] + torch.pi)
-            blta_flipped_true = torch.cat([b_true[..., :2], flipped_azi], dim=-1)
-            bxyz_flipped_true = los_trv_azi_to_img(blta_flipped_true, f=torch)
+        if self.ambiguous:
+            # LOS component
+            loss_bz = (bxyz_pred[..., 2] - bxyz_true[..., 2]).pow(2)
 
-            # compute diff for both cases
-            b_diff = (bxyz_pred - bxyz_true).pow(2).sum(-1)
-            b_diff_flipped = (bxyz_pred - bxyz_flipped_true).pow(2).sum(-1)
+            # transverse components
+            bxy_true = bxyz_true[..., :2]
+            bxy_pred = bxyz_pred[..., :2]
+            dot = (bxy_pred * bxy_true).sum(-1)
+            loss_bxy = bxy_true.pow(2).sum(-1) + bxy_pred.pow(2).sum(-1) - 2 * torch.abs(dot)
+        else:
+            loss_bz = (bxyz_pred[..., 2] - bxyz_true[..., 2]).pow(2)
+            loss_bxy = (bxyz_pred[..., :2] - bxyz_true[..., :2]).pow(2).sum(-1)
 
-            # weighted loss
-            flip = flip[..., 0]
-            loss = b_diff * (1 - flip) + b_diff_flipped * flip
+        loss = (loss_bz * self.los_weight + loss_bxy * (1 - self.los_weight)) * 2
 
-            return loss.mean()
-
-        # compute diff
-        b_diff = bxyz_pred - bxyz_true
-        b_diff = b_diff.pow(2).sum(-1).mean()
-
-        return b_diff
+        return loss
 
 
 class LosBoundaryLoss(BaseLoss):
@@ -344,60 +274,65 @@ class LosBoundaryLoss(BaseLoss):
         b_los_true = b_true[..., 0]
 
         # compute diff
-        b_diff = (b_los_pred - b_los_true).pow(2).mean()
+        b_diff = (b_los_pred - b_los_true).pow(2)
         return b_diff
 
 
 class BoundaryLoss(BaseLoss):
 
-    def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
+    def __init__(self, weights=None, **kwargs):
+        super().__init__(**kwargs)
+        weights = weights if weights is not None else [1.0, 1.0, 1.0]
+        weights = torch.tensor(weights, dtype=torch.float32)
+        self.register_buffer('weights_buffer', weights)
+
+    def forward(self, b, b_true, transform=None, b_err=None, weights=None, *args, **kwargs):
         # apply transforms
         transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         # compute diff
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
-        b_diff = torch.mean(torch.nansum(b_diff.pow(2), -1))
-
-        assert not torch.isnan(b_diff), 'b_diff is nan'
+        b_diff = torch.einsum('...i,i->...', b_diff.pow(2), self.weights_buffer)
+        # if weights is not None:
+        #     weights = weights.reshape(-1).to(b_diff)
+        #     weighted_sum = (b_diff * weights).sum()
+        #     weight_sum = weights.sum().clamp_min(1e-7)
+        #     return weighted_sum / weight_sum
         return b_diff
 
 
-class HeightLoss(BaseLoss):
+class WeightedHeightLoss(BaseLoss):
 
     def forward(self, coords, original_coords, height_range, *args, **kwargs):
         height_diff = torch.abs(coords[:, 2] - original_coords[:, 2])
         normalization = (height_range[:, 1] - height_range[:, 0]) + 1e-6
-        height_regularization = torch.true_divide(height_diff, normalization).mean()
+        height_regularization = torch.true_divide(height_diff, normalization)
 
         return height_regularization
 
+class HeightLoss(BaseLoss):
 
-class AzimuthDisambiguationLoss(BaseLoss):
+    def forward(self, coords, original_coords, *args, **kwargs):
+        height_diff = (coords[:, 2] - original_coords[:, 2]).pow(2)
+        height_diff = height_diff / (original_coords[:, 2].pow(2) + 1e-7)
 
-    def __init__(self, power=4.0, **kwargs):
-        super().__init__(**kwargs)
-        self.power = power
-
-    def forward(self, flip, *args, **kwargs):
-        loss = (flip - 0.5).abs().pow(self.power) / 0.5 ** self.power
-        return loss.mean()
+        return height_diff
 
 
 class MinHeightLoss(BaseLoss):
 
     def forward(self, coords, *args, **kwargs):
-        min_height_regularization = torch.abs(coords[:, 2])
+        min_height_regularization = coords[:, 2].pow(2)  # torch.abs(coords[:, 2])
         # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
-        min_height_regularization = min_height_regularization.mean()
         return min_height_regularization
-
 
 # mapping
 loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
                        'boundary_azi': AziBoundaryLoss,
                        'boundary_los_trv_azi': LosTrvAziBoundaryLoss, 'boundary_los': LosBoundaryLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
-                       'height': HeightLoss, 'NaNs': NaNLoss, 'radial': RadialLoss,
+                       'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
+                       'NaNs': NaNLoss, 'radial': RadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
-                       'magneto_static': MagnetoStaticLoss, 'implicit_magnetostatic': ImplicitMagnetoStaticLoss,
-                       'azimuth_disambiguation': AzimuthDisambiguationLoss}
+                       'sigma_j': SigmaJLoss
+                       }

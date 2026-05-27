@@ -1,13 +1,30 @@
 import numpy as np
-import wandb
-from matplotlib import pyplot as plt
-from matplotlib.colors import LogNorm
-from mpl_toolkits.axes_grid1 import make_axes_locatable
-from pytorch_lightning import Callback
 import torch
+import wandb
+from astropy import units as u
+from matplotlib import pyplot as plt
+from matplotlib.colors import LogNorm, Normalize
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+from lightning.pytorch import Callback
+from lightning.pytorch.utilities import rank_zero_only
 
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
-from astropy import units as u
+
+
+def _log_norm(values, floor=1e-6):
+    values = np.asarray(values)
+    values = values[np.isfinite(values) & (values > 0)]
+    if values.size == 0:
+        return LogNorm(vmin=floor, vmax=floor * 10)
+    vmin = max(values.min(), floor)
+    vmax = max(values.max(), vmin * 10)
+    return LogNorm(vmin=vmin, vmax=vmax)
+
+
+def _trapezoid(y, x, axis):
+    integrate = np.trapezoid if hasattr(np, 'trapezoid') else np.trapz
+    return integrate(y, x=x, axis=axis)
+
 
 class SphericalSlicesCallback(Callback):
 
@@ -17,7 +34,8 @@ class SphericalSlicesCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -40,24 +58,27 @@ class SphericalSlicesCallback(Callback):
 
     def plot_b(self, b, coords):
         n_samples = b.shape[0]
-        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
+        fig, plot_axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12), squeeze=False)
         for i in range(3):
             for j in range(n_samples):
-                v_min_max = np.max(np.abs(b[j, :, :]))
-                # extent = [coords[j, 0, 0, 2], coords[j, -1, -1, 2],
-                #           coords[j, 0, 0, 1], coords[j, -1, -1, 1]]
-                # extent = np.rad2deg(extent)
-                extent = None
                 height = coords[j, :, :, 0].mean()
-                im = axs[i, j].imshow(b[j, :, :, i], cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='upper', extent=extent)
-                axs[i, j].set_xlabel('Longitude [deg]')
-                axs[i, j].set_ylabel('Latitude [deg]')
-                # add locatable colorbar
-                divider = make_axes_locatable(axs[i, j])
+                b_slice = b[j, :, :, i]
+                v_min_max = np.nanmax(np.abs(b_slice))
+                v_min_max = max(v_min_max, 1)
+                im = plot_axs[i, j].imshow(b_slice, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
+                                            origin='lower', extent=None)
+                divider = make_axes_locatable(plot_axs[i, j])
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
-                axs[i, j].set_title(f'{height:.02f} - $B_{["r", "t", "p"][i]}$')
+                if i == 2:
+                    plot_axs[i, j].set_xlabel('Longitude [deg]')
+                else:
+                    plot_axs[i, j].tick_params(labelbottom=False)
+                if j == 0:
+                    plot_axs[i, j].set_ylabel('Latitude [deg]')
+                else:
+                    plot_axs[i, j].tick_params(labelleft=False)
+                plot_axs[i, j].set_title(f'{height:.02f} - $B_{["r", "t", "p"][i]}$')
         fig.tight_layout()
         wandb.log({f"{self.name} - B": fig})
         plt.close('all')
@@ -65,36 +86,153 @@ class SphericalSlicesCallback(Callback):
     def plot_current(self, j, coords):
         j = (j ** 2).sum(-1) ** 0.5
         n_samples = j.shape[0]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        width_ratios = [1] * n_samples + [0.05]
+        fig, axs = plt.subplots(1, n_samples + 1, figsize=(n_samples * 4 + 0.4, 4),
+                                gridspec_kw={'width_ratios': width_ratios}, constrained_layout=True,
+                                squeeze=False)
+        plot_axs = axs[0, :-1]
+        cbar_ax = axs[0, -1]
+        norm = _log_norm(j)
         for i in range(n_samples):
-            # extent = [coords[i, 0, 0, 2], coords[i, -1, -1, 2],
-            #           coords[i, 0, 0, 1], coords[i, -1, -1, 1]]
-            # extent = np.rad2deg(extent)
-            extent = None
             height = coords[i, :, :, 0].mean()
-            im = axs[i].imshow(j[i, :, :], cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
-            axs[i].set_xlabel('Longitude [deg]')
-            axs[i].set_ylabel('Latitude [deg]')
-            # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='J [G/ds]')
-            axs[i].set_title(f'{height:.02f} - $|J|$')
-        fig.tight_layout()
+            im = self._plot_spherical_map(plot_axs[i], j[i, :, :], coords[i], cmap='plasma', norm=norm)
+            plot_axs[i].set_xlabel('Longitude [deg]')
+            if i == 0:
+                plot_axs[i].set_ylabel('Latitude [deg]')
+            else:
+                plot_axs[i].tick_params(labelleft=False)
+            plot_axs[i].set_title(f'{height:.02f} $R_\\odot$ - $|J|$')
+        fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
         wandb.log({f"{self.name} - Current density": fig})
         plt.close('all')
         # plot integrated current density
-        j = np.sum(j, axis=0)
+        j, j_label = self._integrate_radial_current(j, coords)
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j, cmap='viridis', origin='upper', norm=LogNorm(), extent=extent)
+        im = self._plot_spherical_map(ax, j, coords[0], cmap='plasma', norm=_log_norm(j), physical_units=True)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax)
+        plt.colorbar(im, cax=cax, label=j_label)
+        ax.set_xlabel('Longitudinal arc length [Mm]')
+        ax.set_ylabel('Latitudinal arc length [Mm]')
         #
         fig.tight_layout()
         wandb.log({f"{self.name} - Integrated Current density": fig})
         plt.close('all')
+
+    @staticmethod
+    def _plot_spherical_map(ax, values, coords, physical_units=False, **kwargs):
+        longitude_rad = np.unwrap(coords[..., 2], axis=1)
+        longitude = np.rad2deg(longitude_rad)
+        latitude_rad = np.pi / 2 - coords[..., 1]
+        latitude = np.rad2deg(latitude_rad)
+
+        if physical_units:
+            radius_Mm = np.nanmean(coords[..., 0]) * (1 * u.solRad).to_value(u.Mm)
+            longitude = radius_Mm * (longitude_rad - np.nanmean(longitude_rad))
+            latitude = radius_Mm * latitude_rad
+            aspect = 'equal'
+        else:
+            aspect = 'auto'
+
+        extent = [np.nanmin(longitude), np.nanmax(longitude),
+                  np.nanmin(latitude), np.nanmax(latitude)]
+
+        im = ax.imshow(np.flipud(values), origin='lower', extent=extent, aspect=aspect, **kwargs)
+        return im
+
+    def _integrate_radial_current(self, j, coords):
+        if j.shape[0] < 2:
+            return j[0], r'$|J|$ [G/Mm]'
+
+        radius_Mm = coords[..., 0] * (1 * u.solRad).to_value(u.Mm)
+        integrated_j = _trapezoid(j, x=radius_Mm, axis=0)
+        return integrated_j, r'$\int |J|\,dr$ [G]'
+
+
+class SphericalFITSComparisonCallback(Callback):
+
+    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
+        self.name = name
+        self.cube_shape = cube_shape
+        self.gauss_per_dB = gauss_per_dB
+        self.Mm_per_ds = Mm_per_ds
+
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
+        if self.name not in pl_module.validation_outputs:
+            return
+        outputs = pl_module.validation_outputs[self.name]
+
+        b = outputs['b'] * self.gauss_per_dB
+        j = outputs['j'] * self.gauss_per_dB / self.Mm_per_ds
+
+        b_cube = b.reshape([*self.cube_shape, 3]).cpu().numpy()
+        j_cube = j.reshape([*self.cube_shape, 3]).cpu().numpy()
+        if 'spherical_coords' in outputs:
+            spherical_coords = outputs['spherical_coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
+        else:
+            coords = outputs['coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
+            coords = coords * self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
+            spherical_coords = cartesian_to_spherical(coords)
+
+        model_br = vector_cartesian_to_spherical(b_cube, spherical_coords)[0, ..., 0]
+        reference_br = outputs['reference_br'].reshape(self.cube_shape).cpu().numpy()[0]
+        reference_lon = outputs['reference_lon'].reshape(self.cube_shape).cpu().numpy()[0]
+        reference_lat = outputs['reference_lat'].reshape(self.cube_shape).cpu().numpy()[0]
+
+        j_cube = np.linalg.norm(j_cube, axis=-1)
+        integrated_current, current_label = self._integrate_radial_current(j_cube, spherical_coords)
+
+        self.plot_comparison(reference_br, model_br, integrated_current,
+                             reference_lon, reference_lat, current_label)
+
+    def plot_comparison(self, reference_br, model_br, integrated_current, longitude, latitude, current_label):
+        extent = [np.nanmin(longitude), np.nanmax(longitude),
+                  np.nanmin(latitude), np.nanmax(latitude)]
+        br_norm_value = np.nanmax(np.abs([reference_br, model_br]))
+        br_norm_value = max(min(br_norm_value, 1000), 1)
+        br_norm = Normalize(vmin=-br_norm_value, vmax=br_norm_value)
+        current_norm = _log_norm(integrated_current)
+
+        fig, axs = plt.subplots(1, 3, figsize=(13, 4), sharex=True, sharey=True)
+
+        im = axs[0].imshow(reference_br, origin='lower', extent=extent, cmap='gray', norm=br_norm)
+        axs[0].set_title('Reference Br')
+        self._add_colorbar(fig, axs[0], im, 'Br [G]')
+
+        im = axs[1].imshow(model_br, origin='lower', extent=extent, cmap='gray', norm=br_norm)
+        axs[1].set_title('Model Br')
+        self._add_colorbar(fig, axs[1], im, 'Br [G]')
+
+        im = axs[2].imshow(integrated_current, origin='lower', extent=extent, cmap='inferno', norm=current_norm)
+        axs[2].set_title('Integrated Current Density')
+        self._add_colorbar(fig, axs[2], im, current_label)
+
+        for i, ax in enumerate(axs):
+            ax.set_xlabel('Carrington Longitude [deg]')
+            if i == 0:
+                ax.set_ylabel('Carrington Latitude [deg]')
+            else:
+                ax.tick_params(labelleft=False)
+
+        fig.tight_layout()
+        wandb.log({f"{self.name} - FITS Comparison": fig})
+        plt.close('all')
+
+    @staticmethod
+    def _add_colorbar(fig, ax, im, label):
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        fig.colorbar(im, cax=cax, orientation='vertical', label=label)
+
+    def _integrate_radial_current(self, j, spherical_coords):
+        if j.shape[0] < 2:
+            return j[0], r'$|J|$ [G/Mm]'
+
+        radius_Mm = spherical_coords[..., 0] * (1 * u.solRad).to_value(u.Mm)
+        integrated_j = _trapezoid(j, x=radius_Mm, axis=0)
+        return integrated_j, r'$\int |J|\,dr$ [G]'
 
 
 class SlicesCallback(Callback):
@@ -105,7 +243,8 @@ class SlicesCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -119,30 +258,34 @@ class SlicesCallback(Callback):
 
         self.plot_b(b_cube, c_cube)
         self.plot_current(j_cube, c_cube)
-        if 'p' in outputs:
-            p = outputs['p']
-            p = p.reshape([*self.cube_shape]).cpu().numpy()
-            self.plot_pressure(p, c_cube)
 
     def plot_b(self, b, coords):
         n_samples = b.shape[2]
-        fig, axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12))
+        fig, plot_axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12), squeeze=False)
         for i in range(3):
             for j in range(n_samples):
-                v_min_max = np.max(np.abs(b[:, :, j]))
                 extent = [coords[0, 0, j, 0], coords[-1, -1, j, 0],
                           coords[0, 0, j, 1], coords[-1, -1, j, 1]]
                 extent = np.array(extent) * self.Mm_per_ds
                 height = coords[:, :, j, 2].mean() * self.Mm_per_ds
-                im = axs[i, j].imshow(b[:, :, j, i].T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                                      origin='lower', extent=extent)
-                axs[i, j].set_xlabel('X [Mm]')
-                axs[i, j].set_ylabel('Y [Mm]')
-                # add locatable colorbar
-                divider = make_axes_locatable(axs[i, j])
+                b_slice = b[:, :, j, i]
+                v_min_max = np.nanmax(np.abs(b_slice))
+                v_min_max = max(v_min_max, 1)
+                ax = plot_axs[i, j]
+                im = ax.imshow(b_slice.T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
+                               origin='lower', extent=extent)
+                divider = make_axes_locatable(ax)
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
-                axs[i, j].set_title(f'{height:.02f} - $B_{["x", "y", "z"][i]}$')
+                if i == 2:
+                    ax.set_xlabel('X [Mm]')
+                else:
+                    ax.tick_params(labelbottom=False)
+                if j == 0:
+                    ax.set_ylabel('Y [Mm]')
+                else:
+                    ax.tick_params(labelleft=False)
+                ax.set_title(f'{height:.02f} - $B_{["x", "y", "z"][i]}$')
         fig.tight_layout()
         wandb.log({f"{self.name} - B": fig})
         plt.close('all')
@@ -150,33 +293,40 @@ class SlicesCallback(Callback):
     def plot_current(self, j, coords):
         j = (j ** 2).sum(-1) ** 0.5
         n_samples = j.shape[2]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
+        width_ratios = [1] * n_samples + [0.05]
+        fig, axs = plt.subplots(1, n_samples + 1, figsize=(n_samples * 4 + 0.4, 4),
+                                gridspec_kw={'width_ratios': width_ratios}, constrained_layout=True,
+                                squeeze=False)
+        plot_axs = axs[0, :-1]
+        cbar_ax = axs[0, -1]
+        norm = _log_norm(j)
         for i in range(n_samples):
             extent = [coords[0, 0, i, 0], coords[-1, -1, i, 0],
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-            # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='J [G/ds]')
-            axs[i].set_title(f'{height:.02f} - $|J|$')
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-        fig.tight_layout()
+            im = plot_axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm, extent=extent)
+            plot_axs[i].set_xlabel('X [Mm]')
+            if i == 0:
+                plot_axs[i].set_ylabel('Y [Mm]')
+            else:
+                plot_axs[i].tick_params(labelleft=False)
+            plot_axs[i].set_title(f'{height:.02f} - $|J|$')
+        fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
         wandb.log({f"{self.name} - Current density": fig})
         plt.close('all')
         # plot integrated current density
-        j = np.sum(j, axis=2)
+        j, j_label = self._integrate_height_current(j, coords)
+        extent = [coords[0, 0, 0, 0], coords[-1, -1, 0, 0],
+                  coords[0, 0, 0, 1], coords[-1, -1, 0, 1]]
+        extent = np.array(extent) * self.Mm_per_ds
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
+        norm = _log_norm(j)
+        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=norm, extent=extent)
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax)
+        plt.colorbar(im, cax=cax, label=j_label)
         ax.set_xlabel('X [Mm]')
         ax.set_ylabel('Y [Mm]')
         #
@@ -184,54 +334,27 @@ class SlicesCallback(Callback):
         wandb.log({f"{self.name} - Integrated Current density": fig})
         plt.close('all')
 
-    def plot_pressure(self, p, coords):
-        n_samples = p.shape[2]
-        fig, axs = plt.subplots(1, n_samples, figsize=(n_samples * 4, 4))
-        for i in range(n_samples):
-            extent = [coords[0, 0, i, 0], coords[-1, -1, i, 0],
-                      coords[0, 0, i, 1], coords[-1, -1, i, 1]]
-            extent = np.array(extent) * self.Mm_per_ds
-            height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = axs[i].imshow(p[:, :, i].T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-            # add locatable colorbar
-            divider = make_axes_locatable(axs[i])
-            cax = divider.append_axes("right", size="5%", pad=0.05)
-            plt.colorbar(im, cax=cax, label='P')
-            axs[i].set_title(f'{height:.02f}')
-            axs[i].set_xlabel('X [Mm]')
-            axs[i].set_ylabel('Y [Mm]')
-        fig.tight_layout()
-        wandb.log({f"{self.name} - Plasma Pressure": fig})
-        plt.close('all')
-        # plot integrated current density
-        p = np.sum(p, axis=2)
-        fig, ax = plt.subplots(1, 1, figsize=(8, 8))
-        im = ax.imshow(p.T, cmap='plasma', origin='lower', norm=LogNorm(), extent=extent)
-        # add locatable colorbar
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='P')
-        ax.set_xlabel('X [Mm]')
-        ax.set_ylabel('Y [Mm]')
-        #
-        fig.tight_layout()
-        wandb.log({f"{self.name} - Integrated Plasma Pressure": fig})
-        plt.close('all')
+    def _integrate_height_current(self, j, coords):
+        if j.shape[2] < 2:
+            return j[:, :, 0], r'$|J|$ [G/Mm]'
 
-
-
+        height_Mm = coords[..., 2] * self.Mm_per_ds
+        integrated_j = _trapezoid(j, x=height_Mm, axis=2)
+        return integrated_j, r'$\int |J|\,dz$ [G]'
 
 class BoundaryCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, component_labels=None, **kwargs):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        if component_labels is None and validation_dataset_key == 'synoptic_valid':
+            component_labels = ['r', 't', 'p']
+        self.component_labels = component_labels or ['x', 'y', 'z']
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -270,47 +393,28 @@ class BoundaryCallback(Callback):
             self.plot_b_coords(b, b_true, original_coords, transformed_coords)
         else:
             original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            self.plot_b(b, b_true, original_coords)
+            self.plot_b(b, b_true)
 
-    def plot_b(self, b, b_true, original_coords):
+    def plot_b(self, b, b_true):
         extent = None
 
-        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+        fig, axs = plt.subplots(3, 3, figsize=(8.4, 8),
+                                gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
+        plot_axs = axs[:, :2]
+        cbar_axs = axs[:, 2]
 
         b_norm = np.nanmax(np.abs(b_true))
         b_norm = min(500, b_norm)
 
-        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
+        for i, label in enumerate(self.component_labels):
+            im = plot_axs[i, 0].imshow(b[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 0].set_title(f'Predicted $B_{label}$')
+            im = plot_axs[i, 1].imshow(b_true[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 1].set_title(f'True $B_{label}$')
+            fig.colorbar(im, cax=cbar_axs[i], label='[G]')
 
-        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[2, 0].imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[2, 1].imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
 
@@ -318,60 +422,39 @@ class BoundaryCallback(Callback):
         extent = [original_coords[..., 0].min(), original_coords[..., 0].max(),
                   original_coords[..., 1].min(), original_coords[..., 1].max()]
 
-        fig, axs = plt.subplots(4, 2, figsize=(8, 8))
+        fig, axs = plt.subplots(4, 3, figsize=(8.4, 8),
+                                gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
+        plot_axs = axs[:, :2]
+        cbar_axs = axs[:, 2]
 
         b_norm = np.nanmax(np.abs(b_true))
         b_norm = min(500, b_norm)
 
-        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
+        for i, label in enumerate(self.component_labels):
+            im = plot_axs[i, 0].imshow(b[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 0].set_title(f'Predicted $B_{label}$')
+            im = plot_axs[i, 1].imshow(b_true[..., i].T, cmap='gray', vmin=-b_norm, vmax=b_norm,
+                                       origin='lower', extent=extent)
+            plot_axs[i, 1].set_title(f'True $B_{label}$')
+            fig.colorbar(im, cax=cbar_axs[i], label='[G]')
 
-        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
+        ax = plot_axs[3, 0]
+        im = ax.imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
+        ax.set_title('Transformed z')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
+        ax = plot_axs[3, 1]
+        im = ax.imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
+        ax.set_title('Original z')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
+        fig.colorbar(im, cax=cbar_axs[3], label='Z [Mm]')
 
-        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[2, 0].imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[2, 1].imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-
-        im = axs[3, 0].imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
-        divider = make_axes_locatable(axs[3, 0])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Z [Mm]')
-        axs[3, 0].set_title('Transformed z')
-        axs[3, 0].set_xlabel('X [Mm]')
-        axs[3, 0].set_ylabel('Y [Mm]')
-
-        im = axs[3, 1].imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[3, 1])
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Z [Mm]')
-        axs[3, 1].set_title('Original z')
-        axs[3, 1].set_xlabel('X [Mm]')
-        axs[3, 1].set_ylabel('Y [Mm]')
-
-        fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
         plt.close('all')
+
 
 class DisambiguationCallback(Callback):
 
@@ -382,61 +465,65 @@ class DisambiguationCallback(Callback):
         self.Mm_per_ds = Mm_per_ds
         self.name = name
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
         outputs = pl_module.validation_outputs[self.validation_dataset_key]
-        b_true = outputs['b_true']
         flip = outputs['flip']
+        b_true = outputs['b_true']
+
+        # load predicted los_trv_azi
+        b_xyz = outputs['b']
+        if 'transform' in outputs:
+            transform = outputs['transform']
+            b_xyz = torch.einsum('ijk,ik->ij', transform, b_xyz)
+        b_xyz = b_xyz * self.gauss_per_dB
+        b_pred = img_to_los_trv_azi(b_xyz, f=torch)
 
         flip = flip.cpu().numpy().reshape([*self.cube_shape])
-        azimuth_amb = b_true[..., 2].cpu().numpy().reshape([*self.cube_shape])
+        azimuth_true = b_true[..., 2].cpu().numpy().reshape([*self.cube_shape]) % (2 * np.pi)
+        azimuth_amb = azimuth_true % np.pi
 
-        azimuth = azimuth_amb + np.round(flip) * np.pi
+        azimuth = (azimuth_amb + np.round(flip) * np.pi) % (2 * np.pi)
+        azimuth_pred = b_pred[..., 2].cpu().numpy().reshape([*self.cube_shape]) % (2 * np.pi)
 
         extent = None
 
-        fig, axs = plt.subplots(3, 2, figsize=(8, 8))
+        fig, axs = plt.subplots(2, 2, figsize=(8, 8))
 
         ax = axs[0, 0]
-        im = ax.imshow(azimuth.T, cmap='twilight', origin='lower',
-                         extent=extent, vmin=0, vmax=2 * np.pi)
+        im = ax.imshow(azimuth_true.T, cmap='twilight', origin='lower',
+                       extent=extent, vmin=0, vmax=2 * np.pi)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        plt.colorbar(im, cax=cax, label='Ambiguous Azimuth [rad]')
 
         ax = axs[0, 1]
-        im = ax.imshow(azimuth_amb.T, cmap='twilight', origin='lower',
-                         extent=extent, vmin=0, vmax=2 * np.pi)
+        im = ax.imshow(azimuth.T, cmap='twilight', origin='lower',
+                       extent=extent, vmin=0, vmax=2 * np.pi)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        plt.colorbar(im, cax=cax, label='Disambiguated Azimuth [rad]')
 
         ax = axs[1, 0]
-        im = ax.imshow(azimuth.T % (np.pi), cmap='twilight', origin='lower',
-                         extent=extent, vmin=0, vmax=np.pi)
+        im = ax.imshow(azimuth_pred.T, cmap='twilight', origin='lower',
+                       extent=extent, vmin=0, vmax=2 * np.pi)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        plt.colorbar(im, cax=cax, label='Predicted Azimuth [rad]')
 
         ax = axs[1, 1]
-        im = ax.imshow(azimuth_amb.T % (np.pi), cmap='twilight', origin='lower',
-                            extent=extent, vmin=0, vmax=np.pi)
-        divider = make_axes_locatable(ax)
-        cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
-
-        ax = axs[2, 0]
         im = ax.imshow(flip.T, cmap='bwr', origin='lower', extent=extent, vmin=0, vmax=1)
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Flip Probability')
 
-        axs[2, 1].set_axis_off()
-
-        axs[0, 0].set_title('Predicted Azimuth')
-        axs[0, 1].set_title('Ambiguous Azimuth')
+        axs[0, 0].set_title('Input Azimuth')
+        axs[0, 1].set_title('Disambiguated Azimuth')
+        axs[1, 0].set_title('Predicted Azimuth')
+        axs[1, 1].set_title('Flip Probability')
 
         fig.tight_layout()
         name = f"{self.validation_dataset_key} - Disambiguation" if self.name is None else self.name
@@ -452,7 +539,8 @@ class LosTrvAziBoundaryCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -496,10 +584,10 @@ class LosTrvAziBoundaryCallback(Callback):
         else:
             original_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
             self.plot_b(b_los_trv_azi, b_true, original_coords)
-            #
-            self.plot_bxyz(b_xyz, b_true_xyz, original_coords)
 
-    def plot_bxyz(self, b, b_true, original_coords):
+        self.plot_bxyz(b_xyz, b_true_xyz)
+
+    def plot_bxyz(self, b, b_true):
         extent = None
 
         fig, axs = plt.subplots(3, 2, figsize=(8, 8))
@@ -507,35 +595,47 @@ class LosTrvAziBoundaryCallback(Callback):
         b_norm = np.nanmax(np.abs(b_true))
         b_norm = min(500, b_norm)
 
-        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 0])
+        ax = axs[0, 0]
+        im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('Predicted $B_x$')
 
-        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 1])
+        ax = axs[0, 1]
+        im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('True $B_x$')
 
-        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 0])
+        ax = axs[1, 0]
+        im = ax.imshow(b[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('Predicted $B_y$')
 
-        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 1])
+        ax = axs[1, 1]
+        im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('True $B_y$')
 
-        im = axs[2, 0].imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 0])
+        ax = axs[2, 0]
+        im = ax.imshow(b[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('Predicted $B_z$')
 
-        im = axs[2, 1].imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 1])
+        ax = axs[2, 1]
+        im = ax.imshow(b_true[..., 2].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
+        ax.set_title('True $B_z$')
 
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - Bxyz": fig})
@@ -550,41 +650,49 @@ class LosTrvAziBoundaryCallback(Callback):
         b_norm = np.nanmax(np.abs(b_true[..., 0]))
         b_norm = min(500, b_norm)
 
-        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 0])
+        ax = axs[0, 0]
+        im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
-        axs[0, 0].set_title('B_los')
+        ax.set_title('B_los')
 
-        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 1])
+        ax = axs[0, 1]
+        im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
-        axs[0, 1].set_title('B_los_true')
+        ax.set_title('B_los_true')
 
-        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 0])
+        ax = axs[1, 0]
+        im = ax.imshow(b[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
-        axs[1, 0].set_title('B_trv')
+        ax.set_title('B_trv')
 
-        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 1])
+        ax = axs[1, 1]
+        im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[G]')
-        axs[1, 1].set_title('B_trv_true')
+        ax.set_title('B_trv_true')
 
-        im = axs[2, 0].imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 0])
+        ax = axs[2, 0]
+        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[deg]')
-        axs[2, 0].set_title('B_azi')
+        ax.set_title('B_azi')
 
-        im = axs[2, 1].imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 1])
+        ax = axs[2, 1]
+        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='[deg]')
-        axs[2, 1].set_title('B_azi_true')
+        ax.set_title('B_azi_true')
 
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
@@ -599,57 +707,79 @@ class LosTrvAziBoundaryCallback(Callback):
         b_norm = np.nanmax(np.abs(b_true[..., 0]))
         b_norm = min(500, b_norm)
 
-        im = axs[0, 0].imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 0])
+        ax = axs[0, 0]
+        im = ax.imshow(b[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        axs[0, 0].set_title('B_los')
+        plt.colorbar(im, cax=cax, label='B$_{los}$ [G]')
+        ax.set_title(r'$B_\text{LOS}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[0, 1].imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[0, 1])
+        ax = axs[0, 1]
+        im = ax.imshow(b_true[..., 0].T, cmap='gray', vmin=-b_norm, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        axs[0, 1].set_title('B_los_true')
+        plt.colorbar(im, cax=cax, label='B$_{los,true}$ [G]')
+        ax.set_title(r'$B_\text{LOS,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[1, 0].imshow(b[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 0])
+        ax = axs[1, 0]
+        im = ax.imshow(b[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        axs[1, 0].set_title('B_trv')
+        plt.colorbar(im, cax=cax, label='B$_{trv}$ [G]')
+        ax.set_title(r'$B_\text{TRV}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[1, 1].imshow(b_true[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[1, 1])
+        ax = axs[1, 1]
+        im = ax.imshow(b_true[..., 1].T, cmap='gray', vmin=0, vmax=b_norm, origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[G]')
-        axs[1, 1].set_title('B_trv_true')
+        plt.colorbar(im, cax=cax, label='B$_{trv,true}$ [G]')
+        ax.set_title(r'$B_\text{TRV,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[2, 0].imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 0])
+        ax = axs[2, 0]
+        im = ax.imshow(b[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[deg]')
-        axs[2, 0].set_title('B_azi')
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        ax.set_title(r'$B_\text{AZI}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[2, 1].imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[2, 1])
+        ax = axs[2, 1]
+        im = ax.imshow(b_true[..., 2].T % (2 * np.pi), cmap='twilight', vmin=0, vmax=2 * np.pi, origin='lower',
+                       extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
-        plt.colorbar(im, cax=cax, label='[deg]')
-        axs[2, 1].set_title('B_azi_true')
+        plt.colorbar(im, cax=cax, label='Azimuth [rad]')
+        ax.set_title(r'$B_\text{AZI,true}$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[3, 0].imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
-        divider = make_axes_locatable(axs[3, 0])
+        ax = axs[3, 0]
+        im = ax.imshow(transformed_coords[..., 2].T, cmap='inferno', origin='lower', vmin=0, extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Z [Mm]')
-        axs[3, 0].set_title('Transformed z')
-        axs[3, 0].set_xlabel('X [Mm]')
-        axs[3, 0].set_ylabel('Y [Mm]')
+        ax.set_title('Transformed $z$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
-        im = axs[3, 1].imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
-        divider = make_axes_locatable(axs[3, 1])
+        ax = axs[3, 1]
+        im = ax.imshow(original_coords[..., 2].T, cmap='inferno', origin='lower', extent=extent)
+        divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         plt.colorbar(im, cax=cax, label='Z [Mm]')
-        axs[3, 1].set_title('Original z')
-        axs[3, 1].set_xlabel('X [Mm]')
-        axs[3, 1].set_ylabel('Y [Mm]')
+        ax.set_title('Original $z$')
+        ax.set_xlabel('X [Mm]')
+        ax.set_ylabel('Y [Mm]')
 
         fig.tight_layout()
         wandb.log({f"{self.validation_dataset_key} - B": fig})
@@ -663,7 +793,8 @@ class MetricsCallback(Callback):
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
 
-    def on_validation_epoch_end(self, trainer, pl_module):
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.validation_dataset_key]
@@ -673,15 +804,16 @@ class MetricsCallback(Callback):
 
         div = outputs['div'] * self.gauss_per_dB / self.Mm_per_ds
 
-        norm = torch.norm(b, dim=-1) * torch.norm(j, dim=-1)
+        norm = torch.norm(b, dim=-1) * torch.norm(j, dim=-1) + 1e-7
         sigma = torch.norm(torch.cross(j, b, dim=-1), dim=-1) / norm
         j_weight = torch.norm(j, dim=-1)
-        angle = (sigma * j_weight).sum() / j_weight.sum()
+        angle = (sigma * j_weight).sum() / (j_weight.sum() + 1e-7)
         angle = torch.clip(angle, -1. + 1e-7, 1. - 1e-7)
         theta_J = torch.arcsin(angle)
         theta_J = torch.rad2deg(theta_J)
 
-        sigma_J = (torch.norm(torch.cross(j, b, dim=-1), dim=-1) / (torch.norm(b, dim=-1) + 1e-7)).sum() / (torch.norm(j, dim=-1).sum() + 1e-7)
+        sigma_J = (torch.norm(torch.cross(j, b, dim=-1), dim=-1) / (torch.norm(b, dim=-1) + 1e-7)).sum() / (
+                torch.norm(j, dim=-1).sum() + 1e-7)
 
         b_norm = b.pow(2).sum(-1).pow(0.5) + 1e-7
         div_loss = (div / b_norm).mean()
@@ -693,3 +825,37 @@ class MetricsCallback(Callback):
                              "force-free": ff_loss.cpu().numpy(),
                              "sigma_J": sigma_J.cpu().numpy(),
                              "theta_J": theta_J.cpu().numpy()}})
+
+
+class AdvanceDatamoduleStep(Callback):
+    def __init__(self, data_module, every_n):
+        super().__init__()
+        self.every_n = every_n
+        self.data_module = data_module
+        # assures that train epoch start is called at least once before we start advancing steps
+        # avoids errors for continued training from an interrupted checkpoint
+        self.initialized = False
+
+    def on_train_epoch_start(self, trainer, pl_module):
+        self._print_step()
+        self.initialized = True
+
+    @rank_zero_only
+    def _print_step(self):
+        data_module = self.data_module
+        print(f'\nStep {data_module.step + 1:03d}/{len(data_module.boundaries):03d}; ID: {data_module.current_id}')
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        if not self.initialized:
+            return
+        current_epoch = trainer.current_epoch
+        if (current_epoch + 1) % self.every_n != 0:
+            return
+
+        data_module = self.data_module
+        data_module.step += 1
+
+        # if we've used all configs, stop training cleanly
+        if data_module.step >= data_module.total_steps:
+            print('All training files processed. Stopping training...')
+            trainer.should_stop = True

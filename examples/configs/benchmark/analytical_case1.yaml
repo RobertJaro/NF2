@@ -1,0 +1,44 @@
+---
+path: "<<run_path>>"
+work_path: "<<work_path>>"
+logging:
+  project: nf2
+  name: "Analytical NLFFF case 1"
+data:
+  geometry: cartesian
+  normalization:
+    Mm_per_ds: 1
+    Gauss_per_dB: 1
+  boundaries:
+    - id: boundary
+      type: analytical
+      case: 1
+      boundary: full
+      resolution: 64
+  sampler:
+    type: height
+    batch_size: 16384
+  potential_boundary:
+    type: none
+  validation:
+    - id: boundary
+      type: analytical
+      case: 1
+      boundary: bottom
+      resolution: 64
+  iterations: 10000
+  z_range: [0, 2]
+training:
+  epochs: 10
+losses:
+  - type: boundary
+    name: boundary
+    weight: 1.0
+    datasets: boundary
+  - type: force_free
+    name: force_free
+    weight: 1.0e-3
+    datasets: [random]
+callbacks:
+  - type: boundary
+    dataset: boundary

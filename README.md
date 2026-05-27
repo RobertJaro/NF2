@@ -1,333 +1,180 @@
-# Neural Network Force-Free magnetic field extrapolation - NF2
+# Neural Network Force-Free Magnetic Field Extrapolation - NF2
+
+[![Documentation Status](https://readthedocs.org/projects/nf2/badge/?version=latest)](https://nf2.readthedocs.io/en/latest/?badge=latest)
+[![PyPI version](https://img.shields.io/pypi/v/nf2.svg)](https://pypi.org/project/nf2/)
+[![Python versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/pypi/l/nf2.svg)](LICENSE)
+
 <img src="https://github.com/RobertJaro/NF2/blob/main/images/logo.jpg" width="150" height="150">
 
-# [Usage](#usage) --- [Paper](#publications) --- [Data](#data)
+---
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/notebooks/NF2_SHARP_extrapolation.ipynb)
+[![Quickstart](https://img.shields.io/badge/Quickstart-README-blue)](#quick-start)
+[![SHARP CEA Colab](https://img.shields.io/badge/SHARP%20CEA-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/sharp_cea_cartesian.ipynb)
+[![HMI Spherical Colab](https://img.shields.io/badge/HMI%20Spherical-Colab-F9AB00?logo=googlecolab&logoColor=white)](https://colab.research.google.com/github/RobertJaro/NF2/blob/main/examples/notebooks/spherical_hmi.ipynb)
 
+NF2 is a Python framework for neural non-linear force-free magnetic-field extrapolations. It supports Cartesian and spherical geometries, single-boundary and multi-height observations, extrapolation series, standard NLFF quality metrics, and exports for scientific analysis and visualization.
 
-## Abstract
+The framework is designed for solar-physics workflows with HMI/SHARP, full-disk, synoptic, and benchmark data, while keeping the training, export, and evaluation interfaces consistent across geometries.
 
-While the photospheric magnetic field of our Sun is routinely measured, its extent into the upper atmosphere remains elusive.
-We present a novel approach for coronal magnetic field extrapolation, using a neural network that integrates observational data and the physical force-free magnetic field model. 
-Our method flexibly finds a trade-off between the observation and force-free magnetic field assumption, improving the understanding of the connection between the observation and the underlying physics.
-We utilize meta-learning concepts to simulate the evolution of active region NOAA 11158. Our simulation of 5 days of observations at full cadence, requires less than 13 hours of total computation time, enabling real-time force-free magnetic field extrapolations. 
-A systematic comparison of the time evolution of free magnetic energy and magnetic helicity in the coronal volume, as well as comparison to EUV observations demonstrates the validity of our approach. The obtained temporal and spatial depletion of free magnetic energy unambiguously relates to the observed flare activity.
+## Highlights
 
-## Usage
-
-NF2 can be used as framework to download SHARP data, perform extrapolations and to verify the results. 
-The colab notebook provides a basic example that can be adjusted for arbitrary active regions.
-For local usage configuration files can be used to perform extrapolations of single active regions or series.
+- Unified Cartesian and spherical extrapolation workflows
+- YAML-based configuration with explicit defaults
+- SIREN-based neural-field model for all geometries
+- Single-run and series extrapolations
+- HMI SHARP, full-disk, and synoptic download helpers
+- VTK, NumPy, and metric exports
+- Standard NLFF quality metrics through `nf2-metrics`
+- Sphinx documentation configured for ReadTheDocs
 
 ## Installation
 
-Use pip to install the NF2 package.
-```
-pip install nf2
+NF2 supports Python 3.11 and 3.12.
+
+Install from PyPI after release:
+
+```bash
+python -m pip install nf2
 ```
 
-For the latest version use the following command.
-```
-pip install git+https://github.com/RobertJaro/NF2@v0.3.0
+For development or source installs:
+
+```bash
+git clone https://github.com/RobertJaro/NF2.git
+cd NF2
+python -m pip install -e ".[wandb,jsoc,pfss,docs,dev]"
 ```
 
-Make sure that PyTorch is installed if you use a GPU environment. Run in python console:
+The recommended conda environment for local development is:
+
+```bash
+conda env create -f environment.yml
+conda activate nf2
+```
+
+See [INSTALL.md](INSTALL.md) for source builds, optional dependencies, and the conda package recipe.
+
+## Quick Start
+
+Run an extrapolation from a YAML configuration:
+
+```bash
+nf2-extrapolate \
+  --config examples/configs/cartesian/sharp_cea.yaml \
+  --run_path "./runs/ar377" \
+  --work_path "/scratch/ar377" \
+  --Br "/data/Br.fits" \
+  --Bt "/data/Bt.fits" \
+  --Bp "/data/Bp.fits"
+```
+
+Download HMI SHARP data:
+
+```bash
+nf2-download \
+  --source hmi_sharp \
+  --download_dir "./data/sharp" \
+  --email "you@example.org" \
+  --sharp_num 377 \
+  --t_start "2011-02-15T00:00:00"
+```
+
+Export a trained extrapolation:
+
+```bash
+nf2-export \
+  "path/to/extrapolation_result.nf2" \
+  --format vtk \
+  --out "path/to/field.vtk" \
+  --Mm_per_pixel 0.72 \
+  --metrics j alpha free_energy_fft
+```
+
+Print standard NLFF quality metrics:
+
+```bash
+nf2-metrics \
+  "path/to/extrapolation_result.nf2" \
+  --Mm_per_pixel 0.72 \
+  --height_range 0 80
+```
+
+Run a time series or parameter series:
+
+```bash
+nf2-extrapolate-series --config "path/to/series.yaml"
+```
+
+## Python API
+
 ```python
-import torch
-    
-print('PyTorch version:', torch.__version__)
-print('GPU available:', torch.cuda.is_available())
-print('Number of GPUs:', torch.cuda.device_count())
+import nf2
+
+out = nf2.load("path/to/extrapolation_result.nf2")
+cube = out.load_cube(Mm_per_pixel=0.72, metrics=["j", "alpha"])
 ```
 
-## Scripts (command line)
+Direct helpers are also available:
 
-NF2 runs can be configured through yaml files.
-The method can be used for single active regions or time series.
-
-### Data download
-
-NF2 provides direct data download of SHARP data from JSOC.
-
-Download of single SHARP region:
-```
-nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00
+```python
+from nf2 import CartesianOutput, SphericalOutput, run, run_series
 ```
 
-Download of SHARP series:
-```
-nf2-download --download_dir "<<PATH TO SAVE>>" --email <<YOUR JSOC REGISTERED EMAIL>> --noaa_num 11158 --t_start 2011-02-15T00:00:00 --t_end 2011-02-16T00:00:00
-```
+## Examples
 
-To use near real-time data add `--series sharp_cea_720s_nrt`
+Example configurations live in [examples/configs](examples/configs):
 
-### AR - Extrapolation
-The code provides NLFF extrapolations where a trade-off between the observation and the force-free magnetic field assumption is found. The weighting is controlled through the lambda parameters in the configuration file. Increase the force-free lambda to enforce the force-free magnetic field assumption. If solutions closer to the observation are desired, decrease the force-free lambda.
+- `cartesian/sharp_cea.yaml`
+- `cartesian/minimal_fits.yaml`
+- `cartesian/auto_disambiguation.yaml`
+- `cartesian/multi_height.yaml`
+- `cartesian/multi_height_series.yaml`
+- `spherical/full_disk_synoptic.yaml`
+- `benchmark/analytical_case1.yaml`
+- `benchmark/analytical_case2.yaml`
 
-Basic example for NOAA AR 11158 (377.yaml):
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "SHARP 377"
-data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
-      error_path: # optional
-        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
-model:
-  type: b
-  dim: 256
-training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-    - type: divergence
-      lambda: 1.0e-1
-```
-The training can be started with the following command and requires about 1 hour on a single V100 GPU.
-```
-nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377.yaml
-```
+Notebook are available in [examples/notebooks](examples/notebooks) for SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are collected in [examples/scripts/README.md](examples/scripts/README.md).
 
-### AR - Divergence free
+## Documentation
 
-To enforce a divergence free magnetic field, the magnetic field can be computed through a vector potential.
-For this we specify the model type as vector_potential and remove the divergence loss term. The divergence free condition can be kept for monitoring but should be close to zero. 
-Extrapolations that use the vector potential will require more computational resources and training time since the optimization is performed through second order derivatives.
+The full documentation is available at [nf2.readthedocs.io](https://nf2.readthedocs.io/).
 
-Example for a divergence-free extrapolation of NOAA AR 11158 (377_vp.yaml):
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "SHARP 377 - VP"
-data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
-      error_path: # optional
-        Br_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
-model:
-  type: vector_potential
-  dim: 256
-training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-```
+The documentation includes:
 
-```
-nf2-extrapolate --config <<PATH TO CONFIG FILE>>/377_vp.yaml
-```
+- YAML configuration reference
+- Cartesian and spherical workflows
+- Dataset, sampler, and normalization options
+- Download, extrapolation, export, and metric commands
+- Python API reference
+- Example notebook descriptions
+- Publication list
 
-### Time series
+## Visualization
 
-For the extrapolations of time series we can use the model weights of the previous time step. A single time step can then be performed in a few minutes.
-For this we also create a configuration that specifies our data set.
+NF2 results can be exported to VTK and visualized with ParaView:
 
-Example for the time series of NOAA 13664 (related to the May 2024 geomagnetic storm; SHARP 11149).
-
-(initial frame - 13664.yaml)
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>/init"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "NOAA 13664 - init"
-data:
-  type: fits
-  slices:
-    - fits_path:
-        Br: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br.fits"
-        Bt: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt.fits"
-        Bp: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp.fits"
-      error_path:
-        Br_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Br_err.fits"
-        Bt_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bt_err.fits"
-        Bp_err: "<<ABSOLUTE PATH TO DATA>>//hmi.sharp_cea_720s.11149.20240505_000000_TAI.Bp_err.fits"
-  num_workers: 8
-  iterations: 10000
-model:
-  type: vector_potential
-  dim: 256
-training:
-  epochs: 15
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: {start: 1.0e+3, end: 1.0, iterations: 5.0e+4}
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-```
-(series - 13664_series.yaml)
-
-```yaml
----
-base_path: "<<PATH TO SAVE THE RESULTS>>/series"
-work_directory: "<<OPTIONAL - SCRATCH DIRECTORY>>"
-meta_path: "<<PATH TO SAVE THE RESULTS>>/init/last.ckpt"
-logging:
-  project: "<<YOUR WANDB PROJECT>>"
-  name: "NOAA 13664 - series"
-data:
-  type: sharp
-  data_path: "<<ABSOLUTE PATH TO DATA>>"
-  num_workers: 8
-  iterations: 2.0e+3
-model:
-  type: vector_potential
-  dim: 256
-training:
-  check_val_every_n_epoch: 5 # validation plots in 1h steps
-  loss_config:
-    - type: boundary
-      name: boundary
-      lambda: 1
-      ds_id: [boundary_01, potential]
-    - type: force_free
-      lambda: 1.0e-1
-```
-
-Run initial extrapolation and series extrapolation:
-``` 
-nf2-extrapolate --config <<your path>>/13664.yaml
-nf2-extrapolate-series --config <<your path>>/13664_series.yaml
-```
-
-### Visualization
-
-We recommend Paraview to visualize the results.
-https://www.paraview.org/download/ 
-
-![](images/paraview.jpeg)
-
-NF2 models can be converted to VTK files that can be used by Paraview. 
-Full resolution extrapolations typically exceed the memory capacity. 
-`--Mm_per_pixel 0.72` can be used to reduce the resolution to bin2 SHARP data (the default SHARP resolution is 0.36 Mm per pixel).
-
-``` 
-nf2-to-vtk --nf2_path <<path to your nf2 file>> --out_path <<path to the output vtk file>> --Mm_per_pixel 0.72
-```
+![NF2 field visualization in ParaView](images/paraview.jpeg)
 
 ## Publications
 
-### Original method paper
-[Jarolim et al. 2023, Nature Astronomy](https://doi.org/10.1038/s41550-023-02030-9) \
-Jarolim, R., Thalmann, J.K., Veronig, A.M. et al. **Probing the solar coronal magnetic field with physics-informed neural networks**. Nat Astron 7, 1171–1179 (2023). https://doi-org.cuucar.idm.oclc.org/10.1038/s41550-023-02030-9
+Core NF2 method and tool-development papers:
 
-BibTeX:
-```
-@ARTICLE{2023NatAs...7.1171J,
-       author = {{Jarolim}, R. and {Thalmann}, J.~K. and {Veronig}, A.~M. and {Podladchikova}, T.},
-        title = "{Probing the solar coronal magnetic field with physics-informed neural networks.}",
-      journal = {Nature Astronomy},
-         year = 2023,
-        month = oct,
-       volume = {7},
-        pages = {1171-1179},
-          doi = {10.1038/s41550-023-02030-9},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2023NatAs...7.1171J},
-      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}
-```
+- Jarolim, Thalmann, Veronig, and Podladchikova 2023, *Nature Astronomy*  
+  "Probing the solar coronal magnetic field with physics-informed neural networks."  
+  DOI: [10.1038/s41550-023-02030-9](https://doi.org/10.1038/s41550-023-02030-9)
+- Jarolim, Tremblay, Rempel, Molnar, Veronig, Thalmann, and Podladchikova 2024, *The Astrophysical Journal Letters*  
+  "Advancing solar magnetic field extrapolations through multiheight magnetic field measurements."  
+  DOI: [10.3847/2041-8213/ad2450](https://doi.org/10.3847/2041-8213/ad2450)
+- Jarolim, Veronig, Purkhart, Zhang, and Rempel 2024, *The Astrophysical Journal Letters*  
+  "Magnetic field evolution of the solar active region 13664."  
+  DOI: [10.3847/2041-8213/ad8914](https://doi.org/10.3847/2041-8213/ad8914)
+- da Silva Santos, Dunnington, Jarolim, Danilovic, and Criscuoli 2025, *The Astrophysical Journal*  
+  "Magnetic Reconnection in a Compact Magnetic Dome: Chromospheric Emissions and High-velocity Plasma Flows."  
+  DOI: [10.3847/1538-4357/adcf23](https://doi.org/10.3847/1538-4357/adcf23)
 
-### Multi-height extrapolations
-[Jarolim et al. 2024a, ApJL](https://doi.org/10.3847/2041-8213/ad2450) \
-Jarolim, R., Tremblay, B., Rempel, M., Molnar, M., Veronig, A. M., Thalmann, J. K., & Podladchikova, T. (2024). **Advancing solar magnetic field extrapolations through multiheight magnetic field measurements**. The Astrophysical Journal Letters, 963(1), L21.
+See [docs/publications.md](docs/publications.md) for selected applications and related PINN NLFFF work.
 
-BibTeX:
-```
-@ARTICLE{2024ApJ...963L..21J,
-       author = {{Jarolim}, Robert and {Tremblay}, Benoit and {Rempel}, Matthias and {Molnar}, Momchil and {Veronig}, Astrid M. and {Thalmann}, Julia K. and {Podladchikova}, Tatiana},
-        title = "{Advancing Solar Magnetic Field Extrapolations through Multiheight Magnetic Field Measurements}",
-      journal = {\apjl},
-     keywords = {Solar magnetic fields, Neural networks, Solar corona, 1503, 1933, 1483},
-         year = 2024,
-        month = mar,
-       volume = {963},
-       number = {1},
-          eid = {L21},
-        pages = {L21},
-          doi = {10.3847/2041-8213/ad2450},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...963L..21J},
-      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}
-```
+## License
 
-### Divergence-free extrapolations using the vector potential
-
-[Jarolim et al. 2024b, ApJL](https://doi.org/10.3847/2041-8213/ad8914) \
-Jarolim, R., Veronig, A. M., Purkhart, S., Zhang, P., & Rempel, M. (2024). **Magnetic Field Evolution of the Solar Active Region 13664**. The Astrophysical Journal Letters, 976(1), L12.
-
-BibTeX:
-```
-@ARTICLE{2024ApJ...976L..12J,
-       author = {{Jarolim}, Robert and {Veronig}, Astrid M. and {Purkhart}, Stefan and {Zhang}, Peijin and {Rempel}, Matthias},
-        title = "{Magnetic Field Evolution of the Solar Active Region 13664}",
-      journal = {\apjl},
-     keywords = {Solar flares, Solar activity, Solar magnetic fields, Solar magnetic reconnection, Magnetohydrodynamical simulations, 1496, 1475, 1503, 1504, 1966, Astrophysics - Solar and Stellar Astrophysics},
-         year = 2024,
-        month = nov,
-       volume = {976},
-       number = {1},
-          eid = {L12},
-        pages = {L12},
-          doi = {10.3847/2041-8213/ad8914},
-archivePrefix = {arXiv},
-       eprint = {2409.08124},
- primaryClass = {astro-ph.SR},
-       adsurl = {https://ui.adsabs.harvard.edu/abs/2024ApJ...976L..12J},
-      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
-}
-```
-
-
-### Applications
-
-Purkhart, S., Veronig, A. M., Kliem, B., Jarolim, R., Dissauer, K., Dickson, E. C., ... & Krucker, S. (2024). **Multipoint study of the rapid filament evolution during a confined C2 flare on 28 March 2022, leading to eruption**. Astronomy & Astrophysics, 689, A259.
-
-Purkhart, S., Veronig, A.M., Dickson, E.C., Battaglia, A.F., Krucker, S., Jarolim, R., Kliem, B., Dissauer, K. and Podladchikova, T., 2023. **Multipoint study of the energy release and transport in the 28 March 2022, M4 flare using STIX, EUI, and AIA during the first Solar Orbiter nominal mission perihelion**. Astronomy & Astrophysics, 679, p.A99.
-
-McKevitt, J., Jarolim, R., Matthews, S., Baker, D., Temmer, M., Veronig, A., Reid, H. and Green, L., 2024. **The Link between Nonthermal Velocity and Free Magnetic Energy in Solar Flares**. The Astrophysical Journal Letters, 961(2), p.L29.
-
-Korsós, M.B., Jarolim, R., Erdélyi, R., Veronig, A.M., Morgan, H. and Zuccarello, F., 2024. **First Insights into the Applicability and Importance of Different 3D Magnetic Field Extrapolation Approaches for Studying the Preeruptive Conditions of Solar Active Regions**. The Astrophysical Journal, 962(2), p.171.
-
-## Data
-All our simulation results are publicly available (parameter variation, time series, 66 individual active regions).
-
-http://kanzelhohe.uni-graz.at/nf2/
-
-
+NF2 is released under the [GPL-3.0 license](LICENSE).

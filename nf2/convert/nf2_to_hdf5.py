@@ -17,12 +17,18 @@ class _SaveFileTask(Thread):
 
     def run(self):
         f = h5py.File(self.out_path, 'w')
+
         f.create_dataset('B', data=self.output['b'], dtype='f4', compression='gzip')
         f.attrs['INFO'] = f'Magnetic vector field (B_x, B_y, B_z): {self.output["b"].shape} (x, y, z, 3)'
+
+        for k, v in self.output['metrics'].items():
+            f.create_dataset(k, data=v, dtype='f4', compression='gzip')
+            f.attrs[f'INFO_{k}'] = f'Metric {k}: {v.shape}'
+
         f.attrs['Mm_per_pixel'] = self.output['Mm_per_pixel']
         f.attrs['type'] = self.nf2_out.data_config['type']
-        f.attrs['wcs'] = self.nf2_out.wcs[0].to_header_string()
-        f.attrs['time'] = self.nf2_out.time.isoformat('T', timespec='seconds')
+        f.attrs['wcs'] = self.nf2_out.wcs[0].to_header_string() if len(self.nf2_out.wcs) > 0 else 'None'
+        f.attrs['time'] = self.nf2_out.time.isoformat('T', timespec='seconds') if self.nf2_out.time is not None else 'None'
         f.close()
         print('File saved:', self.out_path)
 
@@ -47,6 +53,7 @@ def main():
     parser.add_argument('--Mm_per_pixel', type=float, help='spatial resolution (0.36 for original HMI)', required=False,
                         default=None)
     parser.add_argument('--height_range', type=float, nargs=2, help='height range in Mm', required=False, default=None)
+    parser.add_argument('--metrics', type=str, nargs='*', help='metrics to be computed', required=False, default=['j'])
 
     args = parser.parse_args()
     nf2_path = args.nf2_path
@@ -54,8 +61,11 @@ def main():
     Mm_per_pixel = args.Mm_per_pixel
     out_path = args.out_path
     height_range = args.height_range
+    metrics = args.metrics
 
-    convert(nf2_path, out_path, Mm_per_pixel, height_range)
+    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    convert(nf2_path, out_path, Mm_per_pixel, height_range, progress=True, metrics=metrics)
 
 
 if __name__ == '__main__':
