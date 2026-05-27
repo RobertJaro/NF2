@@ -4,6 +4,20 @@ NF2 supports installation through pip and conda.
 
 ## Pip
 
+Install from PyPI:
+
+```bash
+pip install nf2
+```
+
+Install optional dependency groups:
+
+```bash
+pip install "nf2[wandb]"
+pip install "nf2[jsoc,pfss]"
+pip install "nf2[docs]"
+```
+
 Install from a local checkout:
 
 ```bash
@@ -23,6 +37,13 @@ python -m pip install build
 python -m build
 ```
 
+When using conda for packaging tools, install the conda-forge package name:
+
+```bash
+conda install -c conda-forge python-build twine
+python -m build
+```
+
 The build creates:
 
 - `dist/nf2-0.4.0.tar.gz`
@@ -30,7 +51,22 @@ The build creates:
 
 ## Conda Environment
 
-Create the recommended development environment:
+Install with conda:
+
+```bash
+conda install nf2
+```
+
+Create a fresh NF2 environment:
+
+```bash
+conda create -n nf2 python=3.11 nf2
+conda activate nf2
+```
+
+If your conda setup does not already use conda-forge, add it or pass `-c conda-forge`.
+
+Create the recommended development environment from a local checkout:
 
 ```bash
 conda env create -f environment.yml

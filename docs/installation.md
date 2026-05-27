@@ -5,31 +5,33 @@
 Install NF2 from PyPI:
 
 ```bash
-python -m pip install nf2
+pip install nf2
 ```
 
 Install optional dependency groups when you need W&B logging, JSOC downloads, PFSS support, documentation tools, or development tools:
 
 ```bash
-python -m pip install "nf2[wandb]"
-python -m pip install "nf2[jsoc,pfss]"
-python -m pip install "nf2[docs]"
+pip install "nf2[wandb]"
+pip install "nf2[jsoc,pfss]"
+pip install "nf2[docs]"
 ```
 
 ## Conda Installation
 
-Install NF2 from conda-forge:
+Install NF2 with conda:
 
 ```bash
-conda install -c conda-forge nf2
+conda install nf2
 ```
 
 Create a fresh environment if you prefer to isolate NF2:
 
 ```bash
-conda create -n nf2 -c conda-forge python=3.11 nf2
+conda create -n nf2 python=3.11 nf2
 conda activate nf2
 ```
+
+If your conda setup does not already use conda-forge, add it or pass `-c conda-forge`.
 
 ## Local Installation
 
@@ -121,6 +123,13 @@ Build a source distribution and wheel:
 
 ```bash
 python -m pip install build
+python -m build
+```
+
+When using conda for packaging tools, install the conda-forge package name:
+
+```bash
+conda install -c conda-forge python-build twine
 python -m build
 ```
 

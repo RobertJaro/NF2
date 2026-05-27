@@ -32,7 +32,7 @@ dependencies:
   - ruff>=0.5
   - mypy>=1.10
   - pre-commit>=3.7
-  - build
+  - python-build
   - twine>=5
   - pip:
       - --no-deps

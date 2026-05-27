@@ -26,16 +26,21 @@ The framework is designed for solar-physics workflows with HMI/SHARP, full-disk,
 - HMI SHARP, full-disk, and synoptic download helpers
 - VTK, NumPy, and metric exports
 - Standard NLFF quality metrics through `nf2-metrics`
-- Sphinx documentation configured for ReadTheDocs
 
 ## Installation
 
 NF2 supports Python 3.11 and 3.12.
 
-Install from PyPI after release:
+Install from PyPI:
 
 ```bash
-python -m pip install nf2
+pip install nf2
+```
+
+Install with conda:
+
+```bash
+conda install nf2
 ```
 
 For development or source installs:
@@ -53,7 +58,7 @@ conda env create -f environment.yml
 conda activate nf2
 ```
 
-See [INSTALL.md](INSTALL.md) for source builds, optional dependencies, and the conda package recipe.
+See the online [installation guide](https://nf2.readthedocs.io/en/latest/installation.html) for pip, conda, local, and development installation options.
 
 ## Quick Start
 
@@ -138,16 +143,21 @@ Notebook are available in [examples/notebooks](examples/notebooks) for SHARP CEA
 
 ## Documentation
 
-The full documentation is available at [nf2.readthedocs.io](https://nf2.readthedocs.io/).
+The full documentation is online at [nf2.readthedocs.io](https://nf2.readthedocs.io/).
 
 The documentation includes:
 
+- Installation instructions for pip, conda, local checkouts, and development setups
+- Quickstart and usage overview
 - YAML configuration reference
-- Cartesian and spherical workflows
+- Cartesian, spherical, analytical, and series extrapolation workflows
+- Training guidance for losses, schedules, height scaling, validation resolution, and memory use
+- Evaluation guidance for exports and quality metrics
 - Dataset, sampler, and normalization options
 - Download, extrapolation, export, and metric commands
 - Python API reference
 - Example notebook descriptions
+- FAQ
 - Publication list
 
 ## Visualization
