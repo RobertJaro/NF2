@@ -2,11 +2,19 @@
 
 This page is generated from `nf2.reference` and mirrors the public v0.4 YAML schema.
 
+## General Run Keys
+
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | path | str | ./runs/nf2 | Directory for checkpoints, logs, and extrapolation_result.nf2. |
 | work_path | str \| null | path/work | Optional scratch directory for preprocessed arrays. |
 | logging | dict | {} | Options passed to the Lightning/W&B logger. |
+| meta_path | str | none | Optional previous NF2 state used by series runs. |
+
+## Data And Geometry
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
 | data.geometry | cartesian \| spherical | required | Extrapolation geometry. |
 | data.normalization.Mm_per_ds | float | 100 | Length represented by one model coordinate unit. |
 | data.normalization.Gauss_per_dB | float | 1000 | Magnetic-field strength represented by one model field unit. |
@@ -20,22 +28,41 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | data.z_range | list[float] | loader default | Cartesian height range in Mm where supported by the loader. |
 | data.max_radius | float | loader default | Spherical outer radius in solar radii where supported by the loader. |
 | data.iterations | int | loader default | Number of random sampler batches for Cartesian training. |
+
+## Model
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
 | model.field | vector_potential \| b | vector_potential | Field representation. |
 | model.network.type | siren | siren | Only SIREN networks are supported. |
 | model.network.hidden_dim | int | 256 cartesian, 512 spherical | SIREN hidden width. |
 | model.network.layers | int | model default | Number of SIREN layers. |
 | model.network.w0 | float | model default | SIREN frequency scale for hidden layers. |
 | model.network.w0_initial | float | model default | SIREN frequency scale for the first layer. |
+
+## Training
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
 | training.epochs | int | 10 | Number of Lightning epochs. |
 | training.optimizer.start | float | 5e-4 | Initial learning rate. |
 | training.optimizer.end | float | 5e-5 | Final learning rate. |
 | training.optimizer.iterations | int | 100000 | Learning-rate schedule length. |
 | training.trainer | dict | {} | Additional Lightning Trainer keyword arguments. |
+
+## Losses And Scaling
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
 | losses[].type | str | geometry default | Loss implementation name. |
 | losses[].name | str | type | Stable logging and scaling identifier. |
 | losses[].weight | float \| schedule | required when explicit | Loss weight. The legacy lambda key is not accepted. |
 | losses[].datasets | str \| list[str] | loss default | Dataset ids used by the loss. |
 | loss_scaling | list[dict] | geometry default | Spatial scaling modules for selected losses. |
+
+## Callbacks And Transforms
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
 | callbacks | list[dict] | geometry default | Validation plots and metrics logged during training. |
 | transforms | list[dict] | [] | Optional coordinate/field transforms applied to datasets. |
-| meta_path | str | none | Optional previous NF2 state used by series runs. |

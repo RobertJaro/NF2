@@ -2,6 +2,20 @@
 
 NF2 can be used from YAML-driven commands or from Python.
 
+## Notebooks
+
+Notebook workflows are useful for interactive inspection and small experiments:
+
+- [Notebook workflows](notebooks.md) links available example notebooks and common notebook entry points.
+- Use notebooks after an initial command-line run when you want to inspect exported fields, metrics, or derived quantities interactively.
+
+```{toctree}
+:maxdepth: 1
+:caption: Usage Details
+
+notebooks
+```
+
 ## Command Line
 
 Use `nf2-extrapolate` for one run:
