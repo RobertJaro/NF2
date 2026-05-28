@@ -60,12 +60,6 @@ def _reject_legacy_keys(config):
     normalization = data.get("normalization", {}) or {}
     if "type" in data:
         raise ValueError("Config key 'data.type' was removed in v0.4. Use 'data.geometry'.")
-    if "G_per_dB" in data or "G_per_dB" in normalization:
-        raise ValueError("Config key 'G_per_dB' was removed in v0.4. Use 'Gauss_per_dB'.")
-    if "length_unit_Mm" in data or "length_unit_Mm" in normalization:
-        raise ValueError("Config key 'length_unit_Mm' was removed in v0.4. Use 'Mm_per_ds'.")
-    if "field_unit_G" in data or "field_unit_G" in normalization:
-        raise ValueError("Config key 'field_unit_G' was removed in v0.4. Use 'Gauss_per_dB'.")
     if "type" in model:
         raise ValueError("Config key 'model.type' was removed in v0.4. Use 'model.field'.")
     if "dim" in model:

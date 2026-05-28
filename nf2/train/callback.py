@@ -77,11 +77,12 @@ class SphericalSlicesCallback(Callback):
         j_cube = j.reshape([*self.cube_shape, 3]).cpu().numpy()
         c_cube = coords.reshape([*self.cube_shape, 3]).cpu().numpy()
 
-        # transform to spherical coordinates
-        c_cube = cartesian_to_spherical(c_cube)
+        if 'spherical_coords' in outputs:
+            c_cube = outputs['spherical_coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
+        else:
+            c_cube = cartesian_to_spherical(c_cube)
+            c_cube[..., 0] *= self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
         b_cube = vector_cartesian_to_spherical(b_cube, c_cube)
-
-        c_cube[..., 0] *= self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
 
         self.plot_b(b_cube, c_cube)
         self.plot_current(j_cube, c_cube)
@@ -159,7 +160,8 @@ class SphericalSlicesCallback(Callback):
 
         if physical_units:
             radius_Mm = np.nanmean(coords[..., 0]) * (1 * u.solRad).to_value(u.Mm)
-            longitude = radius_Mm * (longitude_rad - np.nanmean(longitude_rad))
+            longitude_center = (np.nanmin(longitude_rad) + np.nanmax(longitude_rad)) / 2
+            longitude = radius_Mm * (longitude_rad - longitude_center)
             latitude = radius_Mm * latitude_rad
             aspect = 'equal'
         else:
@@ -309,7 +311,7 @@ class SlicesCallback(Callback):
                 v_min_max = max(v_min_max, 1)
                 ax = plot_axs[i, j]
                 im = ax.imshow(b_slice.T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
-                               origin='lower', extent=extent)
+                               origin='lower', extent=extent, aspect='equal')
                 divider = make_axes_locatable(ax)
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
@@ -341,7 +343,8 @@ class SlicesCallback(Callback):
                       coords[0, 0, i, 1], coords[-1, -1, i, 1]]
             extent = np.array(extent) * self.Mm_per_ds
             height = coords[:, :, i, 2].mean() * self.Mm_per_ds
-            im = plot_axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm, extent=extent)
+            im = plot_axs[i].imshow(j[:, :, i].T, cmap='plasma', origin='lower', norm=norm,
+                                     extent=extent, aspect='equal')
             plot_axs[i].set_xlabel('X [Mm]')
             if i == 0:
                 plot_axs[i].set_ylabel('Y [Mm]')
@@ -358,7 +361,7 @@ class SlicesCallback(Callback):
         extent = np.array(extent) * self.Mm_per_ds
         fig, ax = plt.subplots(1, 1, figsize=(8, 8))
         norm = _log_norm(j)
-        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=norm, extent=extent)
+        im = ax.imshow(j.T, cmap='plasma', origin='lower', norm=norm, extent=extent, aspect='equal')
         # add locatable colorbar
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)

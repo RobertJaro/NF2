@@ -273,10 +273,12 @@ class SphereSlicesDataset(NF2Dataset):
     def __getitem__(self, idx):
         start = idx * self.batch_size
         stop = min((idx + 1) * self.batch_size, self.n_coords)
-        coord = _spherical_coordinate_batch(self.axes, self.component_axes, start, stop)
-        coord = spherical_to_cartesian(coord) * self.coord_scale
-        coord = torch.tensor(coord, dtype=torch.float32)
-        return {'coords': coord}
+        spherical_coord = _spherical_coordinate_batch(self.axes, self.component_axes, start, stop)
+        coord = spherical_to_cartesian(spherical_coord) * self.coord_scale
+        return {
+            'coords': torch.tensor(coord, dtype=torch.float32),
+            'spherical_coords': torch.tensor(spherical_coord, dtype=torch.float32),
+        }
 
 
 class SlicesDataset(NF2Dataset):
