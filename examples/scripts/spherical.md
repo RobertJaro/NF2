@@ -3,7 +3,7 @@
 Spherical runs combine full-disk HMI vector data with synoptic maps and train in a spherical coordinate volume. The example config is:
 
 ```text
-examples/configs/spherical/full_disk_synoptic.yaml
+examples/configs/spherical/hmi_full_disk.yaml
 ```
 
 ## 1. Download Full-Disk HMI Data
@@ -15,7 +15,7 @@ nf2-download \
   --source hmi_full_disk \
   --download_dir "./data/hmi_spherical/full_disk" \
   --email "you@example.org" \
-  --t_start 2024-05-10T00:00:00 \
+  --t_start 2011-02-15T00:00:00 \
   --series B_720s
 ```
 
@@ -26,7 +26,7 @@ nf2-download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \
-  --carrington_rotation 2283 \
+  --carrington_rotation 2106 \
   --series b_synoptic \
   --segments Br,Bt,Bp
 ```
@@ -37,9 +37,11 @@ Fill the placeholders with the downloaded files. The full-disk error placeholder
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/spherical/full_disk_synoptic.yaml" \
+  --config "examples/configs/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_hmi" \
   --work_path "./runs/spherical_hmi/work" \
+  --wandb_project "nf2" \
+  --run_name "Spherical HMI" \
   --full_disk_Br "./data/hmi_spherical/full_disk/*Br.fits" \
   --full_disk_Bt "./data/hmi_spherical/full_disk/*Bt.fits" \
   --full_disk_Bp "./data/hmi_spherical/full_disk/*Bp.fits" \

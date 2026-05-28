@@ -95,7 +95,7 @@ Cartesian-specific keys:
 
 - `z_range`: extrapolation height range in Mm.
 - `potential_boundary`: explicit potential boundary data. FFT potential fields are used by default; set `method: direct` to use the Green's-function fallback. Use `{type: none}` to disable.
-- `iterations`: number of random sampler batches.
+- `iterations`: number of random sampler batches per epoch-like pass.
 
 Spherical-specific keys:
 
@@ -152,7 +152,7 @@ files:
   B_azi: ./B_azi.fits
 ```
 
-Spherical map boundaries use `Br`, `Bt`, and `Bp` files. Error maps can be placed under `errors`; for spherical `map` datasets they are merged into the file map.
+Cartesian and spherical vector boundaries use `Br`, `Bt`, and `Bp` files. Error maps can be placed under `errors`; NF2 routes them to the loader-specific internal form.
 
 ## Potential Boundary
 

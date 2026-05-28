@@ -40,16 +40,32 @@ def _cartesian_extent_title(coords):
             f'center: ({x_center:.2f}, {y_center:.2f}) Mm')
 
 
+def _planar_cartesian_extent(coords, tolerance=1e-6):
+    if coords is None:
+        return None
+    finite_z = coords[..., 2][np.isfinite(coords[..., 2])]
+    if finite_z.size == 0 or np.nanmax(finite_z) - np.nanmin(finite_z) > tolerance:
+        return None
+    return _cartesian_extent(coords)
+
+
+def _should_plot(plot=True):
+    return bool(plot)
+
+
 class SphericalSlicesCallback(Callback):
 
-    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds, plot=True, **kwargs):
         self.name = name
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        self.plot = plot
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
+        if not _should_plot(self.plot):
+            return
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -166,14 +182,17 @@ class SphericalSlicesCallback(Callback):
 
 class SphericalFITSComparisonCallback(Callback):
 
-    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds, plot=True, **kwargs):
         self.name = name
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        self.plot = plot
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
+        if not _should_plot(self.plot):
+            return
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -251,14 +270,17 @@ class SphericalFITSComparisonCallback(Callback):
 
 class SlicesCallback(Callback):
 
-    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds, plot=True, **kwargs):
         self.name = name
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        self.plot = plot
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
+        if not _should_plot(self.plot):
+            return
         if self.name not in pl_module.validation_outputs:
             return
         outputs = pl_module.validation_outputs[self.name]
@@ -358,11 +380,13 @@ class SlicesCallback(Callback):
 
 class BoundaryCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, component_labels=None, **kwargs):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, component_labels=None,
+                 plot=True, **kwargs):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        self.plot = plot
         if component_labels is None and validation_dataset_key == 'synoptic_valid':
             component_labels = ['r', 't', 'p']
         self.component_labels = component_labels or ['x', 'y', 'z']
@@ -397,6 +421,8 @@ class BoundaryCallback(Callback):
             evaluation['b_diff_err'] = b_diff_err.detach()
 
         wandb.log({"valid": {self.validation_dataset_key: evaluation}})
+        if not _should_plot(self.plot):
+            return
 
         b = b.cpu().numpy().reshape([*self.cube_shape, 3])
         b_true = b_true.cpu().numpy().reshape([*self.cube_shape, 3])
@@ -410,7 +436,7 @@ class BoundaryCallback(Callback):
             self.plot_b(b, b_true, coords)
 
     def plot_b(self, b, b_true, coords=None):
-        extent = _cartesian_extent(coords) if coords is not None else None
+        extent = _planar_cartesian_extent(coords)
 
         fig, axs = plt.subplots(3, 3, figsize=(8.4, 8),
                                 gridspec_kw={'width_ratios': [1, 1, 0.05]}, constrained_layout=True)
@@ -428,12 +454,12 @@ class BoundaryCallback(Callback):
                                        origin='lower', extent=extent)
             plot_axs[i, 1].set_title(f'True $B_{label}$')
             fig.colorbar(im, cax=cbar_axs[i], label='[G]')
-            if coords is not None:
+            if extent is not None:
                 for ax in plot_axs[i]:
                     ax.set_xlabel('X [Mm]')
                     ax.set_ylabel('Y [Mm]')
 
-        if coords is not None:
+        if extent is not None:
             fig.suptitle(_cartesian_extent_title(coords))
 
         wandb.log({f"{self.validation_dataset_key} - B": fig})
@@ -482,15 +508,19 @@ class BoundaryCallback(Callback):
 
 class DisambiguationCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, name=None):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds, name=None,
+                 plot=True, **kwargs):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
         self.name = name
+        self.plot = plot
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
+        if not _should_plot(self.plot):
+            return
         if self.validation_dataset_key not in pl_module.validation_outputs:
             return
 
@@ -557,11 +587,13 @@ class DisambiguationCallback(Callback):
 
 class LosTrvAziBoundaryCallback(Callback):
 
-    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds):
+    def __init__(self, validation_dataset_key, cube_shape, gauss_per_dB, Mm_per_ds,
+                 plot=True, **kwargs):
         self.validation_dataset_key = validation_dataset_key
         self.cube_shape = cube_shape
         self.gauss_per_dB = gauss_per_dB
         self.Mm_per_ds = Mm_per_ds
+        self.plot = plot
 
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
@@ -595,6 +627,8 @@ class LosTrvAziBoundaryCallback(Callback):
         evaluation['b_amb_diff'] = b_diff.detach()
 
         wandb.log({"valid": {self.validation_dataset_key: evaluation}})
+        if not _should_plot(self.plot):
+            return
 
         b_los_trv_azi = b_los_trv_azi.cpu().numpy().reshape([*self.cube_shape, 3])
         b_true = b_true.cpu().numpy().reshape([*self.cube_shape, 3])

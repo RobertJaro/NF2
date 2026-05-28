@@ -70,20 +70,22 @@ class CubeDataset(NF2Dataset):
         x_resolution = int((coord_range[0, 1] - coord_range[0, 0]) / ds_per_pixel)
         y_resolution = int((coord_range[1, 1] - coord_range[1, 0]) / ds_per_pixel)
         z_resolution = int((coord_range[2, 1] - coord_range[2, 0]) / ds_per_pixel)
-        coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
-                                      np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
-                                      np.linspace(coord_range[2, 0], coord_range[2, 1], z_resolution, dtype=np.float32),
-                                      indexing='ij'), -1)
-        self.coords_shape = coords.shape[:-1]
-        coords = coords.reshape(-1, 3)
-        batch_size = int(batch_size)
-        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+        self.axes = [
+            np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
+            np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
+            np.linspace(coord_range[2, 0], coord_range[2, 1], z_resolution, dtype=np.float32),
+        ]
+        self.coords_shape = tuple(len(axis) for axis in self.axes)
+        self.batch_size = int(batch_size)
+        self.n_coords = int(np.prod(self.coords_shape))
 
     def __len__(self):
-        return len(self.coords)
+        return int(np.ceil(self.n_coords / self.batch_size))
 
     def __getitem__(self, idx):
-        coord = self.coords[idx]
+        start = idx * self.batch_size
+        stop = min((idx + 1) * self.batch_size, self.n_coords)
+        coord = _coordinate_batch(self.axes, start, stop)
         coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
 
@@ -218,24 +220,26 @@ class SphereDataset(NF2Dataset):
         #
         ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(resolution * ratio)
-        coords = np.stack(
-            np.meshgrid(np.linspace(radius_range[0], radius_range[1], resolution),
-                        np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat),
-                        np.linspace(longitude_range[0], longitude_range[1], resolution),
-                        indexing='ij')).T
-        self.coords_shape = coords.shape[:-1]
-
-        coords = spherical_to_cartesian(coords)
-        coords = torch.tensor(coords, dtype=torch.float32)
-        coords = coords.reshape((-1, 3))
-        coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+        self.axes = [
+            np.linspace(longitude_range[0], longitude_range[1], resolution, dtype=np.float32),
+            np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat, dtype=np.float32),
+            np.linspace(radius_range[0], radius_range[1], resolution, dtype=np.float32),
+        ]
+        self.component_axes = [2, 1, 0]
+        self.coords_shape = tuple(len(axis) for axis in self.axes)
+        self.batch_size = int(batch_size)
+        self.n_coords = int(np.prod(self.coords_shape))
+        self.coord_scale = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
     def __len__(self):
-        return len(self.coords)
+        return int(np.ceil(self.n_coords / self.batch_size))
 
     def __getitem__(self, idx):
-        coord = self.coords[idx]
+        start = idx * self.batch_size
+        stop = min((idx + 1) * self.batch_size, self.n_coords)
+        coord = _spherical_coordinate_batch(self.axes, self.component_axes, start, stop)
+        coord = spherical_to_cartesian(coord) * self.coord_scale
+        coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
 
 
@@ -252,25 +256,26 @@ class SphereSlicesDataset(NF2Dataset):
         ratio = (colatitude_range[1] - colatitude_range[0]) / (longitude_range[1] - longitude_range[0])
         resolution_lat = int(longitude_resolution * ratio)
         radius_samples = np.exp(np.linspace(np.log(radius_range[0]), np.log(radius_range[1]), n_slices))
-        coords = np.stack(
-            np.meshgrid(radius_samples,
-                        np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat),
-                        np.linspace(longitude_range[0], longitude_range[1], longitude_resolution),
-                        indexing='ij'), -1)
-
-        self.cube_shape = coords.shape[:-1]
-
-        coords = spherical_to_cartesian(coords)
-        coords = torch.tensor(coords, dtype=torch.float32)
-        coords = coords.reshape((-1, 3))
-        coords = coords * (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
-        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+        self.axes = [
+            radius_samples.astype(np.float32, copy=False),
+            np.linspace(colatitude_range[0], colatitude_range[1], resolution_lat, dtype=np.float32),
+            np.linspace(longitude_range[0], longitude_range[1], longitude_resolution, dtype=np.float32),
+        ]
+        self.component_axes = [0, 1, 2]
+        self.cube_shape = tuple(len(axis) for axis in self.axes)
+        self.batch_size = int(batch_size)
+        self.n_coords = int(np.prod(self.cube_shape))
+        self.coord_scale = (1 * u.solRad).to_value(u.Mm) / Mm_per_ds
 
     def __len__(self):
-        return len(self.coords)
+        return int(np.ceil(self.n_coords / self.batch_size))
 
     def __getitem__(self, idx):
-        coord = self.coords[idx]
+        start = idx * self.batch_size
+        stop = min((idx + 1) * self.batch_size, self.n_coords)
+        coord = _spherical_coordinate_batch(self.axes, self.component_axes, start, stop)
+        coord = spherical_to_cartesian(coord) * self.coord_scale
+        coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
 
 
@@ -285,24 +290,40 @@ class SlicesDataset(NF2Dataset):
         else:
             z_range = np.linspace(0, coord_range[2, 1], n_slices - 1, dtype=np.float32)
             z_range = np.concatenate([np.array([coord_range[2, 0]]), z_range])
-        coords = np.stack(np.meshgrid(np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
-                                      np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
-                                      z_range,
-                                      indexing='ij'), -1)
-        self.cube_shape = coords.shape[:-1]
-        #
-        coords = coords.reshape((-1, 3))
-        self.coords = np.split(coords, np.arange(batch_size, len(coords), batch_size))
+        self.axes = [
+            np.linspace(coord_range[0, 0], coord_range[0, 1], x_resolution, dtype=np.float32),
+            np.linspace(coord_range[1, 0], coord_range[1, 1], y_resolution, dtype=np.float32),
+            z_range.astype(np.float32, copy=False),
+        ]
+        self.cube_shape = tuple(len(axis) for axis in self.axes)
+        self.batch_size = int(batch_size)
+        self.n_coords = int(np.prod(self.cube_shape))
 
         super().__init__()
 
     def __len__(self):
-        return len(self.coords)
+        return int(np.ceil(self.n_coords / self.batch_size))
 
     def __getitem__(self, idx):
-        coord = self.coords[idx]
+        start = idx * self.batch_size
+        stop = min((idx + 1) * self.batch_size, self.n_coords)
+        coord = _coordinate_batch(self.axes, start, stop)
         coord = torch.tensor(coord, dtype=torch.float32)
         return {'coords': coord}
+
+
+def _coordinate_batch(axes, start, stop):
+    shape = tuple(len(axis) for axis in axes)
+    flat_idx = np.arange(start, stop, dtype=np.int64)
+    indices = np.unravel_index(flat_idx, shape)
+    return np.stack([axis[index] for axis, index in zip(axes, indices)], -1)
+
+
+def _spherical_coordinate_batch(axes, component_axes, start, stop):
+    shape = tuple(len(axis) for axis in axes)
+    flat_idx = np.arange(start, stop, dtype=np.int64)
+    indices = np.unravel_index(flat_idx, shape)
+    return np.stack([axes[axis_idx][indices[axis_idx]] for axis_idx in component_axes], -1)
 
 
 class RandomCoordinateDataset(NF2Dataset):

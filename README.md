@@ -131,8 +131,9 @@ Example configurations live in [examples/configs](examples/configs); see the [ex
 - `cartesian/minimal_fits.yaml`
 - `cartesian/auto_disambiguation.yaml`
 - `cartesian/multi_height.yaml`
+- `cartesian/sharp_cea_series.yaml`
 - `cartesian/multi_height_series.yaml`
-- `spherical/full_disk_synoptic.yaml`
+- `spherical/hmi_full_disk.yaml`
 - `benchmark/analytical_case1.yaml`
 - `benchmark/analytical_case2.yaml`
 

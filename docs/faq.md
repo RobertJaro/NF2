@@ -20,7 +20,7 @@ See [Training](training.md#out-of-memory-errors) for a step-by-step order.
 
 Treat convergence as a combination of stable losses, stable quality metrics, and physically plausible validation plots. Boundary losses should stop improving rapidly, force-free and divergence metrics should flatten, and validation slices should no longer show large structural changes between validation intervals. For series runs, check that each step behaves consistently rather than judging only the final step.
 
-If metrics are still improving at the end of training, increase `training.epochs` or the sampler `length`/`data.iterations`. If only one loss is dominating, tune its `weight` or schedule.
+If metrics are still improving at the end of training, increase `training.epochs` or `data.iterations`. If only one loss is dominating, tune its `weight` or schedule.
 
 ## How do I avoid using W&B online?
 

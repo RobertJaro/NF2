@@ -8,6 +8,7 @@ Primary examples:
 - `examples/configs/cartesian/sharp_cea.yaml`
 - `examples/configs/cartesian/auto_disambiguation.yaml`
 - `examples/configs/cartesian/multi_height.yaml`
+- `examples/configs/cartesian/sharp_cea_series.yaml`
 - `examples/configs/cartesian/multi_height_series.yaml`
 
 ## How The YAML Is Configured

@@ -12,24 +12,30 @@ def load_callbacks(callback_configs, data_module):
     for callback_config in deepcopy(callback_configs):
         ds_id = callback_config.pop('ds_id')
         callback_type = callback_config.pop('type')
-        assert ds_id in data_module.validation_datasets, \
-            f'Dataset {ds_id} not found in validation datasets. Check your configuration. Available datasets: {list(data_module.validation_datasets.keys())}'
+        if ds_id not in data_module.validation_datasets:
+            raise ValueError(
+                f'Dataset {ds_id} not found in validation datasets. Check your configuration. '
+                f'Available datasets: {list(data_module.validation_datasets.keys())}'
+            )
         ds = data_module.validation_datasets[ds_id]
 
         if callback_type == 'disambiguation':
             callback = DisambiguationCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'spherical_slices':
-            callback = SphericalSlicesCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds)
+            callback_config.pop('name', None)
+            callback = SphericalSlicesCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'fits_comparison':
-            callback = SphericalFITSComparisonCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds)
+            callback_config.pop('name', None)
+            callback = SphericalFITSComparisonCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'slices':
-            callback = SlicesCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds)
+            callback_config.pop('name', None)
+            callback = SlicesCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'metrics':
             callback = MetricsCallback(ds_id, Gauss_per_dB, Mm_per_ds)
         elif callback_type == 'boundary':
-            callback = BoundaryCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds)
+            callback = BoundaryCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         elif callback_type == 'los_trv_azi_boundary':
-            callback = LosTrvAziBoundaryCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds)
+            callback = LosTrvAziBoundaryCallback(ds_id, ds.cube_shape, Gauss_per_dB, Mm_per_ds, **callback_config)
         else:
             raise NotImplementedError(f'Callback type {callback_type} not implemented.')
         callbacks.append(callback)

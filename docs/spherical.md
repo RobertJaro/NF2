@@ -4,7 +4,7 @@ Spherical runs use `data.geometry: spherical` and train a global or large-field-
 
 The full-disk plus synoptic example configuration is:
 
-- `examples/configs/spherical/full_disk_synoptic.yaml`
+- `examples/configs/spherical/hmi_full_disk.yaml`
 
 ## How The YAML Is Configured
 
@@ -35,7 +35,7 @@ Fill the placeholders from the command line:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/spherical/full_disk_synoptic.yaml \
+  --config examples/configs/spherical/hmi_full_disk.yaml \
   --run_path ./runs/hmi_spherical \
   --work_path ./runs/hmi_spherical/work \
   --full_disk_Br ./data/full_disk/Br.fits \
@@ -95,12 +95,12 @@ If `data.samplers` is omitted, NF2 adds a `random_radial_grouped` sampler. For e
 
 ```yaml
 data:
+  iterations: 10000
   samplers:
     - id: random
       type: random_radial_grouped
       batch_size: 16384
       n_lat_lon_sample: 64
-      length: 10000
       radial_sampling_exponent: 2
   validation:
     - id: sphere
@@ -124,8 +124,8 @@ losses:
     name: force_free
     weight: { start: 1.0e-4, end: 1.0e-2, iterations: 50000 }
     datasets: [random]
-  - type: potential_top
-    name: potential_top
+  - type: potential
+    name: potential
     weight: { start: 1.0e-4, end: 1.0e-2, iterations: 50000 }
     datasets: [random]
 ```

@@ -27,7 +27,7 @@ losses:
 
 Use `datasets` to point a loss at boundary, sampler, or validation dataset ids. NF2 v0.4 uses `weight`; the legacy `lambda` key is rejected.
 
-Common Cartesian losses include `boundary`, `force_free`, and `potential`. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. Spherical configs usually combine `boundary`, `force_free`, `potential_top`, and sometimes `energy_gradient`.
+Common Cartesian losses include `boundary`, `force_free`, and `potential`. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. Spherical configs usually combine `boundary`, `force_free`, `potential`, and sometimes `energy_gradient`.
 
 ## Loss Schedules
 
@@ -74,7 +74,7 @@ loss_scaling:
     name: radial
     base_radius: 1.0
     max_radius: 1.3
-    loss_ids: [force_free, potential_top, energy_gradient]
+    loss_ids: [force_free, potential, energy_gradient]
 ```
 
 For multi-height data, set `height_mapping` on the elevated boundary and add a matching height transform:
@@ -119,6 +119,27 @@ data:
 ```
 
 Validation can use a smaller `batch_size` than training. This is useful when callbacks or metrics run out of memory even though training batches fit.
+
+## Loader And Series Cadence
+
+NF2 defaults to 4 PyTorch DataLoader workers. On shared filesystems or series runs with frequent DataLoader reloads, lowering validation workers often reduces transition overhead:
+
+```yaml
+data:
+  num_workers: 4
+  validation_num_workers: 0
+  prefetch_factor: 2
+```
+
+Series configs advance to a new dataset every epoch by default. The example series configs validate every 10th dataset while still saving one `.nf2` result per dataset:
+
+```yaml
+training:
+  reload_dataloaders_every_n_epochs: 1
+  check_val_every_n_epoch: 10
+```
+
+If preloading every series step uses too much memory, set `data.preload_data_modules: false` to load only the active step.
 
 ## Validation Resolution
 

@@ -15,6 +15,13 @@ def _geometry(nf2_path: str) -> str | None:
     return state.get("data", {}).get("type")
 
 
+def _normalize_format(fmt: str) -> str:
+    fmt = fmt.lower().replace("-", "_")
+    if fmt in {"height", "height_npz", "heights", "heights_npz"}:
+        return "height"
+    return fmt
+
+
 def export_file(
     nf2_path: str,
     out_path: str | None = None,
@@ -36,7 +43,8 @@ def export_file(
     out_path:
         Optional output path. Converter defaults are used when omitted.
     fmt:
-        Export format: ``vtk``, ``npz``, ``hdf5``/``h5``, or ``fits``.
+        Export format: ``vtk``, ``npz``, ``hdf5``/``h5``, ``fits``, or
+        ``height`` for multi-height surface mappings.
     Mm_per_pixel, height_range, x_range, y_range:
         Cartesian sampling controls in megameters.
     metrics:
@@ -45,7 +53,7 @@ def export_file(
     progress:
         Show converter progress where supported.
     """
-    fmt = fmt.lower()
+    fmt = _normalize_format(fmt)
     metrics = metrics if metrics is not None else ["j"]
 
     if fmt == "vtk":
@@ -82,6 +90,15 @@ def export_file(
             metrics=metrics,
             x_range=x_range,
             y_range=y_range,
+            progress=progress,
+        )
+    if fmt == "height":
+        from nf2.convert.nf2_height_to_npz import convert
+
+        return convert(
+            nf2_path=nf2_path,
+            out_path=out_path,
+            Mm_per_pixel=Mm_per_pixel,
             progress=progress,
         )
     if fmt in {"hdf5", "h5"}:
@@ -121,7 +138,16 @@ def export_series(
 
     Existing files are skipped unless ``overwrite`` is true.
     """
-    suffix = {"vtk": ".vtk", "npz": ".npz", "npy": ".npz", "hdf5": ".hdf5", "h5": ".hdf5", "fits": ".fits"}[fmt]
+    fmt = _normalize_format(fmt)
+    suffix = {
+        "vtk": ".vtk",
+        "npz": ".npz",
+        "npy": ".npz",
+        "height": ".height.npz",
+        "hdf5": ".hdf5",
+        "h5": ".hdf5",
+        "fits": ".fits",
+    }[fmt]
     nf2_paths = [path for pattern in patterns for path in sorted(glob.glob(pattern))]
     os.makedirs(out_dir, exist_ok=True)
 
@@ -137,7 +163,11 @@ def export_series(
 def main():
     parser = argparse.ArgumentParser(description="Export NF2 extrapolation results.")
     parser.add_argument("nf2_path", nargs="+", help="NF2 file path or glob pattern")
-    parser.add_argument("--format", choices=["vtk", "npz", "hdf5", "h5", "fits"], default="vtk")
+    parser.add_argument(
+        "--format",
+        choices=["vtk", "npz", "hdf5", "h5", "fits", "height", "height-npz", "height_npz"],
+        default="vtk",
+    )
     parser.add_argument("--out", help="Output file for a single input")
     parser.add_argument("--out-dir", help="Output directory for multiple inputs")
     parser.add_argument("--Mm_per_pixel", type=float, default=None)

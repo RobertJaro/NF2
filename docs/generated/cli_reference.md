@@ -54,7 +54,7 @@ Export NF2 results to exchange formats.
 | Option | Default | Description |
 | --- | --- | --- |
 | nf2_path | required | One or more .nf2 paths or glob patterns. |
-| --format | vtk | One of vtk, npz, hdf5, h5, fits. |
+| --format | vtk | One of vtk, npz, hdf5, h5, fits, height. |
 | --out | none | Output file for a single input. |
 | --out-dir | current directory | Output directory for multiple inputs. |
 | --Mm_per_pixel | checkpoint default | Cartesian export sampling. |

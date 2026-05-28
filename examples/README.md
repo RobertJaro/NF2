@@ -43,21 +43,21 @@ Guide: [scripts/cartesian.md](scripts/cartesian.md)
 
 ### Cartesian Series Runs
 
-Use [configs/cartesian/multi_height_series.yaml](configs/cartesian/multi_height_series.yaml) for a time series of Cartesian multi-height extrapolations.
+Use [configs/cartesian/sharp_cea_series.yaml](configs/cartesian/sharp_cea_series.yaml) for a single-height SHARP CEA Cartesian series and [configs/cartesian/multi_height_series.yaml](configs/cartesian/multi_height_series.yaml) for a time series of Cartesian multi-height extrapolations.
 
-Series runs require a completed first single extrapolation. That first run provides the `meta_path` start point for the sequence, and the series then continues from that trained NF2 state.
+Series runs require a completed first single extrapolation. That first run's `last.ckpt` provides the `meta_path` start point for the sequence, and the series then continues from that trained NF2 state.
 
 Guide: [scripts/cartesian_series.md](scripts/cartesian_series.md)
 
 ### Spherical Single Runs
 
-Use [configs/spherical/full_disk_synoptic.yaml](configs/spherical/full_disk_synoptic.yaml) for spherical HMI extrapolations that combine full-disk vector data with Carrington synoptic maps.
+Use [configs/spherical/hmi_full_disk.yaml](configs/spherical/hmi_full_disk.yaml) for spherical HMI extrapolations that combine full-disk vector data with Carrington synoptic maps.
 
 Guide: [scripts/spherical.md](scripts/spherical.md)
 
 ### Spherical Series Runs
 
-The repository ships a single-run spherical template. For a spherical series, copy [configs/spherical/full_disk_synoptic.yaml](configs/spherical/full_disk_synoptic.yaml), replace single-file entries with glob patterns or file lists, and provide a completed first spherical extrapolation as `meta_path`.
+Use [configs/spherical/hmi_full_disk_series.yaml](configs/spherical/hmi_full_disk_series.yaml) for spherical HMI sequences. Series runs require the completed first spherical extrapolation's `last.ckpt` as `meta_path`; the series template validates every 10th dataset by default and still writes one `.nf2` file per dataset.
 
 Guide: [scripts/spherical_series.md](scripts/spherical_series.md)
 
@@ -84,8 +84,8 @@ Typical quality checks include boundary agreement, `divB`, current-weighted `the
 1. Choose the closest YAML template in [configs](configs).
 2. Copy the template or pass placeholder values with `nf2-extrapolate`.
 3. Set `run_path` to a writable output directory, usually under `runs/`.
-4. Keep the produced `extrapolation_result.nf2`; it is the main input for exports, metrics, and series initialization.
-5. For series runs, first train the initial single extrapolation and then use its `extrapolation_result.nf2` as `meta_path`.
+4. Keep the produced `extrapolation_result.nf2`; it is the main input for exports and metrics.
+5. For series runs, first train the initial single extrapolation and then use its `last.ckpt` as `meta_path`.
 
 Example placeholder invocation:
 

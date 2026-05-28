@@ -78,7 +78,7 @@ class NF2Module(LightningModule):
 
         # load meta state
         if meta_path:
-            checkpoint = torch.load(meta_path, map_location='cpu')
+            checkpoint = torch.load(meta_path, map_location='cpu', weights_only=False)
             if meta_path.endswith('nf2'):
                 state_dict = checkpoint['model'].state_dict()
             elif 'm' in checkpoint:
@@ -201,6 +201,9 @@ class NF2Module(LightningModule):
             assert name not in weights, f"Duplicate name for loss: {name}"
             weights[name] = value
             # additional kwargs
+            if k not in loss_module_mapping:
+                valid_options = ', '.join(sorted(loss_module_mapping))
+                raise ValueError(f"Invalid loss type: {k}. Valid options are: {valid_options}")
             loss_module = {name: loss_module_mapping[k](**config, **data_config)}
             loss_modules.update(loss_module)
         return loss_modules, weights, scheduled_weights

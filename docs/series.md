@@ -2,7 +2,7 @@
 
 Series runs reuse the same public YAML schema as single extrapolations, but file placeholders usually point to glob patterns instead of single files. A series config tells NF2 how to build one boundary set per time step, then train each step while carrying forward state from the previous extrapolation.
 
-A series run requires an initial single extrapolation first. Run the first time step with `nf2-extrapolate`, then pass that first run's `extrapolation_result.nf2` as `--meta_path` when starting the full series. The meta path is the start point for the series and lets each subsequent time step continue from a trained NF2 state instead of starting cold.
+A series run requires an initial single extrapolation first. Run the first time step with `nf2-extrapolate`, then pass that first run's `last.ckpt` as `--meta_path` when starting the full series. The meta path is the start point for the series and lets each subsequent time step continue from a trained NF2 state, including optimizer state, instead of starting cold.
 
 ## How The YAML Is Configured
 
@@ -30,7 +30,7 @@ You can write patterns directly in a local YAML file:
 ```yaml
 path: ./runs/multi_height_series
 work_path: ./runs/multi_height_series/work
-meta_path: ./runs/multi_height_initial/extrapolation_result.nf2
+meta_path: ./runs/multi_height_initial/last.ckpt
 data:
   geometry: cartesian
   boundaries:
@@ -58,7 +58,7 @@ nf2-extrapolate \
   --photosphere_B_azi "./data/photosphere/20240101_000000_B_azi.fits"
 ```
 
-Wait until this run writes `./runs/multi_height_initial/extrapolation_result.nf2`.
+Wait until this run writes `./runs/multi_height_initial/last.ckpt`.
 
 ## Step 2: Start The Full Series
 
@@ -67,15 +67,17 @@ nf2-extrapolate-series \
   --config "examples/configs/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --work_path "./runs/multi_height_series/work" \
-  --meta_path "./runs/multi_height_initial/extrapolation_result.nf2" \
+  --meta_path "./runs/multi_height_initial/last.ckpt" \
   --photosphere_B_los_pattern "./data/photosphere/*B_los.fits" \
   --photosphere_B_trv_pattern "./data/photosphere/*B_trv.fits" \
   --photosphere_B_azi_pattern "./data/photosphere/*B_azi.fits"
 ```
 
-The `--meta_path` value must point to the completed first extrapolation. Keep that first run available until the series has started successfully.
+The `--meta_path` value must point to the completed first extrapolation's `last.ckpt` file. Keep that first run available until the series has started successfully.
 
 Each component pattern in a boundary must expand to the same number of files. NF2 pairs files by sorted order, so use filenames that sort chronologically and consistently across components.
+
+The example series configs use `check_val_every_n_epoch: 10`, so validation callbacks and W&B validation logging run every 10th dataset. The per-step `.nf2` result files are still saved at the end of every training epoch/dataset.
 
 Multi-height extrapolations can be used as series runs when all boundary heights provide matching file sequences. First create the single-run meta path from one complete multi-height extrapolation, then start the full multi-height series with glob patterns for every photospheric and chromospheric component.
 
@@ -89,7 +91,7 @@ import nf2
 nf2.run_series(
     path="./runs/multi_height_series",
     work_path="./runs/multi_height_series/work",
-    meta_path="./runs/multi_height_initial/extrapolation_result.nf2",
+    meta_path="./runs/multi_height_initial/last.ckpt",
     data={
         "geometry": "cartesian",
         "boundaries": [
@@ -108,7 +110,7 @@ nf2.run_series(
         ],
         "z_range": [0, 100],
     },
-    training={"reload_dataloaders_every_n_epochs": 1},
+    training={"reload_dataloaders_every_n_epochs": 1, "check_val_every_n_epoch": 10},
 )
 ```
 

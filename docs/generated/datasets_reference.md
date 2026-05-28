@@ -169,8 +169,8 @@ Role: spherical sampler.
 | radial_sampling_exponent | float | 1 | Bias radial samples when greater than 1. |
 | latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
 | longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
-| length | int \| null | 1 | Number of sampler batches. |
-| requires_jacobian | bool | true | Required for force-free, potential-top, and energy-gradient losses. |
+| length | int \| null | data.iterations | Internal sampler length; public YAML should usually use data.iterations. |
+| requires_jacobian | bool | true | Required for force-free, potential, and energy-gradient losses. |
 
 ## `sphere`
 

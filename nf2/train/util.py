@@ -1,6 +1,25 @@
 import yaml
+import warnings
 
 from nf2.train.config import normalize_config
+
+
+def suppress_runtime_warnings():
+    import torch
+
+    setter = getattr(torch.autograd.graph, "set_warn_on_accumulate_grad_stream_mismatch", None)
+    if setter is not None:
+        setter(False)
+    warnings.filterwarnings(
+        "ignore",
+        message=r"`isinstance\(treespec, LeafSpec\)` is deprecated.*",
+        category=UserWarning,
+        module=r"lightning\.pytorch\.utilities\._pytree",
+    )
+
+
+def suppress_accumulate_grad_stream_warning():
+    suppress_runtime_warnings()
 
 
 def load_yaml_config(yaml_config_file, overwrite_args=None):

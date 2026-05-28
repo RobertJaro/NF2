@@ -27,7 +27,13 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | data.potential_boundary | dict | FFT potential | Cartesian potential boundary data. Use type: none to disable. |
 | data.z_range | list[float] | loader default | Cartesian height range in Mm where supported by the loader. |
 | data.max_radius | float | loader default | Spherical outer radius in solar radii where supported by the loader. |
-| data.iterations | int | loader default | Number of random sampler batches for Cartesian training. |
+| data.iterations | int | loader default | Number of random sampler batches per epoch-like pass. |
+| data.num_workers | int | 4 | Default PyTorch DataLoader workers for training and validation loaders. |
+| data.train_num_workers | int | data.num_workers | PyTorch DataLoader workers for training loaders. |
+| data.validation_num_workers | int | data.num_workers | PyTorch DataLoader workers for validation loaders. |
+| data.prefetch_factor | int | 5 | Training DataLoader prefetch factor when workers are enabled. |
+| data.persistent_workers | bool | true | Keep training DataLoader workers alive while a loader is active. |
+| data.preload_data_modules | bool | true | For series runs, preload all step data modules up front instead of loading each step lazily. |
 
 ## Model
 
@@ -48,6 +54,8 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | training.optimizer.start | float | 5e-4 | Initial learning rate. |
 | training.optimizer.end | float | 5e-5 | Final learning rate. |
 | training.optimizer.iterations | int | 100000 | Learning-rate schedule length. |
+| training.reload_dataloaders_every_n_epochs | int | 1 for series | Series cadence for advancing to the next dataset. |
+| training.check_val_every_n_epoch | int | 1 | Lightning validation cadence. Series examples use 10 to validate every 10th dataset. |
 | training.trainer | dict | {} | Additional Lightning Trainer keyword arguments. |
 
 ## Losses And Scaling
@@ -65,4 +73,5 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | callbacks | list[dict] | geometry default | Validation plots and metrics logged during training. |
+| callbacks[].plot | bool | true | For plotting callbacks, set false to keep scalar metrics but skip image rendering/logging. |
 | transforms | list[dict] | [] | Optional coordinate/field transforms applied to datasets. |

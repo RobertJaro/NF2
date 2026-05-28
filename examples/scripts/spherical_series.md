@@ -1,8 +1,8 @@
 # Spherical Series Runs
 
-NF2 can run spherical sequences when the spherical boundary file entries are glob patterns or file lists. The repository currently ships a single-run spherical template, `examples/configs/spherical/full_disk_synoptic.yaml`; adapt it for a series by using glob patterns that match one full-disk and synoptic set per time step.
+NF2 can run spherical sequences when the spherical boundary file entries are glob patterns or file lists. Use `examples/configs/spherical/hmi_full_disk.yaml` for the initial extrapolation and `examples/configs/spherical/hmi_full_disk_series.yaml` for the sequence.
 
-As with Cartesian series, a spherical series needs a completed first extrapolation as `meta_path`.
+As with Cartesian series, a spherical series needs the completed first extrapolation's `last.ckpt` as `meta_path`.
 
 ## 1. Run The First Spherical Extrapolation
 
@@ -10,9 +10,11 @@ Use the single-run guide in [spherical.md](spherical.md) for the first time step
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/spherical/full_disk_synoptic.yaml" \
+  --config "examples/configs/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_initial" \
   --work_path "./runs/spherical_initial/work" \
+  --wandb_project "nf2" \
+  --run_name "Spherical HMI initial" \
   --full_disk_Br "./data/hmi_spherical/full_disk/20240510_000000.Br.fits" \
   --full_disk_Bt "./data/hmi_spherical/full_disk/20240510_000000.Bt.fits" \
   --full_disk_Bp "./data/hmi_spherical/full_disk/20240510_000000.Bp.fits" \
@@ -24,42 +26,33 @@ nf2-extrapolate \
   --synoptic_Bp "./data/hmi_spherical/synoptic/2283.Bp.fits"
 ```
 
-## 2. Create A Series Config
+## 2. Use The Series Config
 
-Copy the spherical config and replace each single file placeholder with a glob placeholder, for example:
+Use the series config directly and fill its placeholders from the command line. Every glob must match either one shared file or the same number of time steps as the other series components.
 
-```yaml
-path: ./runs/spherical_series
-work_path: ./runs/spherical_series/work
-meta_path: ./runs/spherical_initial/extrapolation_result.nf2
-data:
-  geometry: spherical
-  boundaries:
-    - id: full_disk
-      type: map
-      files:
-        Br: ./data/hmi_spherical/full_disk/*.Br.fits
-        Bt: ./data/hmi_spherical/full_disk/*.Bt.fits
-        Bp: ./data/hmi_spherical/full_disk/*.Bp.fits
-      errors:
-        Br_err: ./data/hmi_spherical/full_disk/*.Br_err.fits
-        Bt_err: ./data/hmi_spherical/full_disk/*.Bt_err.fits
-        Bp_err: ./data/hmi_spherical/full_disk/*.Bp_err.fits
-    - id: synoptic
-      type: map
-      files:
-        Br: ./data/hmi_spherical/synoptic/*.Br.fits
-        Bt: ./data/hmi_spherical/synoptic/*.Bt.fits
-        Bp: ./data/hmi_spherical/synoptic/*.Bp.fits
-```
-
-Every glob must match either one shared file or the same number of time steps as the other series components.
+The series template validates and logs every 10th dataset by default while still saving one `.nf2` file per dataset.
 
 ## 3. Run The Series
 
 ```bash
 nf2-extrapolate-series \
-  --config "./my_spherical_series.yaml"
+  --config "examples/configs/spherical/hmi_full_disk_series.yaml" \
+  --run_path "./runs/spherical_series" \
+  --work_path "./runs/spherical_series/work" \
+  --meta_path "./runs/spherical_initial/last.ckpt" \
+  --wandb_project "nf2" \
+  --run_name "Spherical HMI series" \
+  --full_disk_Br_pattern "./data/hmi_spherical/full_disk/*.Br.fits" \
+  --full_disk_Bt_pattern "./data/hmi_spherical/full_disk/*.Bt.fits" \
+  --full_disk_Bp_pattern "./data/hmi_spherical/full_disk/*.Bp.fits" \
+  --full_disk_Br_err_pattern "./data/hmi_spherical/full_disk/*.Br_err.fits" \
+  --full_disk_Bt_err_pattern "./data/hmi_spherical/full_disk/*.Bt_err.fits" \
+  --full_disk_Bp_err_pattern "./data/hmi_spherical/full_disk/*.Bp_err.fits" \
+  --synoptic_Br_pattern "./data/hmi_spherical/synoptic/*.Br.fits" \
+  --synoptic_Bt_pattern "./data/hmi_spherical/synoptic/*.Bt.fits" \
+  --synoptic_Bp_pattern "./data/hmi_spherical/synoptic/*.Bp.fits" \
+  --full_disk_Br "./data/hmi_spherical/full_disk/20240510_000000.Br.fits" \
+  --fits_reference_Br "./data/hmi_spherical/reference/20240510_000000.Br.fits"
 ```
 
 ## 4. Export The Series

@@ -63,7 +63,7 @@ nf2-extrapolate \
   --chromosphere_B_azi "./data/multi_height/chromosphere/20240101_000000_B_azi.fits"
 ```
 
-Keep this first multi-height run if you plan to start a series. Its `extrapolation_result.nf2` becomes the `meta_path` for the series run.
+Keep this first multi-height run if you plan to start a series. Its `last.ckpt` becomes the `meta_path` for the series run.
 
 ## Common Adjustments
 

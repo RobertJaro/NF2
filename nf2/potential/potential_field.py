@@ -5,6 +5,8 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 
+from nf2.loader.base import DEFAULT_NUM_WORKERS
+
 
 class PotentialModel(nn.Module):
 
@@ -45,7 +47,7 @@ def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True
 
         coords = torch.tensor(coords, dtype=torch.float32)
         potential = []
-        loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=8)
+        loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=min(8, DEFAULT_NUM_WORKERS))
         it = tqdm(loader, desc='Potential Field') if progress else loader
         for coord, in it:
             coord = coord.to(device)
@@ -115,7 +117,7 @@ def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
         flat_coords = torch.tensor(flat_coords, dtype=torch.float32, )
 
         potential = []
-        iter = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=2)
+        iter = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=min(2, DEFAULT_NUM_WORKERS))
         iter = iter if progress else tqdm(iter, desc='Potential Field')
         for coord, in iter:
             coord = coord.to(device)

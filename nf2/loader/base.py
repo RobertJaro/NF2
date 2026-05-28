@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 from astropy.nddata import block_reduce
 from astropy.wcs import WCS
@@ -9,6 +7,9 @@ from torch.utils.data import DataLoader, Dataset
 
 from nf2.data.dataset import IndexedDataset, TensorsDataset
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
+
+
+DEFAULT_NUM_WORKERS = 4
 
 
 class RequiresJacobianDataset(Dataset):
@@ -30,7 +31,9 @@ class RequiresJacobianDataset(Dataset):
 
 class BaseDataModule(LightningDataModule):
 
-    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None):
+    def __init__(self, training_datasets, validation_datasets, module_config, num_workers=None,
+                 train_num_workers=None, validation_num_workers=None,
+                 persistent_workers=True, prefetch_factor=5):
         super().__init__()
         self.training_datasets = training_datasets
         self.validation_datasets = validation_datasets
@@ -51,7 +54,24 @@ class BaseDataModule(LightningDataModule):
             },
         }
         self.validation_dataset_mapping = {i: name for i, name in enumerate(self.validation_datasets.keys())}
-        self.num_workers = num_workers if num_workers is not None else os.cpu_count()
+        self.num_workers = num_workers if num_workers is not None else DEFAULT_NUM_WORKERS
+        self.train_num_workers = self.num_workers if train_num_workers is None else train_num_workers
+        self.validation_num_workers = self.num_workers if validation_num_workers is None else validation_num_workers
+        self.persistent_workers = persistent_workers
+        self.prefetch_factor = prefetch_factor
+
+    def _loader_kwargs(self, num_workers, shuffle=False, persistent_workers=False, prefetch_factor=None):
+        kwargs = {
+            'batch_size': None,
+            'num_workers': int(num_workers),
+            'pin_memory': False,
+            'shuffle': shuffle,
+        }
+        if kwargs['num_workers'] > 0:
+            kwargs['persistent_workers'] = bool(persistent_workers)
+            if prefetch_factor is not None:
+                kwargs['prefetch_factor'] = int(prefetch_factor)
+        return kwargs
 
     @classmethod
     def _dataset_metadata(cls, name, dataset):
@@ -67,6 +87,8 @@ class BaseDataModule(LightningDataModule):
             'coords_shape',
             'coord_range',
             'radius_range',
+            'cartesian_radius_range',
+            'coord_scale',
             'colatitude_range',
             'longitude_range',
             'ds_per_pixel',
@@ -116,8 +138,10 @@ class BaseDataModule(LightningDataModule):
             name: RequiresJacobianDataset(ds)
             for name, ds in self.training_datasets.items()
         }
-        loaders = {name: DataLoader(ds, batch_size=None, num_workers=self.num_workers,
-                                    pin_memory=False, shuffle=True, persistent_workers=True, prefetch_factor=5)
+        loaders = {name: DataLoader(ds, **self._loader_kwargs(
+                                    self.train_num_workers, shuffle=True,
+                                    persistent_workers=self.persistent_workers,
+                                    prefetch_factor=self.prefetch_factor))
                    for name, ds in datasets.items()}
         return CombinedLoader(loaders, 'max_size_cycle')
 
@@ -127,8 +151,7 @@ class BaseDataModule(LightningDataModule):
         for dataset in datasets.values():
             # add dataset wrapper for indexing
             dataset = IndexedDataset(dataset)
-            loader = DataLoader(dataset, batch_size=None, num_workers=self.num_workers, pin_memory=False,
-                                shuffle=False)
+            loader = DataLoader(dataset, **self._loader_kwargs(self.validation_num_workers, shuffle=False))
             loaders.append(loader)
         return loaders
 

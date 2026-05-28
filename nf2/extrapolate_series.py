@@ -17,7 +17,7 @@ from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.train.callback import AdvanceDatamoduleStep
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
-from nf2.train.util import load_yaml_config
+from nf2.train.util import load_yaml_config, suppress_accumulate_grad_stream_warning
 
 
 def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
@@ -38,6 +38,8 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
         training: Dictionary with the training configuration.
         config: Dictionary with the configuration for the simulation.
     """
+    suppress_accumulate_grad_stream_warning()
+
     callbacks = [] if callbacks is None else callbacks
     logging = {} if logging is None else logging
     model = {} if model is None else model
@@ -120,6 +122,7 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
                    'model': model, 'training': training, 'config': config, 'losses': losses,
                    'transforms': transforms, 'loss_scaling': loss_scaling, 'callbacks': callbacks,
                    'meta_path': meta_path}
+    # Save every training epoch/dataset, independent of the validation cadence.
     save_callback = LambdaCallback(
         on_train_epoch_end=lambda *args:
         save(os.path.join(path, data_module.current_id + '.nf2'),

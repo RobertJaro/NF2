@@ -293,11 +293,6 @@ class BoundaryLoss(BaseLoss):
         b_err = b_err if b_err is not None else torch.zeros_like(b_true)
         b_diff = torch.clip(torch.abs(transformed_b - b_true) - b_err, 0)
         b_diff = torch.einsum('...i,i->...', b_diff.pow(2), self.weights_buffer)
-        # if weights is not None:
-        #     weights = weights.reshape(-1).to(b_diff)
-        #     weighted_sum = (b_diff * weights).sum()
-        #     weight_sum = weights.sum().clamp_min(1e-7)
-        #     return weighted_sum / weight_sum
         return b_diff
 
 
@@ -322,8 +317,7 @@ class HeightLoss(BaseLoss):
 class MinHeightLoss(BaseLoss):
 
     def forward(self, coords, *args, **kwargs):
-        min_height_regularization = coords[:, 2].pow(2)  # torch.abs(coords[:, 2])
-        # min_height_regularization = min_height_regularization / (torch.norm(b_true, dim=-1) + 1e-7)
+        min_height_regularization = coords[:, 2].pow(2)
         return min_height_regularization
 
 # mapping

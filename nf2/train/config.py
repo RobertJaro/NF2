@@ -21,6 +21,7 @@ def normalize_config(config: dict) -> dict:
     model = _normalize_model(config.pop("model", None), data["type"])
     losses = _normalize_losses(config.pop("losses", None), data["type"], data)
     callbacks = _normalize_callbacks(config.pop("callbacks", None), data["type"], data)
+    _validate_callback_refs(callbacks, data)
 
     normalized = {
         "path": path,
@@ -129,6 +130,7 @@ def _normalize_spherical_data(data):
     normalization = data.pop("normalization", {})
     mm_per_ds = normalization.pop("Mm_per_ds", data.pop("Mm_per_ds", 100))
     g_per_db = normalization.pop("Gauss_per_dB", data.pop("Gauss_per_dB", 1000))
+    iterations = data.pop("iterations", None)
 
     boundaries = [_normalize_dataset_config(b, role="boundary") for b in _as_list(data.pop("boundaries", []))]
     samplers = [_normalize_dataset_config(s, role="sampler") for s in _as_list(data.pop("samplers", []))]
@@ -136,6 +138,10 @@ def _normalize_spherical_data(data):
         raise ValueError("Spherical configs require data.boundaries with at least one boundary dataset.")
     if not samplers:
         samplers = [_normalize_dataset_config({"id": "random", "type": "random_radial_grouped"}, role="sampler")]
+    if iterations is not None:
+        for sampler in samplers:
+            if sampler.get("type") in {"random_spherical", "random_radial_grouped"}:
+                sampler.setdefault("length", iterations)
 
     validation = data.pop("validation", None)
     if validation is None:
@@ -210,7 +216,7 @@ def _default_losses(geometry, data):
     boundary_ids = [cfg["id"] for cfg in data["boundaries"] if cfg["type"] == "map"]
     losses = [
         {"type": "force_free", "name": "force_free", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": ["random"]},
-        {"type": "potential_top", "name": "potential_top", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": ["random"]},
+        {"type": "potential", "name": "potential", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": ["random"]},
     ]
     if boundary_ids:
         losses.insert(0, {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": boundary_ids})
@@ -218,7 +224,7 @@ def _default_losses(geometry, data):
 
 
 def _default_loss_scaling(geometry, losses):
-    loss_ids = [loss.get("name", loss["type"]) for loss in losses if loss.get("type") in {"force_free", "potential", "potential_top", "energy_gradient"}]
+    loss_ids = [loss.get("name", loss["type"]) for loss in losses if loss.get("type") in {"force_free", "potential", "energy_gradient"}]
     if not loss_ids:
         return []
     if geometry == "cartesian":
@@ -235,6 +241,24 @@ def _normalize_callbacks(callbacks, geometry, data):
             callback["ds_id"] = callback.pop("dataset")
         normalized.append(callback)
     return normalized
+
+
+def _validate_callback_refs(callbacks, data):
+    validation_ids = _validation_ids(data)
+    for callback in callbacks:
+        ds_id = callback.get("ds_id")
+        if ds_id is None or ds_id in validation_ids:
+            continue
+        raise ValueError(
+            f"Callback dataset '{ds_id}' is not defined in data.validation. "
+            f"Available validation datasets: {sorted(validation_ids)}"
+        )
+
+
+def _validation_ids(data):
+    if data["type"] == "cartesian" and "validation" not in data:
+        return {cfg["id"] for cfg in data["boundaries"]} | {"cube", "slices"}
+    return {cfg["id"] for cfg in data.get("validation", [])}
 
 
 def _default_callbacks(geometry, data):
@@ -258,6 +282,10 @@ def _default_callbacks(geometry, data):
 
 def _normalize_dataset_config(config, role):
     config = deepcopy(config)
+    if role == "sampler" and "iterations" in config:
+        if "length" in config:
+            raise ValueError("Sampler keys 'length' and 'iterations' are both set. Use data.iterations.")
+        config["length"] = config.pop("iterations")
     if "dataset" in config:
         config["id"] = config.pop("dataset")
     if "files" in config and config.get("type") in {"fits", "sharp", "los_trv_azi", "los", "fld_inc_azi"}:

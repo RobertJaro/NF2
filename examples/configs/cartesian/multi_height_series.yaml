@@ -41,6 +41,7 @@ data:
   z_range: [0, 100]
 training:
   reload_dataloaders_every_n_epochs: 1
+  check_val_every_n_epoch: 10
 losses:
   - type: boundary_los_trv_azi
     name: boundary
@@ -57,7 +58,7 @@ losses:
     datasets: [random]
   - type: potential
     name: potential
-    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    weight: 0.0
     datasets: [random]
   - type: height
     name: height
