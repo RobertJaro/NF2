@@ -22,6 +22,7 @@ release = "0.4.0"
 
 extensions = [
     "myst_parser",
+    "sphinxext.opengraph",
     "sphinx.ext.autodoc",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
@@ -39,10 +40,17 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
+html_logo = "_static/logo.jpg"
+html_favicon = "_static/logo.jpg"
 html_theme_options = {
     "github_url": "https://github.com/RobertJaro/NF2",
     "show_toc_level": 2,
 }
+
+ogp_site_url = "https://nf2.readthedocs.io/en/latest/"
+ogp_site_name = "NF2"
+ogp_image = "https://raw.githubusercontent.com/RobertJaro/NF2/main/images/logo.jpg"
+ogp_type = "website"
 
 autodoc_member_order = "bysource"
 autodoc_typehints = "description"
