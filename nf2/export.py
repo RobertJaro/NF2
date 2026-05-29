@@ -32,6 +32,10 @@ def export_file(
     metrics: list[str] | None = None,
     x_range: list[float] | None = None,
     y_range: list[float] | None = None,
+    radius_range: list[float] | None = None,
+    latitude_range: list[float] | None = None,
+    longitude_range: list[float] | None = None,
+    pixels_per_solRad: int = 64,
     progress: bool = True,
 ):
     """Export one NF2 file to a supported exchange format.
@@ -47,6 +51,9 @@ def export_file(
         ``height`` for multi-height surface mappings.
     Mm_per_pixel, height_range, x_range, y_range:
         Cartesian sampling controls in megameters.
+    radius_range, latitude_range, longitude_range, pixels_per_solRad:
+        Spherical VTK sampling controls. Radius is in solar radii; angles are
+        in degrees.
     metrics:
         Derived quantities to include, such as ``j``, ``alpha``, or
         ``free_energy_fft``.
@@ -64,6 +71,10 @@ def export_file(
                 nf2_path=nf2_path,
                 out_path=out_path,
                 metrics=metrics,
+                radius_range=radius_range,
+                latitude_range=latitude_range,
+                longitude_range=longitude_range,
+                pixels_per_solRad=pixels_per_solRad,
                 progress=progress,
             )
 
@@ -170,12 +181,20 @@ def main():
     )
     parser.add_argument("--out", help="Output file for a single input")
     parser.add_argument("--out-dir", help="Output directory for multiple inputs")
-    parser.add_argument("--Mm_per_pixel", type=float, default=None)
-    parser.add_argument("--height_range", type=float, nargs=2, default=None)
-    parser.add_argument("--x_range", type=float, nargs=2, default=None)
-    parser.add_argument("--y_range", type=float, nargs=2, default=None)
     parser.add_argument("--metrics", nargs="*", default=["j"])
     parser.add_argument("--overwrite", action="store_true")
+
+    cartesian = parser.add_argument_group("Cartesian sampling")
+    cartesian.add_argument("--Mm_per_pixel", type=float, default=None)
+    cartesian.add_argument("--height_range", type=float, nargs=2, default=None)
+    cartesian.add_argument("--x_range", type=float, nargs=2, default=None)
+    cartesian.add_argument("--y_range", type=float, nargs=2, default=None)
+
+    spherical = parser.add_argument_group("Spherical VTK sampling")
+    spherical.add_argument("--radius_range", type=float, nargs=2, default=None)
+    spherical.add_argument("--latitude_range", type=float, nargs=2, default=None)
+    spherical.add_argument("--longitude_range", type=float, nargs=2, default=None)
+    spherical.add_argument("--pixels_per_solRad", type=int, default=64)
     args = parser.parse_args()
 
     matched = [path for pattern in args.nf2_path for path in sorted(glob.glob(pattern))]
@@ -189,6 +208,10 @@ def main():
             metrics=args.metrics,
             x_range=args.x_range,
             y_range=args.y_range,
+            radius_range=args.radius_range,
+            latitude_range=args.latitude_range,
+            longitude_range=args.longitude_range,
+            pixels_per_solRad=args.pixels_per_solRad,
         )
         return
 
@@ -203,6 +226,10 @@ def main():
         metrics=args.metrics,
         x_range=args.x_range,
         y_range=args.y_range,
+        radius_range=args.radius_range,
+        latitude_range=args.latitude_range,
+        longitude_range=args.longitude_range,
+        pixels_per_solRad=args.pixels_per_solRad,
     )
 
 

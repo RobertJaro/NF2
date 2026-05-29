@@ -28,12 +28,13 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | data.z_range | list[float] | loader default | Cartesian height range in Mm where supported by the loader. |
 | data.max_radius | float | loader default | Spherical outer radius in solar radii where supported by the loader. |
 | data.iterations | int | loader default | Number of random sampler batches per epoch-like pass. |
-| data.num_workers | int | 4 | Default PyTorch DataLoader workers for training and validation loaders. |
+| data.num_workers | int | 4 | Default PyTorch DataLoader workers for training and validation loaders. Series preloading uses this value unless data.data_module_workers is set. |
 | data.train_num_workers | int | data.num_workers | PyTorch DataLoader workers for training loaders. |
 | data.validation_num_workers | int | data.num_workers | PyTorch DataLoader workers for validation loaders. |
 | data.prefetch_factor | int | 5 | Training DataLoader prefetch factor when workers are enabled. |
 | data.persistent_workers | bool | true | Keep training DataLoader workers alive while a loader is active. |
 | data.preload_data_modules | bool | true | For series runs, preload all step data modules up front instead of loading each step lazily. |
+| data.data_module_workers | int | data.num_workers | Series-only multiprocessing workers used to preload per-step data modules. |
 
 ## Model
 

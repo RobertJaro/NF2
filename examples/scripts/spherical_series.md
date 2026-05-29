@@ -28,7 +28,9 @@ nf2-extrapolate \
 
 ## 2. Use The Series Config
 
-Use the series config directly and fill its placeholders from the command line. Every glob must match either one shared file or the same number of time steps as the other series components.
+Use the series config directly and fill its `<<...>>` placeholders from the command line. Every glob must match either one shared file or the same number of time steps as the other series components.
+
+Within a spherical series config, `[[dataset.path.to.value]]` references are resolved after dataset files are expanded. For example, `[[full_disk.files.Br]]` points to the current time step's full-disk `Br` file and is not a command-line override.
 
 The series template validates and logs every 10th dataset by default while still saving one `.nf2` file per dataset.
 
@@ -51,7 +53,6 @@ nf2-extrapolate-series \
   --synoptic_Br_pattern "./data/hmi_spherical/synoptic/*.Br.fits" \
   --synoptic_Bt_pattern "./data/hmi_spherical/synoptic/*.Bt.fits" \
   --synoptic_Bp_pattern "./data/hmi_spherical/synoptic/*.Bp.fits" \
-  --full_disk_Br "./data/hmi_spherical/full_disk/20240510_000000.Br.fits" \
   --fits_reference_Br "./data/hmi_spherical/reference/20240510_000000.Br.fits"
 ```
 

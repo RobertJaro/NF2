@@ -119,7 +119,22 @@ nf2-extrapolate-series \
   --chromosphere_B_azi_pattern "./data/multi_height/chromosphere/*B_azi.fits"
 ```
 
-If filename sorting is not enough to pair time steps correctly, use list notation in a local YAML config instead of glob placeholders. Each list item is one time step, and every boundary list must have the same number of items:
+If filename sorting is not enough to pair time steps correctly, use list notation in a local YAML config instead of glob placeholders. You can either put one list on each component key or make each list item one complete time step. Every component and every boundary height must have the same number of items:
+
+```yaml
+files:
+  B_los:
+    - ./data/multi_height/photosphere/20240101_000000_B_los.fits
+    - ./data/multi_height/photosphere/20240101_001200_B_los.fits
+  B_trv:
+    - ./data/multi_height/photosphere/20240101_000000_B_trv.fits
+    - ./data/multi_height/photosphere/20240101_001200_B_trv.fits
+  B_azi:
+    - ./data/multi_height/photosphere/20240101_000000_B_azi.fits
+    - ./data/multi_height/photosphere/20240101_001200_B_azi.fits
+```
+
+The equivalent per-time-step form is:
 
 ```yaml
 path: ./runs/multi_height_series

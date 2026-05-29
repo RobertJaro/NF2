@@ -77,6 +77,8 @@ nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
 
 This is useful when the same example config should run on different file systems.
 
+Spherical series configs use a separate `[[dataset.path.to.value]]` notation for values resolved during dataset loading. For example, `[[full_disk.files.Br]]` points to the current expanded full-disk `Br` file and is not filled from the command line.
+
 ## Data
 
 `data.geometry` is required and must be `cartesian` or `spherical`.

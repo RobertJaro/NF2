@@ -2,7 +2,7 @@
 
 This directory collects runnable NF2 examples for command-line runs, YAML configuration templates, and notebooks. The examples are intended to be copied, edited, and reused with local data paths.
 
-Most YAML files use `<<...>>` placeholders so one template can be reused with different input files, scratch paths, and output directories. The placeholders can be filled from the command line with `nf2-extrapolate` or replaced directly in a local copy of the YAML file.
+Most YAML files use `<<...>>` placeholders so one template can be reused with different input files, scratch paths, and output directories. The placeholders can be filled from the command line with `nf2-extrapolate` or replaced directly in a local copy of the YAML file. Spherical series configs can also use `[[dataset.path.to.value]]` references for values resolved during dataset loading, such as the current time step's `[[full_disk.files.Br]]`.
 
 Start from the repository root:
 

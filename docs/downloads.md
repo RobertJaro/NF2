@@ -18,6 +18,14 @@ nf2-download \
 ```
 
 Use `--noaa_num` instead of `--sharp_num` when the NOAA active-region number should be resolved through JSOC metadata.
+To inspect the mapping directly, use `nf2-noaa-to-sharp`:
+
+```bash
+nf2-noaa-to-sharp \
+  --time 2011-02-15T00:00:00 \
+  --email "you@example.org" \
+  --noaa_nums 11158
+```
 
 ## HMI Full Disk
 

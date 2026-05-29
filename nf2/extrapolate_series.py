@@ -20,8 +20,25 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import load_yaml_config, suppress_accumulate_grad_stream_warning
 
 
+def _is_lightning_checkpoint(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    if 'state_dict' not in checkpoint or 'optimizer_states' not in checkpoint:
+        return False
+    return True
+
+
+def _reset_checkpoint_progress(checkpoint_path, output_path):
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    checkpoint['epoch'] = 0
+    checkpoint['global_step'] = 0
+    checkpoint.pop('loops', None)
+    checkpoint.pop('callbacks', None)
+    torch.save(checkpoint, output_path)
+    return output_path
+
+
 def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
-        transforms=None, loss_scaling=None, config=None):
+        transforms=None, loss_scaling=None, config=None, reload=False):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -33,6 +50,7 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
         data: Dictionary with the data loader configuration.
         meta_path: Path to the initial model checkpoint (run extrapolation first).
         work_path: Path to the directory where the data is stored. If None, the path is used.
+        reload: Rebuild and overwrite any saved data module state in work_path.
         logging: Dictionary with the logging configuration.
         model: Dictionary with the model configuration.
         training: Dictionary with the training configuration.
@@ -82,14 +100,27 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     ckpts = sorted(glob.glob(os.path.join(path, '*.nf2')))
     current_step = len(ckpts)
     last_ckpt_path = os.path.join(path, 'last.ckpt')
-    ckpt_path = last_ckpt_path if os.path.exists(last_ckpt_path) else None
-    meta_state_path = None if ckpt_path is not None else meta_path
+    resume_series_checkpoint = os.path.exists(last_ckpt_path)
+    if resume_series_checkpoint:
+        ckpt_path = last_ckpt_path
+        meta_state_path = None
+    else:
+        if _is_lightning_checkpoint(meta_path):
+            ckpt_path = _reset_checkpoint_progress(meta_path, os.path.join(work_path, 'series_initial.ckpt'))
+        else:
+            ckpt_path = None
+        meta_state_path = None if ckpt_path is not None else meta_path
 
     # initialize data module
     data_module_save_path = os.path.join(work_path, 'data_module.pkl')
 
     @rank_zero_only
     def _init_data_module():
+        if os.path.exists(data_module_save_path) and not reload:
+            print(f'Using saved data module state: {data_module_save_path}')
+            return
+        if os.path.exists(data_module_save_path) and reload:
+            print(f'Reloading data module state: {data_module_save_path}')
         data_module_config = deepcopy(data_runtime)
         assert 'type' in data_module_config, 'Data module type must be specified in the configuration'
         data_module_type = data_module_config.pop('type')
@@ -104,6 +135,9 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     _init_data_module()
     # load data module for all ranks
     data_module = torch.load(data_module_save_path, weights_only=False)
+    data_module.step = current_step
+    assert data_module.step < data_module.total_steps, \
+        'Not enough data files found to continue training. Training completed or configuration is incorrect.'
 
     callback_modules = load_callbacks(callbacks, data_module)
 
@@ -114,8 +148,8 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
 
     reload_dataloaders_interval = training[
         'reload_dataloaders_every_n_epochs'] if 'reload_dataloaders_every_n_epochs' in training else 1
-    max_epochs = data_module.total_steps * reload_dataloaders_interval if ckpt_path is not None else \
-        (data_module.total_steps - data_module.step) * reload_dataloaders_interval
+    remaining_epochs = (data_module.total_steps - data_module.step) * reload_dataloaders_interval
+    max_epochs = data_module.total_steps * reload_dataloaders_interval if resume_series_checkpoint else remaining_epochs
 
     # callback
     config_dict = {'path': path, 'work_path': work_path, 'logging': logging, 'data': data,
@@ -164,10 +198,14 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
+    parser.add_argument('--reload', action='store_true',
+                        help='Rebuild the saved series data module state even if work_path/data_module.pkl exists.')
     args, overwrite_args = parser.parse_known_args()
 
     yaml_config_file = args.config
     config = load_yaml_config(yaml_config_file, overwrite_args)
+    if args.reload:
+        config['reload'] = True
 
     run(**config)
 

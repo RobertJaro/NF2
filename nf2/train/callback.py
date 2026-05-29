@@ -896,6 +896,7 @@ class AdvanceDatamoduleStep(Callback):
         # assures that train epoch start is called at least once before we start advancing steps
         # avoids errors for continued training from an interrupted checkpoint
         self.initialized = False
+        self.epochs_since_advance = 0
 
     def on_train_epoch_start(self, trainer, pl_module):
         self._print_step()
@@ -909,9 +910,10 @@ class AdvanceDatamoduleStep(Callback):
     def on_train_epoch_end(self, trainer, pl_module):
         if not self.initialized:
             return
-        current_epoch = trainer.current_epoch
-        if (current_epoch + 1) % self.every_n != 0:
+        self.epochs_since_advance += 1
+        if self.epochs_since_advance < self.every_n:
             return
+        self.epochs_since_advance = 0
 
         data_module = self.data_module
         data_module.step += 1

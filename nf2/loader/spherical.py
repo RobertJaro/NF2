@@ -247,7 +247,7 @@ class SphericalSeriesDataModule(LightningDataModule):
                 resolved = resolved[key]
             return str(resolved)
 
-        return re.sub(r'<<([^<>]+)>>', replace, value)
+        return re.sub(r'\[\[([^\[\]]+)\]\]', replace, value)
 
     @staticmethod
     def _files_id(files):
@@ -284,7 +284,8 @@ class SphericalSeriesDataModule(LightningDataModule):
             self._get_data_module(self.step)
             return
 
-        n_workers = data_module_workers if data_module_workers is not None else DEFAULT_NUM_WORKERS
+        n_workers = data_module_workers if data_module_workers is not None else self.kwargs.get(
+            'num_workers', DEFAULT_NUM_WORKERS)
         n_workers = max(1, min(n_workers, self.total_steps))
 
         print(f'Loading data modules... (total: {self.total_steps}, workers: {n_workers})')
@@ -331,7 +332,6 @@ class SphericalSeriesDataModule(LightningDataModule):
         return self._get_data_module(self.step).validation_dataset_mapping
 
     def train_dataloader(self):
-        print('Currently loaded:', self.current_id)
         return self._get_data_module(self.step).train_dataloader()
 
     def val_dataloader(self):

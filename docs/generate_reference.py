@@ -9,7 +9,10 @@ from nf2.reference import CLI_COMMANDS, CONFIG_OPTIONS, DATASET_KEYS, DATASET_TY
 
 def _table(headers, rows):
     def _escape(value):
-        return str(value).replace("|", "\\|")
+        text = str(value).replace("|", "\\|")
+        if text.startswith("--") or text.startswith("nf2_") or text.startswith("nf2-"):
+            return f"`{text}`"
+        return text.replace("<<", "`<<").replace(">>", ">>`")
 
     out = ["| " + " | ".join(headers) + " |", "| " + " | ".join(["---"] * len(headers)) + " |"]
     out.extend("| " + " | ".join(_escape(cell) for cell in row) + " |" for row in rows)

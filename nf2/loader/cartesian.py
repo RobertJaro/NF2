@@ -320,7 +320,8 @@ class CartesianSeriesDataModule(LightningDataModule):
             self._get_data_module(self.step)
             return
 
-        n_workers = data_module_workers if data_module_workers is not None else DEFAULT_NUM_WORKERS
+        n_workers = data_module_workers if data_module_workers is not None else self.kwargs.get(
+            'num_workers', DEFAULT_NUM_WORKERS)
         n_workers = max(1, min(n_workers, self.total_steps))
         print(f'Loading data modules... (total: {len(self.boundaries)}, workers: {n_workers})')
         self.data_modules[self.step] = _load_cartesian_data_module(
@@ -456,7 +457,7 @@ def _load_error_paths(error_path, data_type, expected_length=None):
             for key in error_keys
         }
     elif isinstance(error_path, dict):
-        error_files_by_key = {key: sorted(glob.glob(error_path[key])) for key in error_keys}
+        error_files_by_key = {key: _expand_component_files(error_path[key]) for key in error_keys}
     else:
         raise NotImplementedError(f'Unknown error path type {type(error_path)}')
     _assert_component_lengths(error_files_by_key, error_path, expected_length=expected_length)
@@ -486,12 +487,12 @@ def _load_component_paths(data_path, component_keys, error_keys):
         else:
             error_paths = None
     elif isinstance(data_path, dict):
-        files_by_key = {key: sorted(glob.glob(data_path[key])) for key in component_keys}
+        files_by_key = {key: _expand_component_files(data_path[key]) for key in component_keys}
         n_files = _assert_component_lengths(files_by_key, data_path)
         fits_paths = [{key: files_by_key[key][i] for key in component_keys} for i in range(n_files)]
 
         if error_keys and all(key in data_path for key in error_keys):
-            error_files_by_key = {key: sorted(glob.glob(data_path[key])) for key in error_keys}
+            error_files_by_key = {key: _expand_component_files(data_path[key]) for key in error_keys}
             _assert_component_lengths(error_files_by_key, data_path, expected_length=n_files)
             error_paths = [{key: error_files_by_key[key][i] for key in error_keys} for i in range(n_files)]
         else:
@@ -499,6 +500,17 @@ def _load_component_paths(data_path, component_keys, error_keys):
     else:
         raise NotImplementedError(f'Unknown data path type {type(data_path)}')
     return fits_paths, error_paths
+
+
+def _expand_component_files(value):
+    if isinstance(value, list):
+        files = []
+        for item in value:
+            files.extend(_expand_component_files(item))
+        return files
+    if isinstance(value, str):
+        return sorted(glob.glob(value))
+    raise NotImplementedError(f'Unknown component path type {type(value)}')
 
 
 def _assert_component_lengths(files_by_key, source, expected_length=None):
@@ -510,4 +522,3 @@ def _assert_component_lengths(files_by_key, source, expected_length=None):
     if expected_length == 0:
         raise AssertionError(f'No files found in data path {source}')
     return expected_length
-

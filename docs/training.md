@@ -131,6 +131,8 @@ data:
   prefetch_factor: 2
 ```
 
+For series runs, `data.num_workers` also controls the multiprocessing pool used to preload per-step data modules. Set `data.data_module_workers` only when that preload pool should differ from the PyTorch DataLoader worker count.
+
 Series configs advance to a new dataset every epoch by default. The example series configs validate every 10th dataset while still saving one `.nf2` result per dataset:
 
 ```yaml

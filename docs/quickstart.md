@@ -1,13 +1,28 @@
 # Quickstart
 
-Install NF2 and activate the environment:
+Install NF2 in a fresh Python environment:
+
+```bash
+pip install nf2
+```
+
+For a local source checkout, use the repository environment instead:
 
 ```bash
 conda env create -f environment.yml
 conda activate nf2
 ```
 
-Run a single extrapolation from a YAML configuration:
+Run a compact analytical smoke test. This does not require JSOC access or input FITS files:
+
+```bash
+nf2-extrapolate \
+  --config examples/configs/benchmark/analytical_case1.yaml \
+  --run_path ./runs/benchmark/case1 \
+  --work_path ./runs/benchmark/case1/work
+```
+
+Run a single observational extrapolation from a YAML configuration:
 
 ```bash
 nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
@@ -21,7 +36,7 @@ nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
 Run a time series:
 
 ```bash
-nf2-extrapolate-series --config path/to/series.yaml
+nf2-extrapolate-series --config examples/configs/cartesian/sharp_cea_series.yaml
 ```
 
 Load a result in Python:
@@ -29,20 +44,20 @@ Load a result in Python:
 ```python
 import nf2
 
-model = nf2.load("path/to/extrapolation_result.nf2")
+model = nf2.load("./runs/benchmark/case1/extrapolation_result.nf2")
 cube = model.load_cube(Mm_per_pixel=0.72, metrics=["j"])
 ```
 
 Export a result:
 
 ```bash
-nf2-export path/to/extrapolation_result.nf2 --format vtk --Mm_per_pixel 0.72 --metrics j alpha
+nf2-export ./runs/benchmark/case1/extrapolation_result.nf2 --format vtk --Mm_per_pixel 0.72 --metrics j alpha
 ```
 
 Print standard NLFF quality metrics:
 
 ```bash
-nf2-metrics path/to/extrapolation_result.nf2 --Mm_per_pixel 0.72 --height_range 0 80
+nf2-metrics ./runs/benchmark/case1/extrapolation_result.nf2 --Mm_per_pixel 0.05 --height_range 0 2
 ```
 
 Download an example HMI SHARP CEA magnetogram from JSOC:

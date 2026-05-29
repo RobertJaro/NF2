@@ -39,7 +39,7 @@ data:
         Bp: "<<synoptic_Bp_pattern>>"
       mask_configs:
         type: reference
-        file: "<<full_disk_Br>>"
+        file: "[[full_disk.files.Br]]"
         mu_filter:
           min: 0.2
   samplers:
