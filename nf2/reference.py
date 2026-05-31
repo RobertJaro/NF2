@@ -1,5 +1,7 @@
 """Structured reference data used by the NF2 documentation."""
 
+from nf2.evaluation.output_metrics import OUTPUT_METRICS
+
 CONFIG_OPTIONS = [
     ("path", "str", "./runs/nf2", "Directory for checkpoints, logs, and extrapolation_result.nf2."),
     ("work_path", "str | null", "path/work", "Optional scratch directory for preprocessed arrays."),
@@ -259,14 +261,15 @@ CLI_COMMANDS = [
             ("--email", "required", "JSOC export email address."),
             ("--sharp_num", "none", "HARP/SHARP number for hmi_sharp."),
             ("--noaa_num", "none", "NOAA active-region number, resolved to HARP when needed."),
-            ("--t_start", "source dependent", "Start time for hmi_sharp and hmi_full_disk."),
-            ("--t_end", "none", "Optional end time."),
+            ("--t_start", "source dependent", "Start time for hmi_sharp, hmi_full_disk, or Carrington-rotation lookup for hmi_synoptic."),
+            ("--t_end", "none", "Optional end time; for hmi_synoptic this resolves an inclusive rotation range."),
             ("--cadence", "720s", "Cadence for time-range downloads."),
             ("--series", "source default", "JSOC series override."),
             ("--segments", "source default", "Comma-separated JSOC segments."),
-            ("--carrington_rotation", "none", "Required for hmi_synoptic."),
+            ("--carrington_rotation", "none", "Carrington rotation for hmi_synoptic; alternatively provide --t_start."),
             ("--carrington_rotation_end", "same as start", "Optional inclusive final Carrington rotation."),
-            ("--include_mr_polfil", "false", "Also download hmi.synoptic_mr_polfil_720s for synoptic-map runs."),
+            ("--synoptic_product", "vector", "One of vector, mr_polfil, both for hmi_synoptic."),
+            ("--include_mr_polfil", "false", "Also download hmi.synoptic_mr_polfil_720s Mr_polfil for synoptic-map runs."),
             ("--no_convert_ptr", "false", "Disable HmiB2ptr conversion for full-disk vector data."),
             ("--keep_coordinates", "false", "Keep generated latitude/longitude files after full-disk conversion."),
         ],
@@ -322,18 +325,8 @@ CLI_COMMANDS = [
 
 
 EXPORT_METRICS = [
-    ("j", "Current-density vector."),
-    ("alpha", "Force-free alpha proxy |J| / |B|."),
-    ("b_nabla_bz", "Vertical magnetic tension-related derivative."),
-    ("energy", "Magnetic energy density."),
-    ("energy_gradient", "Cartesian magnetic-energy gradient."),
-    ("spherical_energy_gradient", "Spherical magnetic-energy gradient."),
-    ("free_energy", "Free magnetic energy density using the default potential-field method."),
-    ("free_energy_fft", "Free magnetic energy density using the Cartesian FFT potential field."),
-    ("free_energy_direct", "Free magnetic energy density using the direct potential-field method."),
-    ("magnetic_helicity", "Magnetic helicity diagnostic."),
-    ("los_trv_azi", "LOS/transverse/azimuth field components."),
-    ("squashing_factor", "Squashing factor and twist diagnostics."),
+    (metric.name, ", ".join(metric.outputs), metric.description)
+    for metric in OUTPUT_METRICS.values()
 ]
 
 

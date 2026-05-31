@@ -1,5 +1,6 @@
 import argparse
 import os
+import re
 
 from astropy.io import fits
 
@@ -14,7 +15,7 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwa
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, **kwargs)
 
     b = output['b']
-    j = output.get('j', output.get('metrics', {}).get('j'))
+    metrics = output.get('metrics', {})
 
     header = fits.Header()
     header['MM_P_PIX'] = float(output['Mm_per_pixel'])
@@ -25,8 +26,9 @@ def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwa
 
     b_hdu = fits.PrimaryHDU(b, header=header)
     hdus = [b_hdu]
-    if j is not None:
-        hdus.append(fits.ImageHDU(j, name='CURRENT_DENSITY'))
+    for name, values in metrics.items():
+        hdu_name = re.sub(r'[^A-Za-z0-9_]', '_', name).upper()
+        hdus.append(fits.ImageHDU(values, name=hdu_name))
     hdul = fits.HDUList(hdus)
     hdul.writeto(out_path)
 

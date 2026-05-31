@@ -62,9 +62,13 @@ def export_file(
     """
     fmt = _normalize_format(fmt)
     metrics = metrics if metrics is not None else ["j"]
+    geometry = _geometry(nf2_path)
+
+    if geometry == "spherical" and fmt != "vtk":
+        raise ValueError("Spherical checkpoints currently support `vtk` export only.")
 
     if fmt == "vtk":
-        if _geometry(nf2_path) == "spherical":
+        if geometry == "spherical":
             from nf2.convert.nf2_to_vtk_spherical import convert
 
             return convert(
@@ -172,6 +176,8 @@ def export_series(
 
 
 def main():
+    from nf2.evaluation.output_metrics import metric_mapping
+
     parser = argparse.ArgumentParser(description="Export NF2 extrapolation results.")
     parser.add_argument("nf2_path", nargs="+", help="NF2 file path or glob pattern")
     parser.add_argument(
@@ -181,7 +187,7 @@ def main():
     )
     parser.add_argument("--out", help="Output file for a single input")
     parser.add_argument("--out-dir", help="Output directory for multiple inputs")
-    parser.add_argument("--metrics", nargs="*", default=["j"])
+    parser.add_argument("--metrics", nargs="*", default=["j"], choices=sorted(metric_mapping))
     parser.add_argument("--overwrite", action="store_true")
 
     cartesian = parser.add_argument_group("Cartesian sampling")

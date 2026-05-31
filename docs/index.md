@@ -26,8 +26,6 @@ Use the reference pages when you need exact configuration keys, command-line opt
 - [Reference](reference.md) groups the API, YAML, dataset, CLI, and export references.
 - [Publications](publications.md) lists method and application papers.
 
-## Contents
-
 ```{toctree}
 :maxdepth: 2
 :caption: Contents

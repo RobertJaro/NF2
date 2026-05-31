@@ -287,7 +287,7 @@ def _normalize_dataset_config(config, role):
     if "errors" in config:
         errors = config.pop("errors")
         if config.get("type") == "map":
-            config.setdefault("files", {}).update(errors)
+            _merge_map_errors(config, errors)
         else:
             config["error_path"] = errors
     if role in {"boundary", "validation", "sampler"} and "id" not in config:
@@ -298,6 +298,60 @@ def _normalize_dataset_config(config, role):
         else:
             config["id"] = f"valid_{config['type']}"
     return config
+
+
+def _merge_map_errors(config, errors):
+    files = config.setdefault("files", {})
+    if isinstance(files, dict):
+        files.update(errors)
+        return
+    if isinstance(files, list):
+        config["files"] = _merge_map_error_series(files, errors)
+        return
+    raise ValueError("Map dataset 'files' must be a mapping or a list of mappings when 'errors' is set.")
+
+
+def _merge_map_error_series(files, errors):
+    if isinstance(errors, list):
+        if len(errors) not in {1, len(files)}:
+            raise ValueError(
+                f"Map dataset 'errors' list length must be 1 or match 'files' length "
+                f"({len(files)}); got {len(errors)}."
+            )
+        return [
+            _merge_map_file_entry(file_config, errors[i if len(errors) > 1 else 0])
+            for i, file_config in enumerate(files)
+        ]
+    if isinstance(errors, dict):
+        series_lengths = [len(value) for value in errors.values() if isinstance(value, list)]
+        if not series_lengths:
+            return [_merge_map_file_entry(file_config, errors) for file_config in files]
+        if not all(length in {1, len(files)} for length in series_lengths):
+            raise ValueError(
+                f"Map dataset 'errors' component list lengths must be 1 or match 'files' length "
+                f"({len(files)}); got {series_lengths}."
+            )
+        return [
+            _merge_map_file_entry(
+                file_config,
+                {
+                    key: value[i if isinstance(value, list) and len(value) > 1 else 0]
+                    if isinstance(value, list)
+                    else value
+                    for key, value in errors.items()
+                },
+            )
+            for i, file_config in enumerate(files)
+        ]
+    raise ValueError("Map dataset 'errors' must be a mapping or a list when 'files' is a list.")
+
+
+def _merge_map_file_entry(file_config, errors):
+    if not isinstance(file_config, dict):
+        raise ValueError("Map dataset 'files' list entries must be mappings when 'errors' is set.")
+    if not isinstance(errors, dict):
+        raise ValueError("Map dataset 'errors' list entries must be mappings.")
+    return {**file_config, **errors}
 
 
 def _normalize_sampler(config):

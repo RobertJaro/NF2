@@ -3,7 +3,7 @@ import os.path
 from threading import Thread
 
 from nf2.evaluation.output import CartesianOutput
-from nf2.evaluation.vtk import save_vtk
+from nf2.evaluation.vtk import save_vtk, split_vectors_scalars
 
 
 class _SaveFileTask(Thread):
@@ -17,10 +17,7 @@ class _SaveFileTask(Thread):
     def run(self):
         Mm_per_pixel = self.output['Mm_per_pixel']
 
-        # split output into vectors and scalars
-        vectors = {k: v for k, v in self.output['metrics'].items() if len(v.shape) == 4 and v.shape[-1] == 3}
-        scalars = {k: v for k, v in self.output['metrics'].items() if len(v.shape) == 3}
-
+        vectors, scalars = split_vectors_scalars(self.output['metrics'])
         vectors['b'] = self.output['b']
 
         save_vtk(self.out_path, coords=self.output['coords'], vectors=vectors, scalars=scalars, Mm_per_pix=Mm_per_pixel)

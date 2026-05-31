@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import math
 import os
 
 import drms
@@ -12,6 +13,7 @@ from dateutil.parser import parse
 
 DEFAULT_SHARP_SEGMENTS = "Br,Bp,Bt,Br_err,Bp_err,Bt_err"
 DEFAULT_VECTOR_SEGMENTS = "Br,Bt,Bp"
+DEFAULT_MR_POLFIL_SEGMENTS = "Mr_polfil"
 
 
 def download_SHARP_series(download_dir, email, t_start, t_end=None, noaa_num=None, sharp_num=None,
@@ -53,6 +55,13 @@ def find_HARP(start_time, noaa_num, client):
     return None
 
 
+def carrington_rotation_from_time(time):
+    """Return the integer Carrington rotation containing ``time``."""
+    from sunpy.coordinates.sun import carrington_rotation_number
+
+    return math.floor(carrington_rotation_number(time))
+
+
 def download_hmi_sharp(
     download_dir,
     email,
@@ -85,22 +94,41 @@ def download_hmi_sharp(
 def download_hmi_synoptic(
     download_dir,
     email,
-    carrington_rotation,
+    carrington_rotation=None,
     carrington_rotation_end=None,
+    t_start=None,
+    t_end=None,
     segments=DEFAULT_VECTOR_SEGMENTS,
     series='b_synoptic',
     include_mr_polfil=False,
+    synoptic_product='vector',
 ):
-    """Download HMI synoptic vector maps for one or more Carrington rotations."""
+    """Download HMI synoptic maps for one or more Carrington rotations.
+
+    Rotations can be provided explicitly or inferred from ``t_start`` and
+    optional ``t_end``.
+    """
+    if carrington_rotation is None:
+        if t_start is None:
+            raise ValueError('Either carrington_rotation or t_start must be provided.')
+        carrington_rotation = carrington_rotation_from_time(t_start)
+    if carrington_rotation_end is None and t_end is not None:
+        carrington_rotation_end = carrington_rotation_from_time(t_end)
+
     os.makedirs(download_dir, exist_ok=True)
     client = drms.Client(email=email)
     carrington_rotation_end = carrington_rotation if carrington_rotation_end is None else carrington_rotation_end
 
     results = []
     for rotation in range(carrington_rotation, carrington_rotation_end + 1):
-        if include_mr_polfil:
-            results.append(download_ds(f'hmi.synoptic_mr_polfil_720s[{rotation}]', download_dir, client))
-        results.append(download_ds(f'hmi.{series}[{rotation}]{{{segments}}}', download_dir, client))
+        if synoptic_product in {'mr_polfil', 'both'} or include_mr_polfil:
+            results.append(download_ds(
+                f'hmi.synoptic_mr_polfil_720s[{rotation}]{{{DEFAULT_MR_POLFIL_SEGMENTS}}}',
+                download_dir,
+                client,
+            ))
+        if synoptic_product in {'vector', 'both'}:
+            results.append(download_ds(f'hmi.{series}[{rotation}]{{{segments}}}', download_dir, client))
     return results
 
 
@@ -169,6 +197,12 @@ def main():
     parser.add_argument('--segments', type=str, default=None)
     parser.add_argument('--carrington_rotation', type=int, default=None)
     parser.add_argument('--carrington_rotation_end', type=int, default=None)
+    parser.add_argument(
+        '--synoptic_product',
+        choices=['vector', 'mr_polfil', 'both'],
+        default='vector',
+        help='Synoptic product to download for --source hmi_synoptic.',
+    )
     parser.add_argument('--include_mr_polfil', action='store_true')
     parser.add_argument('--no_convert_ptr', action='store_true')
     parser.add_argument('--keep_coordinates', action='store_true')
@@ -190,16 +224,19 @@ def main():
         )
 
     if args.source == 'hmi_synoptic':
-        if args.carrington_rotation is None:
-            parser.error('--carrington_rotation is required for --source hmi_synoptic')
+        if args.carrington_rotation is None and args.t_start is None:
+            parser.error('Either --carrington_rotation or --t_start is required for --source hmi_synoptic')
         return download_hmi_synoptic(
             download_dir=args.download_dir,
             email=args.email,
             carrington_rotation=args.carrington_rotation,
             carrington_rotation_end=args.carrington_rotation_end,
+            t_start=_parse_time(args.t_start),
+            t_end=_parse_time(args.t_end),
             segments=args.segments or DEFAULT_VECTOR_SEGMENTS,
             series=args.series or 'b_synoptic',
             include_mr_polfil=args.include_mr_polfil,
+            synoptic_product=args.synoptic_product,
         )
 
     if args.t_start is None:

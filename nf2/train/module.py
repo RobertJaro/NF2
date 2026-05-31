@@ -461,9 +461,12 @@ class NF2Module(LightningModule):
                 idxs.append((int(lin_idx), i))
             # sort by the scalar lin_idx
             outputs = [outputs[i] for _, i in sorted(idxs, key=lambda x: x[0])]
+            cube_shape = outputs[0].get('cube_shape')
             # ---- concatenate outputs ----
             out_keys = outputs[0].keys()
             outputs = {k: torch.cat([o[k] for o in outputs]) for k in out_keys}
+            if cube_shape is not None:
+                outputs['cube_shape'] = cube_shape.reshape(-1)
             self.validation_outputs[self.validation_mapping[dataloader_idx]] = outputs
 
     def on_load_checkpoint(self, checkpoint):
@@ -493,6 +496,51 @@ class NF2Module(LightningModule):
         self.load_state_dict(state_dict, strict=False)
         self.validation_outputs = {}  # reset validation outputs
 
+def _normalize_date(date):
+    if date is None:
+        return None
+    if hasattr(date, 'to_datetime'):
+        date = date.to_datetime()
+    if hasattr(date, 'isot'):
+        return date.isot
+    if hasattr(date, 'isoformat'):
+        return date.isoformat()
+    return str(date)
+
+
+def _date_from_wcs(wcs):
+    if wcs is None:
+        return None
+    date = getattr(getattr(wcs, 'wcs', None), 'dateobs', None)
+    return _normalize_date(date)
+
+
+def _iter_values(value):
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return value
+    return [value]
+
+
+def _save_state_date(data_module):
+    data_config = getattr(data_module, 'config', {})
+    for wcs in _iter_values(data_config.get('wcs')):
+        date = _date_from_wcs(wcs)
+        if date is not None:
+            return date
+
+    for dataset in getattr(data_module, 'datasets', {}).values():
+        for wcs in _iter_values(getattr(dataset, 'wcs', None)):
+            date = _date_from_wcs(wcs)
+            if date is not None:
+                return date
+        date = _normalize_date(getattr(dataset, 'date', None))
+        if date is not None:
+            return date
+    return None
+
+
 @rank_zero_only
 def save(save_path, nf2, data_module, config):
     import lightning
@@ -503,6 +551,7 @@ def save(save_path, nf2, data_module, config):
         nf2_version = 'unknown'
 
     save_state = {'format_version': '0.4',
+                  'date': _save_state_date(data_module),
                   'software': {
                       'nf2': nf2_version,
                       'torch': torch.__version__,

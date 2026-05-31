@@ -13,6 +13,19 @@ def _vtk_name(name):
     return str(name).replace(" ", "_")
 
 
+def split_vectors_scalars(values):
+    """Split VTK-ready arrays into vector and scalar dictionaries by shape."""
+    vectors = {}
+    scalars = {}
+    for name, value in values.items():
+        shape = value.shape
+        if len(shape) == 4 and shape[-1] == 3:
+            vectors[name] = value
+        elif len(shape) == 3:
+            scalars[name] = value
+    return vectors, scalars
+
+
 def save_vtk(path, coords=None, vectors=None, scalars=None, Mm_per_pix=720e-3):
     """Save a structured grid as a legacy ASCII VTK file.
 

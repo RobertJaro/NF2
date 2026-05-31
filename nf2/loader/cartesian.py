@@ -1,8 +1,8 @@
 import copy
 import gc
 import glob
-import multiprocessing as mp
 import os
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 import numpy as np
@@ -272,7 +272,7 @@ class CartesianDataModule(BaseDataModule):
 def _load_cartesian_data_module(worker_args):
     step, total_steps, boundaries, args, kwargs = worker_args
     print(f'Loading data module {step + 1:03d}/{total_steps:03d}; '
-          f'ID: {CartesianSeriesDataModule._step_id(boundaries, step)}')
+          f'ID: {CartesianSeriesDataModule._step_id(boundaries, step)}', flush=True)
     return CartesianDataModule(boundaries=list(boundaries), *args, **kwargs)
 
 
@@ -281,6 +281,16 @@ def _without_overview_plots(boundaries):
     for config in boundaries:
         config.setdefault('plot', False)
     return boundaries
+
+
+def _series_work_path(work_path, step, include_rank=False):
+    parts = [work_path, 'series_data_modules', f'{step:06d}']
+    if include_rank:
+        world_size = int(os.environ.get('WORLD_SIZE', '1'))
+        rank = os.environ.get('RANK', os.environ.get('LOCAL_RANK'))
+        if world_size > 1 and rank is not None:
+            parts.append(f'rank_{int(rank):03d}')
+    return os.path.join(*parts)
 
 
 class CartesianSeriesDataModule(LightningDataModule):
@@ -305,6 +315,12 @@ class CartesianSeriesDataModule(LightningDataModule):
         super().__init__()
         self._load_data_modules(data_module_workers)
 
+    def _kwargs_for_step(self, step):
+        kwargs = deepcopy(self.kwargs)
+        if kwargs.get('work_path') is not None:
+            kwargs['work_path'] = _series_work_path(kwargs['work_path'], step, include_rank=not self.preload_data_modules)
+        return kwargs
+
     @staticmethod
     def _step_id(boundaries, step):
         for config in boundaries:
@@ -324,14 +340,10 @@ class CartesianSeriesDataModule(LightningDataModule):
             'num_workers', DEFAULT_NUM_WORKERS)
         n_workers = max(1, min(n_workers, self.total_steps))
         print(f'Loading data modules... (total: {len(self.boundaries)}, workers: {n_workers})')
-        self.data_modules[self.step] = _load_cartesian_data_module(
-            (self.step, self.total_steps, self.boundaries[self.step], self.args, self.kwargs))
-
-        worker_args = [(step, self.total_steps, _without_overview_plots(boundaries), self.args, self.kwargs)
-                       for step, boundaries in enumerate(self.boundaries)
-                       if step != self.step]
-        if not worker_args:
-            return
+        worker_args = [(step, self.total_steps,
+                        boundaries if step == self.step else _without_overview_plots(boundaries),
+                        self.args, self._kwargs_for_step(step))
+                       for step, boundaries in enumerate(self.boundaries)]
         if n_workers == 1:
             for args in worker_args:
                 step = args[0]
@@ -339,9 +351,7 @@ class CartesianSeriesDataModule(LightningDataModule):
             return
 
         n_workers = max(1, min(n_workers, len(worker_args)))
-        start_method = 'fork' if 'fork' in mp.get_all_start_methods() else None
-        context = mp.get_context(start_method) if start_method is not None else mp.get_context()
-        with context.Pool(processes=n_workers) as pool:
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
             for args, data_module in zip(worker_args, pool.map(_load_cartesian_data_module, worker_args)):
                 step = args[0]
                 self.data_modules[step] = data_module
@@ -350,7 +360,7 @@ class CartesianSeriesDataModule(LightningDataModule):
         if self.data_modules[step] is None:
             self._evict_data_modules(keep_step=step)
             self.data_modules[step] = _load_cartesian_data_module(
-                (step, self.total_steps, self.boundaries[step], self.args, self.kwargs))
+                (step, self.total_steps, self.boundaries[step], self.args, self._kwargs_for_step(step)))
         return self.data_modules[step]
 
     def _evict_data_modules(self, keep_step):

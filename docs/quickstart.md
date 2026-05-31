@@ -22,6 +22,16 @@ nf2-extrapolate \
   --work_path ./runs/benchmark/case1/work
 ```
 
+This is the safest first run because NF2 generates the benchmark boundary internally. A successful run writes:
+
+```text
+runs/benchmark/case1/last.ckpt
+runs/benchmark/case1/extrapolation_result.nf2
+runs/benchmark/case1/work/
+```
+
+The analytical example is intentionally small, but it still trains a neural field. Runtime depends strongly on GPU availability; on a CUDA GPU it should feel like a smoke test, while CPU-only execution can be much slower. If the command reaches the end and writes `extrapolation_result.nf2`, the installation, configuration loading, training loop, checkpoint writing, and result loader path are all working.
+
 Run a single observational extrapolation from a YAML configuration:
 
 ```bash
@@ -33,11 +43,15 @@ nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
   --Bp /data/Bp.fits
 ```
 
+The observational command above is a template. Replace `/data/Br.fits`, `/data/Bt.fits`, and `/data/Bp.fits` with one matching vector magnetogram. For SHARP CEA data, `Br`, `Bt`, and `Bp` are the radial, theta, and phi components downloaded from JSOC. For generic Cartesian FITS arrays, use the `minimal_fits.yaml` example instead of `sharp_cea.yaml` unless your files include the SHARP/SunPy map metadata expected by the `sharp` loader.
+
 Run a time series:
 
 ```bash
 nf2-extrapolate-series --config examples/configs/cartesian/sharp_cea_series.yaml
 ```
+
+Series runs need one completed single extrapolation before the series starts. First run the initial time step with `nf2-extrapolate`, then pass that run's `last.ckpt` as `--meta_path` and pass glob patterns such as `--Br_pattern "./data/*.Br.fits"`. Each component pattern must expand to the same number of files, and sorted filenames should pair the same time step across `Br`, `Bt`, `Bp`, and optional error maps. See [Series runs](series.md) for complete commands.
 
 Load a result in Python:
 

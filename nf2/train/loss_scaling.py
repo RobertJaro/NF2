@@ -151,7 +151,7 @@ class BHeightLossScalingModule(BaseScalingModule):
         b = b.reshape(grouped_coords.shape[0], grouped_coords.shape[1], b.shape[-1])
         loss = loss.reshape(grouped_coords.shape[0], grouped_coords.shape[1])
 
-        b_norm = (b.norm(dim=-1) + 1e-6).pow(self.power)  # (angular samples, radial samples)
+        b_norm = (b.norm(dim=-1) + 1e-8).pow(self.power)  # (angular samples, radial samples)
         scaling = b_norm.mean(0, keepdim=True)  # mean across angular samples
         if self.detach:
             scaling = scaling.detach()  # No gradient through scaling

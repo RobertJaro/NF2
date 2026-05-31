@@ -85,7 +85,7 @@ def generate(root: str | Path):
     (target / "export_metrics_reference.md").write_text(
         "# Export And Metrics Reference\n\n"
         "## Export Metrics\n\n"
-        + _table(["Metric", "Description"], EXPORT_METRICS)
+        + _table(["Metric", "Output Key(s)", "Description"], EXPORT_METRICS)
         + "\n\n## Quality Metrics\n\n"
         + _table(["Metric", "Description"], QUALITY_METRICS)
         + "\n",

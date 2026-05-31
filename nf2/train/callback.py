@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 import wandb
+import warnings
 from astropy import units as u
 from matplotlib import pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
@@ -51,6 +52,33 @@ def _planar_cartesian_extent(coords, tolerance=1e-6):
 
 def _should_plot(plot=True):
     return bool(plot)
+
+
+def _output_cube_shape(outputs, fallback=None):
+    cube_shape = outputs.get('cube_shape')
+    if cube_shape is None:
+        if fallback is None:
+            raise ValueError('Validation output is missing cube_shape metadata.')
+        return fallback
+    if hasattr(cube_shape, 'detach'):
+        cube_shape = cube_shape.detach().cpu().numpy()
+    cube_shape = np.asarray(cube_shape)
+    if cube_shape.ndim > 1:
+        cube_shape = cube_shape[0]
+    return tuple(int(v) for v in cube_shape.reshape(-1))
+
+
+def _valid_output_cube_shape(tensor, cube_shape):
+    n_samples = int(tensor.shape[0])
+    if int(np.prod(cube_shape)) == n_samples:
+        return True
+    warnings.warn(
+        f'Skipping boundary plot: cube_shape {cube_shape} contains '
+        f'{int(np.prod(cube_shape))} samples, but validation output contains {n_samples} samples.',
+        RuntimeWarning,
+        stacklevel=2,
+    )
+    return False
 
 
 class SphericalSlicesCallback(Callback):
@@ -427,15 +455,18 @@ class BoundaryCallback(Callback):
         if not _should_plot(self.plot):
             return
 
-        b = b.cpu().numpy().reshape([*self.cube_shape, 3])
-        b_true = b_true.cpu().numpy().reshape([*self.cube_shape, 3])
+        cube_shape = _output_cube_shape(outputs)
+        if not _valid_output_cube_shape(b, cube_shape):
+            return
+        b = b.cpu().numpy().reshape([*cube_shape, 3])
+        b_true = b_true.cpu().numpy().reshape([*cube_shape, 3])
 
         if 'original_coords' in outputs:
-            original_coords = outputs['original_coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
-            transformed_coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+            original_coords = outputs['original_coords'].cpu().numpy().reshape([*cube_shape, 3]) * self.Mm_per_ds
+            transformed_coords = outputs['coords'].cpu().numpy().reshape([*cube_shape, 3]) * self.Mm_per_ds
             self.plot_b_coords(b, b_true, original_coords, transformed_coords)
         else:
-            coords = outputs['coords'].cpu().numpy().reshape([*self.cube_shape, 3]) * self.Mm_per_ds
+            coords = outputs['coords'].cpu().numpy().reshape([*cube_shape, 3]) * self.Mm_per_ds
             self.plot_b(b, b_true, coords)
 
     def plot_b(self, b, b_true, coords=None):

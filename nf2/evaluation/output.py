@@ -11,7 +11,7 @@ from tqdm import tqdm
 from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical
 from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
-from nf2.evaluation.output_metrics import metric_mapping
+from nf2.evaluation.output_metrics import metric_mapping, normalize_metric_names
 from nf2.train.model import VectorPotentialModel
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, HeightTransformModel
 
@@ -59,7 +59,7 @@ class BaseOutput:
             Optional metric names from ``nf2.evaluation.output_metrics``.
         """
         batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
-        metrics = metrics if metrics is not None else []
+        metrics = normalize_metric_names(metrics)
 
         def _load(coords):
             # normalize and to tensor
@@ -105,6 +105,9 @@ class BaseOutput:
         state = {**model_out, 'coords': coords}
         metrics_out = {}
         for key in metrics:
+            if key not in metric_mapping:
+                valid_options = ', '.join(sorted(metric_mapping))
+                raise ValueError(f"Unknown output metric '{key}'. Valid options: {valid_options}")
             metric_out = metric_mapping[key](**state)
             metrics_out.update(metric_out)
             state.update(metric_out)

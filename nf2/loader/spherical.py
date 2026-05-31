@@ -2,8 +2,8 @@ import gc
 import glob
 import os
 import re
-import multiprocessing as mp
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from astropy import units as u
@@ -23,7 +23,7 @@ class SphericalDataModule(BaseDataModule):
                  max_radius=1.3,
                  Mm_per_ds=100,
                  Gauss_per_dB=1000, work_path=None,
-                 batch_size=4096, type=None, geometry=None, **kwargs):
+                 batch_size=4096, type=None, geometry=None, overview_id=None, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
                            'fits_reference': SphericalFITSReferenceDataset,
@@ -37,6 +37,7 @@ class SphericalDataModule(BaseDataModule):
         self.Mm_per_ds = Mm_per_ds
         self.cube_shape = [1, max_radius]
         self.spatial_norm = 1 * u.solRad
+        self.overview_id = overview_id
 
         # init boundary datasets
         general_config = {'work_path': work_path, 'batch_size': batch_size, 'Gauss_per_dB': Gauss_per_dB,
@@ -72,7 +73,7 @@ class SphericalDataModule(BaseDataModule):
             c_type = config.pop('type')
             c_name = config.pop('id') if 'id' in config else f'{prefix}_{c_type}_{i}'
             requires_jacobian = config.pop('requires_jacobian', True)
-            config['ds_name'] = c_name
+            config['ds_name'] = c_name if self.overview_id is None else f'{self.overview_id}_{c_name}'
             # update config with general config
             for k, v in general_config.items():
                 if k not in config:
@@ -129,7 +130,7 @@ class SphericalDataModule(BaseDataModule):
 def _load_spherical_data_module(worker_args):
     step, total_steps, boundaries, args, kwargs = worker_args
     print(f'Loading data module {step + 1:03d}/{total_steps:03d}; '
-          f'ID: {SphericalSeriesDataModule._step_id(boundaries, step)}')
+          f'ID: {SphericalSeriesDataModule._step_id(boundaries, step)}', flush=True)
     return SphericalDataModule(boundaries=boundaries, *args, **kwargs)
 
 
@@ -141,6 +142,16 @@ def _without_overview_plots(configs):
     return configs
 
 
+def _series_work_path(work_path, step, include_rank=False):
+    parts = [work_path, 'series_data_modules', f'{step:06d}']
+    if include_rank:
+        world_size = int(os.environ.get('WORLD_SIZE', '1'))
+        rank = os.environ.get('RANK', os.environ.get('LOCAL_RANK'))
+        if world_size > 1 and rank is not None:
+            parts.append(f'rank_{int(rank):03d}')
+    return os.path.join(*parts)
+
+
 class SphericalSeriesDataModule(LightningDataModule):
 
     def __init__(self, boundaries, samplers=None, current_step=0, iterations=None, data_module_workers=None,
@@ -149,8 +160,10 @@ class SphericalSeriesDataModule(LightningDataModule):
         self.kwargs = kwargs
         self.iterations = iterations
         self.preload_data_modules = preload_data_modules
+        self.validation_configs = deepcopy(self.kwargs.pop('validation'))
 
         self.boundaries = self._expand_boundaries(list(boundaries) + list(samplers or []))
+        self.validation = self._expand_validation(self.validation_configs, self.boundaries)
         self.step = current_step
         self.total_steps = len(self.boundaries)
 
@@ -175,6 +188,32 @@ class SphericalSeriesDataModule(LightningDataModule):
                        for i, config in enumerate(step_configs)}
             configs_by_step.append([self._resolve_placeholders(config, context) for config in step_configs])
         return configs_by_step
+
+    def _expand_validation(self, validation, boundaries_by_step):
+        validation = list(validation)
+        expanded_configs = [self._expand_config(config) for config in validation]
+        total_steps = len(boundaries_by_step)
+        assert all(len(configs) in (1, total_steps) for configs in expanded_configs), \
+            'Inconsistent number of validation files in configurations. Check your configurations.'
+
+        validation_by_step = []
+        for step, step_boundaries in enumerate(boundaries_by_step):
+            context = {config.get('id', f'train_{i}'): config
+                       for i, config in enumerate(step_boundaries)}
+            step_validation = []
+            for configs in expanded_configs:
+                config = deepcopy(configs[step] if len(configs) > 1 else configs[0])
+                step_validation.append(self._resolve_placeholders(config, context))
+            validation_by_step.append(step_validation)
+        return validation_by_step
+
+    def _kwargs_for_step(self, step):
+        kwargs = deepcopy(self.kwargs)
+        kwargs['validation'] = deepcopy(self.validation[step])
+        kwargs['overview_id'] = self._step_id(self.boundaries[step], step)
+        if kwargs.get('work_path') is not None:
+            kwargs['work_path'] = _series_work_path(kwargs['work_path'], step, include_rank=not self.preload_data_modules)
+        return kwargs
 
     def _expand_config(self, config):
         config = deepcopy(config)
@@ -224,6 +263,8 @@ class SphericalSeriesDataModule(LightningDataModule):
     def _expand_file_value(value):
         if isinstance(value, list):
             return value
+        if isinstance(value, str) and re.search(r'\[\[[^\[\]]+\]\]', value):
+            return value
         if isinstance(value, str) and glob.has_magic(value):
             files = sorted(glob.glob(value))
             assert len(files) > 0, f'No files found for pattern {value}'
@@ -240,14 +281,26 @@ class SphericalSeriesDataModule(LightningDataModule):
         if not isinstance(value, str):
             return value
 
+        exact_match = re.fullmatch(r'\[\[([^\[\]]+)\]\]', value)
+        if exact_match:
+            return SphericalSeriesDataModule._resolve_placeholder(exact_match.group(1), context)
+
         def replace(match):
-            keys = match.group(1).split('.')
-            resolved = context[keys[0]]
-            for key in keys[1:]:
-                resolved = resolved[key]
+            resolved = SphericalSeriesDataModule._resolve_placeholder(match.group(1), context)
             return str(resolved)
 
         return re.sub(r'\[\[([^\[\]]+)\]\]', replace, value)
+
+    @staticmethod
+    def _resolve_placeholder(path, context):
+        keys = path.split('.')
+        resolved = context[keys[0]]
+        for key in keys[1:]:
+            if key == 'errors' and key not in resolved and 'files' in resolved:
+                resolved = resolved['files']
+                continue
+            resolved = resolved[key]
+        return resolved
 
     @staticmethod
     def _files_id(files):
@@ -276,7 +329,7 @@ class SphericalSeriesDataModule(LightningDataModule):
         if self.data_modules[step] is None:
             self._evict_data_modules(keep_step=step)
             self.data_modules[step] = _load_spherical_data_module(
-                (step, self.total_steps, self.boundaries[step], self.args, self.kwargs))
+                (step, self.total_steps, self.boundaries[step], self.args, self._kwargs_for_step(step)))
         return self.data_modules[step]
 
     def _load_data_modules(self, data_module_workers):
@@ -289,14 +342,10 @@ class SphericalSeriesDataModule(LightningDataModule):
         n_workers = max(1, min(n_workers, self.total_steps))
 
         print(f'Loading data modules... (total: {self.total_steps}, workers: {n_workers})')
-        self.data_modules[self.step] = _load_spherical_data_module(
-            (self.step, self.total_steps, self.boundaries[self.step], self.args, self.kwargs))
-
-        worker_args = [(step, self.total_steps, _without_overview_plots(boundaries), self.args, self.kwargs)
-                       for step, boundaries in enumerate(self.boundaries)
-                       if step != self.step]
-        if not worker_args:
-            return
+        worker_args = [(step, self.total_steps,
+                        boundaries if step == self.step else _without_overview_plots(boundaries),
+                        self.args, self._kwargs_for_step(step))
+                       for step, boundaries in enumerate(self.boundaries)]
         if n_workers == 1:
             for args in worker_args:
                 step = args[0]
@@ -304,9 +353,7 @@ class SphericalSeriesDataModule(LightningDataModule):
             return
 
         n_workers = max(1, min(n_workers, len(worker_args)))
-        start_method = 'fork' if 'fork' in mp.get_all_start_methods() else None
-        context = mp.get_context(start_method) if start_method is not None else mp.get_context()
-        with context.Pool(processes=n_workers) as pool:
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
             for args, data_module in zip(worker_args, pool.map(_load_spherical_data_module, worker_args)):
                 step = args[0]
                 self.data_modules[step] = data_module

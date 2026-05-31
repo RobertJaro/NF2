@@ -88,10 +88,12 @@ nf2-download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \
-  --carrington_rotation 2106 \
+  --t_start "2011-02-15T00:00:00" \
   --series b_synoptic \
   --segments Br,Bt,Bp
 ```
+
+You can also pass `--carrington_rotation` directly. Use `--synoptic_product mr_polfil` to download files such as `hmi.synoptic_mr_polfil_720s.2173.Mr_polfil.fits`.
 
 ### 3. Run The Spherical Config
 

@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
+
 import numpy as np
 from astropy import constants, units as u
 from astropy.nddata import block_reduce
@@ -8,9 +13,33 @@ from nf2.evaluation.energy import get_free_mag_energy, get_free_mag_energy_direc
 from nf2.train.model import calculate_current_from_jacobian
 
 
-def current_density(jac_matrix, **kwargs):
+@dataclass(frozen=True)
+class OutputMetric:
+    """Metadata for a derived export quantity."""
+
+    name: str
+    func: Callable
+    description: str
+    outputs: tuple[str, ...]
+
+
+def normalize_metric_names(metrics: str | Iterable[str] | None) -> list[str]:
+    """Normalize public metric input to a list of metric names."""
+    if metrics is None:
+        return []
+    if isinstance(metrics, str):
+        return [metrics]
+    return list(metrics)
+
+
+def current_density_vector(jac_matrix, **kwargs):
     j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
-    return {'j': j.to(u.G / u.s)}
+    return {'j_vec': j.to(u.G / u.s)}
+
+
+def current_density(jac_matrix, **kwargs):
+    j = current_density_vector(jac_matrix)['j_vec']
+    return {'j': np.sqrt(np.sum(j ** 2, axis=-1)).to(u.G / u.s)}
 
 
 def b_nabla_bz(b, jac_matrix, **kwargs):
@@ -79,7 +108,7 @@ def spherical_energy_gradient(b, jac_matrix, coords, **kwargs):
             (np.sin(t) * np.sin(p)) * dE_dy + \
             np.cos(t) * dE_dz
 
-    return {'dE_dr': dE_dr}
+    return {'spherical_energy_gradient': dE_dr}
 
 
 def energy_gradient(b, jac_matrix, **kwargs):
@@ -90,7 +119,7 @@ def energy_gradient(b, jac_matrix, **kwargs):
     # dE/dz = 2 * (b_x * dBx_dz + b_y * dBy_dz + b_z * dBz_dz)
     dE_dz = 2 * (b[..., 0] * dBx_dz + b[..., 1] * dBy_dz + b[..., 2] * dBz_dz)
 
-    return {'dE_dz': dE_dz}
+    return {'energy_gradient': dE_dz}
 
 
 def los_trv_azi(b, **kwargs):
@@ -99,7 +128,8 @@ def los_trv_azi(b, **kwargs):
     b_trv = np.sqrt(bx ** 2 + by ** 2).to_value(u.G)
     azimuth = np.arctan2(by, bx).to_value(u.deg)
     b_los_trv_azi = np.stack([b_los, b_trv, azimuth], -1)
-    return {'b_los_trv_azi': b_los_trv_azi}
+    return {'los_trv_azi': b_los_trv_azi}
+
 
 def energy(b, **kwargs):
     # E = 0.5 * b^2
@@ -107,19 +137,23 @@ def energy(b, **kwargs):
     energy = energy.to_value(u.G**2) * u.erg * u.cm ** -3  # convert to erg/cm^3
     return {'energy': energy}
 
+
 def free_energy(b, **kwargs):
     free_energy = get_free_mag_energy(b.to_value(u.G)) * u.erg * u.cm ** -3
     return {'free_energy': free_energy}
 
+
 def free_energy_fft(b, **kwargs):
     free_energy = get_free_mag_energy_fft(b.to_value(u.G)) * u.erg * u.cm ** -3
-    return {'free_energy': free_energy}
+    return {'free_energy_fft': free_energy}
+
 
 def free_energy_direct(b, **kwargs):
     free_energy = get_free_mag_energy_direct(b.to_value(u.G)) * u.erg * u.cm ** -3
-    return {'free_energy': free_energy}
+    return {'free_energy_direct': free_energy}
 
-def squashing_factor(b, interp_ratio = 3, x_range=None, y_range=None, z_range=None, **kwargs):
+
+def squashing_factor(b, interp_ratio=3, x_range=None, y_range=None, z_range=None, **kwargs):
     # local imports for optional dependency
     import cupy
     from fastqslpy import FastQSL
@@ -324,20 +358,56 @@ def squashing_factor(b, interp_ratio = 3, x_range=None, y_range=None, z_range=No
     Qube = block_reduce(Qube, (interp_ratio, interp_ratio, interp_ratio), func=np.mean)
     Twube = block_reduce(Twube, (interp_ratio, interp_ratio, interp_ratio), func=np.mean)
 
-    return {"q": Qube, "twist": Twube}
+    return {"squashing_factor": Qube, "twist": Twube}
 
 
-metric_mapping = {
-    'j': current_density,
-    'b_nabla_bz': b_nabla_bz,
-    'alpha': alpha,
-    'spherical_energy_gradient': spherical_energy_gradient,
-    'energy_gradient': energy_gradient,
-    'magnetic_helicity': magnetic_helicity,
-    'los_trv_azi': los_trv_azi,
-    'free_energy': free_energy,
-    'free_energy_fft': free_energy_fft,
-    'free_energy_direct': free_energy_direct,
-    'energy': energy,
-    'squashing_factor': squashing_factor
+OUTPUT_METRICS = {
+    'j': OutputMetric('j', current_density, 'Current-density magnitude |J|.', ('j',)),
+    'j_vec': OutputMetric('j_vec', current_density_vector, 'Current-density vector.', ('j_vec',)),
+    'alpha': OutputMetric('alpha', alpha, 'Force-free alpha, computed as (J . B) / |B|^2.', ('alpha',)),
+    'b_nabla_bz': OutputMetric(
+        'b_nabla_bz', b_nabla_bz, 'Vertical magnetic tension-related derivative.', ('b_nabla_bz',)
+    ),
+    'energy': OutputMetric('energy', energy, 'Magnetic energy density.', ('energy',)),
+    'energy_gradient': OutputMetric(
+        'energy_gradient', energy_gradient, 'Cartesian vertical magnetic-energy gradient.', ('energy_gradient',)
+    ),
+    'spherical_energy_gradient': OutputMetric(
+        'spherical_energy_gradient',
+        spherical_energy_gradient,
+        'Spherical radial magnetic-energy gradient.',
+        ('spherical_energy_gradient',),
+    ),
+    'free_energy': OutputMetric(
+        'free_energy',
+        free_energy,
+        'Cartesian free magnetic energy density using the default potential-field method.',
+        ('free_energy',),
+    ),
+    'free_energy_fft': OutputMetric(
+        'free_energy_fft',
+        free_energy_fft,
+        'Free magnetic energy density using the Cartesian FFT potential field.',
+        ('free_energy_fft',),
+    ),
+    'free_energy_direct': OutputMetric(
+        'free_energy_direct',
+        free_energy_direct,
+        'Free magnetic energy density using the direct potential-field method.',
+        ('free_energy_direct',),
+    ),
+    'magnetic_helicity': OutputMetric(
+        'magnetic_helicity', magnetic_helicity, 'Magnetic helicity diagnostic.', ('magnetic_helicity',)
+    ),
+    'los_trv_azi': OutputMetric(
+        'los_trv_azi', los_trv_azi, 'LOS/transverse/azimuth field components.', ('los_trv_azi',)
+    ),
+    'squashing_factor': OutputMetric(
+        'squashing_factor',
+        squashing_factor,
+        'Squashing factor and twist diagnostics.',
+        ('squashing_factor', 'twist'),
+    ),
 }
+
+metric_mapping = {name: metric.func for name, metric in OUTPUT_METRICS.items()}

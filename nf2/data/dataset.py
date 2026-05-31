@@ -59,8 +59,10 @@ class TensorsDataset(NF2Dataset):
 
     def clear(self):
         for file_path in self.file_paths.values():
-            if os.path.exists(file_path):
+            try:
                 os.remove(file_path)
+            except FileNotFoundError:
+                pass
 
 
 class CubeDataset(NF2Dataset):
@@ -412,6 +414,8 @@ class IndexedDataset(Dataset):
     def __getitem__(self, idx):
         data = self.dataset[idx]
         data[self.key] = torch.tensor([idx], dtype=torch.long)
+        if hasattr(self.dataset, 'cube_shape'):
+            data['cube_shape'] = torch.tensor([self.dataset.cube_shape], dtype=torch.long)
         return data
 
 class EmptyDataset(Dataset):

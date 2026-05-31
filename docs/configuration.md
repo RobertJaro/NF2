@@ -21,6 +21,8 @@ data:
 
 This uses defaults for SIREN model, random sampling, potential boundary data, losses, callbacks, normalization, and training settings.
 
+Defaults are meant to make a valid first run, not to encode every scientific choice. They are a good starting point for smoke tests, SHARP-like Cartesian examples, and quick checks that the data loader works. Review them before production runs, especially the physical normalization, domain size, loss weights, batch sizes, and validation resolution.
+
 ## Minimal Spherical Example
 
 ```yaml
@@ -93,16 +95,22 @@ Common data keys:
 
 If omitted, `normalization.Mm_per_ds` defaults to `100` and `normalization.Gauss_per_dB` defaults to `1000`.
 
+Normalization controls the scale seen by the neural network. Keep the defaults when using the packaged examples unless you have a reason to change the model units. Override `Mm_per_ds` or `Gauss_per_dB` when the physical size or field scale of your data differs strongly from the examples, or when reproducing a published configuration that specifies those values. Export commands and output helpers convert back to physical units using the normalization stored in the checkpoint.
+
 Cartesian-specific keys:
 
 - `z_range`: extrapolation height range in Mm.
 - `potential_boundary`: explicit potential boundary data. FFT potential fields are used by default; set `method: direct` to use the Green's-function fallback. Use `{type: none}` to disable.
 - `iterations`: number of random sampler batches per epoch-like pass.
 
+For a first Cartesian run, set `z_range` explicitly so the extrapolated height is intentional. Use a lower range for smoke tests and memory-limited checks, then increase it for the scientific volume. Keep the default potential boundary unless you are running analytical benchmarks, custom side-boundary experiments, or a config that deliberately disables it.
+
 Spherical-specific keys:
 
 - `max_radius`: outer radius in solar radii.
 - `samplers`: spherical physics samplers, usually `random_radial_grouped`. If omitted, NF2 adds a default random radial sampler.
+
+For spherical runs, `max_radius`, latitude/longitude ranges, and sampler sizes determine most of the memory cost. Start with the packaged spherical example, reduce `batch_size` or validation resolution if memory is tight, and only then change model width or depth.
 
 ## Boundaries And Files
 
@@ -213,6 +221,8 @@ training:
 
 Entries under `training.trainer` are passed to the Lightning `Trainer` after NF2 sets its defaults.
 
+The default `training.epochs: 10` is deliberately conservative. It is enough for quick functional checks, but observational extrapolations often need more epochs or more `data.iterations`. Use validation plots, loss curves, and `nf2-metrics` to decide whether a run has stabilized.
+
 ## Losses
 
 Losses use `weight`, not `lambda`.
@@ -238,6 +248,8 @@ weight:
   start: 1.0e-4
   end: 0.0
 ```
+
+Explicit losses are useful when you want the YAML to record the full scientific objective. If `losses` is omitted, NF2 inserts geometry-appropriate defaults. When tuning a run, change one loss weight or schedule at a time and compare metrics on the same exported volume.
 
 ## Example Layout
 

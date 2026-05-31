@@ -35,14 +35,15 @@ Download supported JSOC/HMI data sources.
 | `--email` | required | JSOC export email address. |
 | `--sharp_num` | none | HARP/SHARP number for hmi_sharp. |
 | `--noaa_num` | none | NOAA active-region number, resolved to HARP when needed. |
-| `--t_start` | source dependent | Start time for hmi_sharp and hmi_full_disk. |
-| `--t_end` | none | Optional end time. |
+| `--t_start` | source dependent | Start time for hmi_sharp, hmi_full_disk, or Carrington-rotation lookup for hmi_synoptic. |
+| `--t_end` | none | Optional end time; for hmi_synoptic this resolves an inclusive rotation range. |
 | `--cadence` | 720s | Cadence for time-range downloads. |
 | `--series` | source default | JSOC series override. |
 | `--segments` | source default | Comma-separated JSOC segments. |
-| `--carrington_rotation` | none | Required for hmi_synoptic. |
+| `--carrington_rotation` | none | Carrington rotation for hmi_synoptic; alternatively provide --t_start. |
 | `--carrington_rotation_end` | same as start | Optional inclusive final Carrington rotation. |
-| `--include_mr_polfil` | false | Also download hmi.synoptic_mr_polfil_720s for synoptic-map runs. |
+| `--synoptic_product` | vector | One of vector, mr_polfil, both for hmi_synoptic. |
+| `--include_mr_polfil` | false | Also download hmi.synoptic_mr_polfil_720s Mr_polfil for synoptic-map runs. |
 | `--no_convert_ptr` | false | Disable HmiB2ptr conversion for full-disk vector data. |
 | `--keep_coordinates` | false | Keep generated latitude/longitude files after full-disk conversion. |
 
@@ -101,3 +102,4 @@ Resolve NOAA active-region numbers to SHARP/HARP numbers through JSOC metadata.
 | `--time` | required | Observation time used for the NOAA-to-HARP lookup. |
 | `--email` | required | JSOC export email address. |
 | `--noaa_nums` | all active regions | One or more NOAA active-region numbers to resolve. |
+

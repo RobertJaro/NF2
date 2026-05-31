@@ -1,11 +1,10 @@
 import argparse
 import os
 
-import numpy as np
 from astropy import units as u
 
 from nf2.evaluation.output import SphericalOutput
-from nf2.evaluation.vtk import save_vtk
+from nf2.evaluation.vtk import save_vtk, split_vectors_scalars
 
 
 def convert(nf2_path, out_path=None, radius_range=None, latitude_range=None, longitude_range=None,
@@ -19,10 +18,11 @@ def convert(nf2_path, out_path=None, radius_range=None, latitude_range=None, lon
     latitude_range = (latitude_range if latitude_range is not None else [-90, 90]) * angle_unit
     longitude_range = (longitude_range if longitude_range is not None else [0, 360]) * angle_unit
     resolution = pixels_per_solRad * u.pix / u.solRad
+    metrics = ['j'] if metrics is None else metrics
 
     output = SphericalOutput(nf2_path)
     result = output.load(radius_range, latitude_range, longitude_range, resolution,
-                         progress=kwargs.pop('progress', True), metrics=metrics or ['j', 'alpha'])
+                         progress=kwargs.pop('progress', True), metrics=metrics)
 
     vectors = {'B': result['b']}
     metrics_out = result.get('metrics', {})
@@ -33,11 +33,9 @@ def convert(nf2_path, out_path=None, radius_range=None, latitude_range=None, lon
             'B_theta': result['b_rtp'][..., 1],
             'B_phi': result['b_rtp'][..., 2],
         })
-    if 'j' in metrics_out:
-        scalars['current_density'] = np.linalg.norm(metrics_out['j'], axis=-1)
-    if 'alpha' in metrics_out:
-        scalars['alpha'] = metrics_out['alpha']
-
+    metric_vectors, metric_scalars = split_vectors_scalars(metrics_out)
+    vectors.update(metric_vectors)
+    scalars.update(metric_scalars)
     save_vtk(out_path, result['coords'], vectors, scalars)
 
 
@@ -50,7 +48,7 @@ def main():
     parser.add_argument('--longitude_range', nargs=2, type=float, default=[0, 360])
     parser.add_argument('--radians', action='store_true', help='latitude and longitude are in radians')
     parser.add_argument('--pixels_per_solRad', type=int, default=64)
-    parser.add_argument('--metrics', type=str, nargs='*', default=['j', 'alpha'])
+    parser.add_argument('--metrics', type=str, nargs='*', default=['j'])
     args = parser.parse_args()
 
     convert(**vars(args), progress=True)

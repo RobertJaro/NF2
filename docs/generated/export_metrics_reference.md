@@ -2,20 +2,21 @@
 
 ## Export Metrics
 
-| Metric | Description |
-| --- | --- |
-| j | Current-density vector. |
-| alpha | Force-free alpha proxy \|J\| / \|B\|. |
-| b_nabla_bz | Vertical magnetic tension-related derivative. |
-| energy | Magnetic energy density. |
-| energy_gradient | Cartesian magnetic-energy gradient. |
-| spherical_energy_gradient | Spherical magnetic-energy gradient. |
-| free_energy | Free magnetic energy density using the default potential-field method. |
-| free_energy_fft | Free magnetic energy density using the Cartesian FFT potential field. |
-| free_energy_direct | Free magnetic energy density using the direct potential-field method. |
-| magnetic_helicity | Magnetic helicity diagnostic. |
-| los_trv_azi | LOS/transverse/azimuth field components. |
-| squashing_factor | Squashing factor and twist diagnostics. |
+| Metric | Output Key(s) | Description |
+| --- | --- | --- |
+| j | j | Current-density magnitude \|J\|. |
+| j_vec | j_vec | Current-density vector. |
+| alpha | alpha | Force-free alpha, computed as (J . B) / \|B\|^2. |
+| b_nabla_bz | b_nabla_bz | Vertical magnetic tension-related derivative. |
+| energy | energy | Magnetic energy density. |
+| energy_gradient | energy_gradient | Cartesian vertical magnetic-energy gradient. |
+| spherical_energy_gradient | spherical_energy_gradient | Spherical radial magnetic-energy gradient. |
+| free_energy | free_energy | Cartesian free magnetic energy density using the default potential-field method. |
+| free_energy_fft | free_energy_fft | Free magnetic energy density using the Cartesian FFT potential field. |
+| free_energy_direct | free_energy_direct | Free magnetic energy density using the direct potential-field method. |
+| magnetic_helicity | magnetic_helicity | Magnetic helicity diagnostic. |
+| los_trv_azi | los_trv_azi | LOS/transverse/azimuth field components. |
+| squashing_factor | squashing_factor, twist | Squashing factor and twist diagnostics. |
 
 ## Quality Metrics
 

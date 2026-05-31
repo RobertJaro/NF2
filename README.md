@@ -117,6 +117,8 @@ out = nf2.load("path/to/extrapolation_result.nf2")
 cube = out.load_cube(Mm_per_pixel=0.72, metrics=["j", "alpha"])
 ```
 
+`j` is the current-density magnitude `|J|`. Request `j_vec` when you need the full current-density vector, for example for custom force-free alignment metrics.
+
 Direct helpers are also available:
 
 ```python
