@@ -387,6 +387,12 @@ class CartesianSeriesDataModule(LightningDataModule):
     def current_id(self):
         return self._step_id(self.boundaries[self.step], self.step)
 
+    def activate_step(self, step):
+        self.step = step
+        if not self.preload_data_modules:
+            self.data_modules = [None] * self.total_steps
+        self._get_data_module(self.step)
+
     def train_dataloader(self):
         return self._get_data_module(self.step).train_dataloader()
 

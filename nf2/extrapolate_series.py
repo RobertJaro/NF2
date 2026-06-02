@@ -135,9 +135,12 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     _init_data_module()
     # load data module for all ranks
     data_module = torch.load(data_module_save_path, weights_only=False)
-    data_module.step = current_step
-    assert data_module.step < data_module.total_steps, \
+    assert current_step < data_module.total_steps, \
         'Not enough data files found to continue training. Training completed or configuration is incorrect.'
+    if hasattr(data_module, 'activate_step'):
+        data_module.activate_step(current_step)
+    else:
+        data_module.step = current_step
 
     callback_modules = load_callbacks(callbacks, data_module)
 

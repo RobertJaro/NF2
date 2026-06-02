@@ -325,6 +325,12 @@ class SphericalSeriesDataModule(LightningDataModule):
     def current_id(self):
         return self._step_id(self.boundaries[self.step], self.step)
 
+    def activate_step(self, step):
+        self.step = step
+        if not self.preload_data_modules:
+            self.data_modules = [None] * self.total_steps
+        self._get_data_module(self.step)
+
     def _get_data_module(self, step):
         if self.data_modules[step] is None:
             self._evict_data_modules(keep_step=step)

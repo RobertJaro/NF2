@@ -3,7 +3,7 @@ import pytest
 from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.loader.spherical import _series_work_path as spherical_series_work_path
 from nf2.data.dataset import IndexedDataset, TensorsDataset
-from nf2.train.callback import _output_cube_shape, _valid_output_cube_shape
+from nf2.train.callback import AdvanceDatamoduleStep, _output_cube_shape, _valid_output_cube_shape
 
 
 def test_spherical_series_resolves_validation_placeholders_per_step():
@@ -181,3 +181,50 @@ def test_spherical_series_preloads_remaining_steps(monkeypatch):
     assert data_module.data_modules == ["module-0", "module-1", "module-2"]
     assert executor_steps == [0, 1, 2]
     assert sorted(calls) == [0, 1, 2]
+
+
+def test_spherical_series_activate_step_rebuilds_lazy_module(monkeypatch):
+    calls = []
+
+    def fake_load(args):
+        step = args[0]
+        calls.append(step)
+        return f"module-{step}"
+
+    monkeypatch.setattr("nf2.loader.spherical._load_spherical_data_module", fake_load)
+
+    data_module = SphericalSeriesDataModule.__new__(SphericalSeriesDataModule)
+    data_module.args = ()
+    data_module.kwargs = {"work_path": "/tmp/nf2-work", "validation": []}
+    data_module.preload_data_modules = False
+    data_module.step = 0
+    data_module.total_steps = 2
+    data_module.boundaries = [[{"id": "step_0"}], [{"id": "step_1"}]]
+    data_module.validation = [[{"id": "valid_0"}], [{"id": "valid_1"}]]
+    data_module.data_modules = ["stale-module", None]
+
+    data_module.activate_step(0)
+
+    assert data_module.data_modules == ["module-0", None]
+    assert calls == [0]
+
+
+def test_spherical_series_step_advance_runs_for_each_ddp_rank_copy():
+    class Trainer:
+        should_stop = False
+
+    def data_module_copy():
+        data_module = SphericalSeriesDataModule.__new__(SphericalSeriesDataModule)
+        data_module.step = 0
+        data_module.total_steps = 2
+        data_module.boundaries = [[{"id": "step_0"}], [{"id": "step_1"}]]
+        return data_module
+
+    rank_modules = [data_module_copy(), data_module_copy()]
+
+    for data_module in rank_modules:
+        callback = AdvanceDatamoduleStep(data_module, every_n=1)
+        callback.initialized = True
+        callback.on_train_epoch_end(Trainer(), None)
+
+    assert [data_module.step for data_module in rank_modules] == [1, 1]
