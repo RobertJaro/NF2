@@ -12,10 +12,15 @@ Dataset entries are used under `data.boundaries`, `data.validation`, `data.sampl
 | los_trv_azi | cartesian boundary | LOS/transverse/azimuth FITS input with automatic disambiguation support. |
 | los | cartesian boundary | Line-of-sight-only Cartesian boundary input. |
 | fld_inc_azi | cartesian boundary | Field strength/inclination/azimuth FITS input. |
+| numpy | cartesian boundary | Preprocessed NumPy Cartesian vector-field input. |
+| muram_slice | cartesian boundary | MURaM slice boundary input. |
+| muram_cube | cartesian boundary | MURaM cube boundary input. |
 | height | cartesian sampler | Random Cartesian volume samples for force-free and potential losses. |
 | potential | cartesian boundary | Potential-field boundary generated from the photospheric boundary. |
 | map | spherical boundary | Spherical Br/Bt/Bp map input for full-disk or synoptic maps. |
 | random_radial_grouped | spherical sampler | Grouped radial samples in the spherical volume. |
+| random_spherical | spherical sampler | Ungrouped random samples in the spherical volume. |
+| fits_reference | spherical validation | Reference spherical FITS comparison dataset. |
 | sphere | spherical validation | Spherical validation grid for field-quality callbacks. |
 | spherical_slices | spherical validation | Radial or angular slices for spherical visualization callbacks. |
 
@@ -26,6 +31,7 @@ Role: benchmark boundary.
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | case | int \| str | 1 | Analytical Low & Lou case identifier. |
+| boundary | full \| bottom | full | Use the full analytical volume as a boundary dataset or only the lower boundary for validation. |
 | bounds | list[float] | loader default | Physical Cartesian volume bounds for the benchmark field. |
 | resolution | int \| list[int] | loader default | Sampling resolution used to generate the benchmark boundary. |
 | batch_size | int | shared boundary batch size | Boundary samples per training batch. |
@@ -39,7 +45,9 @@ Role: cartesian boundary or validation.
 | files.Br | str | required | Radial magnetic-field FITS file. |
 | files.Bt | str | required | Theta/transverse magnetic-field FITS file. |
 | files.Bp | str | required | Phi/azimuthal magnetic-field FITS file. |
-| errors.* | str | optional | Optional uncertainty FITS files, stored as `error_path` internally. |
+| errors.Br_err | str | optional | Radial uncertainty FITS file. |
+| errors.Bt_err | str | optional | Theta/transverse uncertainty FITS file. |
+| errors.Bp_err | str | optional | Phi/azimuthal uncertainty FITS file. |
 | Mm_per_pixel | float | FITS/WCS default | Boundary plate scale in Mm per pixel. |
 | coordinate_center | list[float] \| dict | [0, 0] | Cartesian coordinate of the image center in Mm. |
 | slice | slice \| null | null | Optional image subset. |
@@ -54,6 +62,10 @@ Role: cartesian boundary or validation.
 | files.Br | str | required | Radial/vertical magnetic-field FITS file. |
 | files.Bt | str | required | Transverse x/theta component FITS file. |
 | files.Bp | str | required | Transverse y/phi component FITS file. |
+| errors.Br_err | str | optional | Vertical-component uncertainty FITS file. |
+| errors.Bt_err | str | optional | Transverse x/theta uncertainty FITS file. |
+| errors.Bp_err | str | optional | Transverse y/phi uncertainty FITS file. |
+| load_map | bool | dataset default | Load FITS as SunPy maps when coordinate metadata are needed. |
 | Mm_per_pixel | float | dataset default | Boundary plate scale in Mm per pixel. |
 | coordinate_center | list[float] \| dict | [0, 0] | Cartesian coordinate of the image center in Mm. |
 | batch_size | int | shared boundary batch size | Boundary samples per training or validation batch. |
@@ -91,9 +103,9 @@ Role: cartesian boundary or validation.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| files.B | str | required | Field-strength FITS file. |
-| files.inc | str | required | Inclination FITS file. |
-| files.azi | str | required | Azimuth FITS file. |
+| files.B_fld | str | required | Field-strength FITS file. |
+| files.B_inc | str | required | Inclination FITS file. |
+| files.B_azi | str | required | Azimuth FITS file. |
 | Mm_per_pixel | float | dataset default | Boundary plate scale in Mm per pixel. |
 | coordinate_center | list[float] \| dict | [0, 0] | Cartesian coordinate of the image center in Mm. |
 | batch_size | int | shared boundary batch size | Boundary samples per training or validation batch. |
@@ -105,6 +117,7 @@ Role: cartesian sampler.
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | batch_size | int | 16384 in examples | Random volume samples per training batch. |
+| type | height \| default | height | Height-biased sampler or uniform Cartesian sampler. |
 | z_sample | int | 128 | Number of heights sampled per xy location. |
 | z_sampling_exponent | float | 2 | Bias random samples toward lower heights when greater than 1. |
 | length | int \| null | data.iterations | Number of sampler batches per epoch-like pass. |
@@ -155,6 +168,9 @@ Role: spherical boundary or validation.
 | errors.Bt_err | str | optional | Theta uncertainty map, merged into the file map internally. |
 | errors.Bp_err | str | optional | Phi uncertainty map, merged into the file map internally. |
 | mask_configs | dict | optional | Optional masking/filtering, for example a `mu_filter`. |
+| filter_nans | bool | dataset default | Whether to filter NaN samples. |
+| shuffle | bool | dataset default | Whether to shuffle map samples. |
+| plot_overview | bool | dataset default | Whether to prepare overview plots. |
 | batch_size | int | data.batch_size or dataset default | Map samples per batch. |
 | requires_jacobian | bool | false for boundary examples | Enable only when the dataset feeds derivative-based losses. |
 
@@ -167,6 +183,18 @@ Role: spherical sampler.
 | batch_size | int | 16384 in examples | Random spherical volume samples per batch. |
 | n_lat_lon_sample | int | 128 | Number of angular samples; `batch_size` must be divisible by this value. |
 | radial_sampling_exponent | float | 1 | Bias radial samples when greater than 1. |
+| latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
+| longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
+| length | int \| null | data.iterations | Internal sampler length; public YAML should usually use data.iterations. |
+| requires_jacobian | bool | true | Required for force-free, potential, and energy-gradient losses. |
+
+## `random_spherical`
+
+Role: spherical sampler.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| batch_size | int | data.batch_size | Random spherical volume samples per batch. |
 | latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
 | longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
 | length | int \| null | data.iterations | Internal sampler length; public YAML should usually use data.iterations. |
@@ -192,7 +220,19 @@ Role: spherical validation.
 | --- | --- | --- | --- |
 | longitude_resolution | int | 256 | Longitude resolution for slice plots. |
 | n_slices | int | 5 | Number of radial slices. |
+| plot_currents | bool | false | Include current-density plots in spherical slice callbacks when available. |
 | batch_size | int | 1024 | Validation samples per batch. |
 | latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
 | longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
 | requires_jacobian | bool | true | Needed for current-density plots. |
+
+## `fits_reference`
+
+Role: spherical validation.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| file | str | required | Reference FITS file. |
+| fits_reference_Br | str | template placeholder | Common placeholder used by bundled spherical examples for reference Br files. |
+| batch_size | int | data.batch_size | Validation samples per batch. |
+| requires_jacobian | bool | false | Usually disabled for reference comparisons. |
