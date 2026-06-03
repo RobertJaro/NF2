@@ -3,9 +3,35 @@ path: "<<run_path>>"
 data:
   geometry: cartesian
   boundaries:
-    - type: fits
+    - id: boundary
+      type: fits
       load_map: false
       files:
         Br: "<<Br>>"
         Bt: "<<Bt>>"
         Bp: "<<Bp>>"
+  potential_boundary:
+    id: potential
+    type: potential
+    strides: 4
+losses:
+  - type: boundary
+    name: boundary
+    weight: 1.0
+    datasets: [boundary]
+  - type: boundary
+    name: potential_boundary
+    weight: 10.0
+    datasets: potential
+  - type: force_free
+    name: force_free
+    weight: 1.0e-4
+    datasets: [random]
+  - type: potential
+    name: potential
+    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    datasets: [random]
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [force_free, potential]
