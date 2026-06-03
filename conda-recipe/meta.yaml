@@ -27,9 +27,9 @@ requirements:
     - wheel
   run:
     - python >=3.11,<3.13
-    - pytorch >=2.6,<2.13
-    - torchvision >=0.21,<0.28
-    - lightning =2.6.4
+    - pytorch >=2.6
+    - torchvision >=0.21
+    - lightning >=2.6.4
     - numpy >=1.26
     - scipy >=1.11
     - astropy >=6
@@ -41,7 +41,7 @@ requirements:
     - h5py >=3.10
     - pyyaml >=6
     - python-dateutil >=2.8
-    - wandb >=0.27,<0.28
+    - wandb >=0.27
     - drms >=0.7
     - reproject >=0.12
     - mpl-animators >=1.2
