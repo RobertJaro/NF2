@@ -8,9 +8,9 @@ Use these commands after training has produced one or more `.nf2` files.
 nf2-export "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/sharp_cea_377/exports/field.vtk" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80 \
-  --metrics j alpha free_energy
+  --metrics j alpha free_energy_fft
 ```
 
 Use `--format npz` for Python analysis or `--format hdf5` for a portable scientific data file. VTK output is useful for ParaView.
@@ -21,7 +21,7 @@ Use `--format npz` for Python analysis or `--format hdf5` for a portable scienti
 nf2-export "./runs/spherical_hmi/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/spherical_hmi/exports/field.vtk" \
-  --metrics j alpha free_energy
+  --metrics j alpha free_energy_fft
 ```
 
 ## Export A Series
@@ -30,9 +30,9 @@ nf2-export "./runs/spherical_hmi/extrapolation_result.nf2" \
 nf2-export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 100 \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```
 
@@ -40,7 +40,7 @@ nf2-export "./runs/multi_height_series/*.nf2" \
 
 ```bash
 nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
 

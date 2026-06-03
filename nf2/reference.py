@@ -32,7 +32,7 @@ CONFIG_OPTIONS = [
     ("model.network.layers", "int", "model default", "Number of SIREN layers."),
     ("model.network.w0", "float", "model default", "SIREN frequency scale for hidden layers."),
     ("model.network.w0_initial", "float", "model default", "SIREN frequency scale for the first layer."),
-    ("training.epochs", "int", "10", "Number of Lightning epochs."),
+    ("training.epochs", "int", "15", "Number of Lightning epochs."),
     ("training.optimizer.start", "float", "5e-4", "Initial learning rate."),
     ("training.optimizer.end", "float", "5e-5", "Final learning rate."),
     ("training.optimizer.iterations", "int", "100000", "Learning-rate schedule length."),

@@ -332,9 +332,9 @@ nf2-extrapolate-series \
 nf2-export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 100 \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```
 
@@ -342,7 +342,7 @@ nf2-export "./runs/multi_height_series/*.nf2" \
 nf2-export "./runs/spherical_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/spherical_series/exports" \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```
 

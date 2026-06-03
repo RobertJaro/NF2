@@ -36,7 +36,7 @@ data:
   z_range: [0, 2]
   validation_pixel_per_ds: 32
 training:
-  epochs: 10
+  epochs: 15
 losses:
   - type: boundary
     name: boundary

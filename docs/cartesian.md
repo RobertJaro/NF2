@@ -178,7 +178,7 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: 1.0e-4
+    weight: 1.0e-3
     datasets: [random]
   - type: potential
     name: potential

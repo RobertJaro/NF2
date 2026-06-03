@@ -47,7 +47,7 @@ data:
   iterations: 10000
   z_range: [0, 80]
 training:
-  epochs: 30
+  epochs: 15
 losses:
   - type: boundary
     name: boundary
@@ -59,7 +59,7 @@ losses:
     datasets: potential
   - type: force_free
     name: force_free
-    weight: 1.0e-4
+    weight: 1.0e-3
     datasets: [random]
   - type: potential
     name: potential

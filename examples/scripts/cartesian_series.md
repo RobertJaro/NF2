@@ -198,9 +198,9 @@ The series templates validate and log every 10th dataset by default while still 
 nf2-export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 100 \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```
 

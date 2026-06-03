@@ -199,7 +199,7 @@ Supported `field` values:
 
 ## Training
 
-The minimal default trains for 10 epochs with an exponential Adam learning-rate schedule. All important trainer settings can still be set explicitly:
+The minimal default trains for 15 epochs with an exponential Adam learning-rate schedule. All important trainer settings can still be set explicitly:
 
 ```yaml
 training:
@@ -221,7 +221,7 @@ training:
 
 Entries under `training.trainer` are passed to the Lightning `Trainer` after NF2 sets its defaults.
 
-The default `training.epochs: 10` is deliberately conservative. It is enough for quick functional checks, but observational extrapolations often need more epochs or more `data.iterations`. Use validation plots, loss curves, and `nf2-metrics` to decide whether a run has stabilized.
+The default `training.epochs: 15` is deliberately conservative. It is enough for quick functional checks, but observational extrapolations often need more epochs or more `data.iterations`. Use validation plots, loss curves, and `nf2-metrics` to decide whether a run has stabilized.
 
 ## Losses
 
@@ -235,7 +235,7 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: 1.0e-4
+    weight: 1.0e-3
     datasets: [random]
 ```
 

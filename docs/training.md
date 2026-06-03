@@ -21,7 +21,7 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: 1.0e-4
+    weight: 1.0e-3
     datasets: [random]
 ```
 
@@ -189,5 +189,5 @@ When training fails with CUDA out-of-memory errors, reduce memory in this order:
 If the error happens only during export or `nf2-metrics`, pass a smaller evaluation batch size to the command:
 
 ```bash
-nf2-metrics ./runs/case/extrapolation_result.nf2 --batch_size 2048 --Mm_per_pixel 1.44 --height_range 0 80
+nf2-metrics ./runs/case/extrapolation_result.nf2 --batch_size 2048 --Mm_per_pixel 0.72 --height_range 0 80
 ```

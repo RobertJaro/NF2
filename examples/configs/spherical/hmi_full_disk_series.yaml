@@ -12,7 +12,8 @@ data:
     Gauss_per_dB: 100
   max_radius: 1.3
   batch_size: 16384
-  iterations: 10000
+  iterations: 2000
+  data_module_workers: 16
   boundaries:
     - id: full_disk
       type: map
@@ -49,18 +50,35 @@ data:
       n_lat_lon_sample: 64
       radial_sampling_exponent: 2
   validation:
+    - id: full_disk_valid
+      type: map
+      filter_nans: false
+      shuffle: false
+      plot_overview: false
+      files:
+        Br: "[[full_disk.files.Br]]"
+        Bt: "[[full_disk.files.Bt]]"
+        Bp: "[[full_disk.files.Bp]]"
+      errors:
+        Br_err: "[[full_disk.errors.Br_err]]"
+        Bt_err: "[[full_disk.errors.Bt_err]]"
+        Bp_err: "[[full_disk.errors.Bp_err]]"
+      mask_configs:
+        - type: mu_filter
+          min: 0.2
+    - id: synoptic_valid
+      type: map
+      filter_nans: false
+      shuffle: false
+      plot_overview: false
+      files:
+        Br: "[[synoptic.files.Br]]"
+        Bt: "[[synoptic.files.Bt]]"
+        Bp: "[[synoptic.files.Bp]]"
     - id: slices
       type: spherical_slices
       n_slices: 10
       plot_currents: true
-    - id: fits_reference
-      type: fits_reference
-      reference_file: "<<fits_reference_Br>>"
-      n_slices: 64
-      filter_nans: false
-      shuffle: false
-      plot_overview: false
-      radius_range: [1.0, 1.05]
     - id: sphere
       type: sphere
 training:
@@ -100,10 +118,16 @@ loss_scaling:
     max_radius: 1.3
     loss_ids: [energy_gradient, potential_top]
 callbacks:
+  - type: boundary
+    name: boundary
+    dataset: full_disk_valid
+    component_labels: [r, t, p]
+  - type: boundary
+    name: synoptic_boundary
+    dataset: synoptic_valid
+    component_labels: [r, t, p]
   - type: metrics
     name: metrics
     dataset: sphere
   - type: spherical_slices
     dataset: slices
-  - type: fits_comparison
-    dataset: fits_reference

@@ -42,7 +42,7 @@ Use `nf2-export` and `nf2-metrics` after training:
 
 ```bash
 nf2-export "./runs/sharp_cea/extrapolation_result.nf2" --format vtk --metrics j alpha free_energy_fft
-nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" --Mm_per_pixel 1.44 --height_range 0 80
+nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" --Mm_per_pixel 0.72 --height_range 0 80
 ```
 
 The generated [CLI reference](generated/cli_reference.md) lists all command options.

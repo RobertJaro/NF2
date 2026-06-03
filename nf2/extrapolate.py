@@ -105,7 +105,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
                    'callbacks': callbacks}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None
     val_every_n_epochs = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else None
-    max_epochs = int(training['epochs']) if 'epochs' in training else 10
+    max_epochs = int(training['epochs']) if 'epochs' in training else 15
     trainer_config = deepcopy(training.get('trainer', {}))
     gradient_clip_val = trainer_config.pop('gradient_clip_val', training.get('gradient_clip_val', 0.1))
     matmul_precision = trainer_config.pop('matmul_precision', training.get('matmul_precision', 'medium'))

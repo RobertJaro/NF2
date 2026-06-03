@@ -5,7 +5,7 @@
 Use validation callbacks during training and run `nf2-metrics` after training. The most useful checks are divergence metrics, current-field alignment metrics such as `theta_J` and `sigma_J`, force-free residuals, magnetic-energy values, and visual inspection of boundary/slice plots.
 
 ```bash
-nf2-metrics ./runs/case/extrapolation_result.nf2 --Mm_per_pixel 1.44 --height_range 0 80
+nf2-metrics ./runs/case/extrapolation_result.nf2 --Mm_per_pixel 0.72 --height_range 0 80
 ```
 
 Also compare exported fields and derived quantities such as `j`, `alpha`, and free energy over the region where the boundary data are reliable.

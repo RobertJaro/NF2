@@ -4,7 +4,7 @@
 
 ```bash
 nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
 
@@ -25,7 +25,7 @@ Use the same sampling ranges when comparing runs. Metrics depend on the evaluate
 
 ```bash
 nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
 

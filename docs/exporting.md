@@ -26,9 +26,9 @@ Every export includes the magnetic field evaluated from the NF2 checkpoint. The 
 nf2-export "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/sharp_cea_377/exports/field.vtk" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80 \
-  --metrics j alpha free_energy
+  --metrics j alpha free_energy_fft
 ```
 
 Use `--format npz` for Python analysis or `--format hdf5` for a portable scientific data file. VTK output is useful for ParaView.
@@ -50,9 +50,9 @@ Spherical checkpoints currently export through VTK only. Spherical VTK files inc
 nf2-export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 100 \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```
 
@@ -67,7 +67,7 @@ Pass one or more names after `--metrics`:
 nf2-export "./runs/case/extrapolation_result.nf2" \
   --format npz \
   --out "./runs/case/field.npz" \
-  --Mm_per_pixel 1.44 \
+  --Mm_per_pixel 0.72 \
   --height_range 0 80 \
   --metrics j alpha energy free_energy_fft
 ```

@@ -177,7 +177,7 @@ def _normalize_model(model, geometry):
 
 def _normalize_training(training):
     return {
-        "epochs": 10,
+        "epochs": 15,
         "optimizer": {"start": 5e-4, "end": 5e-5, "iterations": 1e5},
         "trainer": {},
         **deepcopy(training),

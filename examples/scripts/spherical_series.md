@@ -62,6 +62,6 @@ nf2-extrapolate-series \
 nf2-export "./runs/spherical_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/spherical_series/exports" \
-  --metrics j alpha free_energy \
+  --metrics j alpha free_energy_fft \
   --overwrite
 ```

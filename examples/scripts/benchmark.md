@@ -4,7 +4,7 @@ The analytical benchmark examples generate Low & Lou magnetic fields internally,
 
 The benchmark configs intentionally keep the run compact:
 
-- `training.epochs: 10`
+- `training.epochs: 15`
 - `data.iterations: 1000`
 - no potential boundary
 - no height loss scaling

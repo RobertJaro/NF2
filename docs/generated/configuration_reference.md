@@ -51,7 +51,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| training.epochs | int | 10 | Number of Lightning epochs. |
+| training.epochs | int | 15 | Number of Lightning epochs. |
 | training.optimizer.start | float | 5e-4 | Initial learning rate. |
 | training.optimizer.end | float | 5e-5 | Final learning rate. |
 | training.optimizer.iterations | int | 100000 | Learning-rate schedule length. |
