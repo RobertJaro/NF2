@@ -54,6 +54,10 @@ def _should_plot(plot=True):
     return bool(plot)
 
 
+def _log_wandb_figure(name, fig):
+    wandb.log({name: wandb.Image(fig)})
+
+
 def _output_cube_shape(outputs, fallback=None):
     cube_shape = outputs.get('cube_shape')
     if cube_shape is None:
@@ -139,7 +143,7 @@ class SphericalSlicesCallback(Callback):
                     plot_axs[i, j].tick_params(labelleft=False)
                 plot_axs[i, j].set_title(f'{height:.02f} - $B_{["r", "t", "p"][i]}$')
         fig.tight_layout()
-        wandb.log({f"{self.name} - B": fig})
+        _log_wandb_figure(f"{self.name} - B", fig)
         plt.close('all')
 
     def plot_current(self, j, coords):
@@ -162,7 +166,7 @@ class SphericalSlicesCallback(Callback):
                 plot_axs[i].tick_params(labelleft=False)
             plot_axs[i].set_title(f'{height:.02f} $R_\\odot$ - $|J|$')
         fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
-        wandb.log({f"{self.name} - Current density": fig})
+        _log_wandb_figure(f"{self.name} - Current density", fig)
         plt.close('all')
         # plot integrated current density
         j, j_label = self._integrate_radial_current(j, coords)
@@ -176,7 +180,7 @@ class SphericalSlicesCallback(Callback):
         ax.set_ylabel('Latitudinal arc length [Mm]')
         #
         fig.tight_layout()
-        wandb.log({f"{self.name} - Integrated Current density": fig})
+        _log_wandb_figure(f"{self.name} - Integrated Current density", fig)
         plt.close('all')
 
     @staticmethod
@@ -280,7 +284,7 @@ class SphericalFITSComparisonCallback(Callback):
                 ax.tick_params(labelleft=False)
 
         fig.tight_layout()
-        wandb.log({f"{self.name} - FITS Comparison": fig})
+        _log_wandb_figure(f"{self.name} - FITS Comparison", fig)
         plt.close('all')
 
     @staticmethod
@@ -353,7 +357,7 @@ class SlicesCallback(Callback):
                     ax.tick_params(labelleft=False)
                 ax.set_title(f'{height:.02f} - $B_{["x", "y", "z"][i]}$')
         fig.tight_layout()
-        wandb.log({f"{self.name} - B": fig})
+        _log_wandb_figure(f"{self.name} - B", fig)
         plt.close('all')
 
     def plot_current(self, j, coords):
@@ -380,7 +384,7 @@ class SlicesCallback(Callback):
                 plot_axs[i].tick_params(labelleft=False)
             plot_axs[i].set_title(f'{height:.02f} - $|J|$')
         fig.colorbar(im, cax=cbar_ax, label=r'$|J|$ [G/Mm]')
-        wandb.log({f"{self.name} - Current density": fig})
+        _log_wandb_figure(f"{self.name} - Current density", fig)
         plt.close('all')
         # plot integrated current density
         j, j_label = self._integrate_height_current(j, coords)
@@ -398,7 +402,7 @@ class SlicesCallback(Callback):
         ax.set_ylabel('Y [Mm]')
         #
         fig.tight_layout()
-        wandb.log({f"{self.name} - Integrated Current density": fig})
+        _log_wandb_figure(f"{self.name} - Integrated Current density", fig)
         plt.close('all')
 
     def _integrate_height_current(self, j, coords):
@@ -496,7 +500,7 @@ class BoundaryCallback(Callback):
         if extent is not None:
             fig.suptitle(_cartesian_extent_title(coords))
 
-        wandb.log({f"{self.validation_dataset_key} - B": fig})
+        _log_wandb_figure(f"{self.validation_dataset_key} - B", fig)
         plt.close('all')
 
     def plot_b_coords(self, b, b_true, original_coords, transformed_coords):
@@ -536,7 +540,7 @@ class BoundaryCallback(Callback):
         fig.colorbar(im, cax=cbar_axs[3], label='Z [Mm]')
         fig.suptitle(_cartesian_extent_title(original_coords))
 
-        wandb.log({f"{self.validation_dataset_key} - B": fig})
+        _log_wandb_figure(f"{self.validation_dataset_key} - B", fig)
         plt.close('all')
 
 
@@ -615,7 +619,7 @@ class DisambiguationCallback(Callback):
 
         fig.tight_layout()
         name = f"{self.validation_dataset_key} - Disambiguation" if self.name is None else self.name
-        wandb.log({name: fig})
+        _log_wandb_figure(name, fig)
         plt.close('all')
 
 
@@ -730,7 +734,7 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_title('True $B_z$')
 
         fig.tight_layout()
-        wandb.log({f"{self.validation_dataset_key} - Bxyz": fig})
+        _log_wandb_figure(f"{self.validation_dataset_key} - Bxyz", fig)
         plt.close('all')
 
     def plot_b(self, b, b_true, original_coords):
@@ -787,7 +791,7 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_title('B_azi_true')
 
         fig.tight_layout()
-        wandb.log({f"{self.validation_dataset_key} - B": fig})
+        _log_wandb_figure(f"{self.validation_dataset_key} - B", fig)
         plt.close('all')
 
     def plot_b_coords(self, b, b_true, original_coords, transformed_coords):
@@ -874,7 +878,7 @@ class LosTrvAziBoundaryCallback(Callback):
         ax.set_ylabel('Y [Mm]')
 
         fig.tight_layout()
-        wandb.log({f"{self.validation_dataset_key} - B": fig})
+        _log_wandb_figure(f"{self.validation_dataset_key} - B", fig)
         plt.close('all')
 
 

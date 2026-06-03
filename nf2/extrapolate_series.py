@@ -17,7 +17,7 @@ from nf2.loader.spherical import SphericalSeriesDataModule
 from nf2.train.callback import AdvanceDatamoduleStep
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
-from nf2.train.util import load_yaml_config, suppress_accumulate_grad_stream_warning
+from nf2.train.util import is_interactive_environment, load_yaml_config, suppress_accumulate_grad_stream_warning
 
 
 def _is_lightning_checkpoint(checkpoint_path):
@@ -180,7 +180,13 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     callback_modules += [checkpoint_callback, save_callback, advance_data_module_callback]
     default_devices = n_gpus if n_gpus > 0 else 1
     default_accelerator = 'gpu' if n_gpus >= 1 else 'cpu'
-    default_strategy = DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else 'auto'
+    default_strategy = 'auto'
+    if n_gpus > 1:
+        default_strategy = (
+            'ddp_notebook_find_unused_parameters_true'
+            if is_interactive_environment()
+            else DDPStrategy(find_unused_parameters=True)
+        )
 
     val_check_interval = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else 1
     trainer = Trainer(max_epochs=max_epochs,

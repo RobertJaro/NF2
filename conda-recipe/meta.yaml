@@ -27,7 +27,8 @@ requirements:
     - wheel
   run:
     - python >=3.11,<3.13
-    - pytorch >=2.12,<2.13
+    - pytorch >=2.6,<2.13
+    - torchvision >=0.21,<0.28
     - lightning =2.6.4
     - numpy >=1.26
     - scipy >=1.11

@@ -6,6 +6,7 @@ from copy import deepcopy
 
 
 DEFAULT_PATH = "./runs/nf2"
+DEFAULT_DATA_ITERATIONS = 10000
 
 
 def normalize_config(config: dict) -> dict:
@@ -86,6 +87,7 @@ def _normalize_cartesian_data(data):
     normalization = data.pop("normalization", {})
     mm_per_ds = normalization.pop("Mm_per_ds", data.pop("Mm_per_ds", 100))
     g_per_db = normalization.pop("Gauss_per_dB", data.pop("Gauss_per_dB", 1000))
+    iterations = data.pop("iterations", DEFAULT_DATA_ITERATIONS)
 
     boundaries = data.pop("boundaries", None)
     if boundaries is None:
@@ -111,6 +113,7 @@ def _normalize_cartesian_data(data):
         "boundaries": boundaries,
         "sampler": sampler,
         "potential_boundary": potential_boundary,
+        "iterations": iterations,
         "Mm_per_ds": mm_per_ds,
         "Gauss_per_dB": g_per_db,
         **data,
@@ -124,7 +127,7 @@ def _normalize_spherical_data(data):
     normalization = data.pop("normalization", {})
     mm_per_ds = normalization.pop("Mm_per_ds", data.pop("Mm_per_ds", 100))
     g_per_db = normalization.pop("Gauss_per_dB", data.pop("Gauss_per_dB", 1000))
-    iterations = data.pop("iterations", None)
+    iterations = data.pop("iterations", DEFAULT_DATA_ITERATIONS)
 
     boundaries = [_normalize_dataset_config(b, role="boundary") for b in _as_list(data.pop("boundaries", []))]
     samplers = [_normalize_dataset_config(s, role="sampler") for s in _as_list(data.pop("samplers", []))]
@@ -132,10 +135,9 @@ def _normalize_spherical_data(data):
         raise ValueError("Spherical configs require data.boundaries with at least one boundary dataset.")
     if not samplers:
         samplers = [_normalize_dataset_config({"id": "random", "type": "random_radial_grouped"}, role="sampler")]
-    if iterations is not None:
-        for sampler in samplers:
-            if sampler.get("type") in {"random_spherical", "random_radial_grouped"}:
-                sampler.setdefault("length", iterations)
+    for sampler in samplers:
+        if sampler.get("type") in {"random_spherical", "random_radial_grouped"}:
+            sampler.setdefault("length", iterations)
 
     validation = data.pop("validation", None)
     if validation is None:
@@ -147,6 +149,7 @@ def _normalize_spherical_data(data):
         "boundaries": boundaries,
         "samplers": samplers,
         "validation": validation_configs,
+        "iterations": iterations,
         "Mm_per_ds": mm_per_ds,
         "Gauss_per_dB": g_per_db,
         **data,

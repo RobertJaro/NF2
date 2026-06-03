@@ -8,20 +8,34 @@ Install NF2 from PyPI:
 pip install nf2
 ```
 
+Install the current development version from GitHub:
+
+```bash
+pip install git+https://github.com/RobertJaro/NF2
+```
+
 ## PyTorch And CUDA
 
-For GPU-enabled PyTorch installs, use the official PyTorch selector at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). Select your operating system, package manager, Python version, and CUDA version, then run the generated command before installing or running NF2.
+NF2 depends on compatible `torch` and `torchvision` releases. Pip installs both from NF2 metadata. For custom GPU-enabled PyTorch installs, use the official PyTorch selector at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). Select your operating system, package manager, Python version, and CUDA version, then run the generated command before installing or running NF2.
+
+If Colab raises `RuntimeError: operator torchvision::nms does not exist`, reinstall torch and torchvision together from the same PyTorch wheel index, restart the runtime, then install NF2:
+
+```bash
+pip uninstall -y torch torchvision torchaudio
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
+pip install git+https://github.com/RobertJaro/NF2
+```
 
 For CUDA 12.6:
 
 ```bash
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 ```
 
 For the most recent default PyTorch build:
 
 ```bash
-pip3 install torch torchvision
+pip3 install torch torchvision torchaudio
 ```
 
 ## Conda Installation

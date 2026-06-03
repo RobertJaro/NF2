@@ -22,6 +22,14 @@ def suppress_accumulate_grad_stream_warning():
     suppress_runtime_warnings()
 
 
+def is_interactive_environment():
+    try:
+        from IPython import get_ipython
+    except ImportError:
+        return False
+    return get_ipython() is not None
+
+
 def load_yaml_config(yaml_config_file, overwrite_args=None):
     overwrite_args = [] if overwrite_args is None else overwrite_args
     assert all([k.startswith('--') for k in overwrite_args[::2]]), \

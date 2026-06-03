@@ -14,7 +14,7 @@ from nf2.loader.cartesian import CartesianDataModule
 from nf2.loader.spherical import SphericalDataModule
 from nf2.train.mapping import load_callbacks
 from nf2.train.module import NF2Module, save
-from nf2.train.util import load_yaml_config, suppress_accumulate_grad_stream_warning
+from nf2.train.util import is_interactive_environment, load_yaml_config, suppress_accumulate_grad_stream_warning
 
 
 def run(path, data, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
@@ -122,7 +122,13 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
     callback_modules += [checkpoint_callback, save_callback]
     default_devices = n_gpus if n_gpus > 0 else 1
     default_accelerator = 'gpu' if n_gpus >= 1 else 'cpu'
-    default_strategy = DDPStrategy(find_unused_parameters=True) if n_gpus > 1 else 'auto'
+    default_strategy = 'auto'
+    if n_gpus > 1:
+        default_strategy = (
+            'ddp_notebook_find_unused_parameters_true'
+            if is_interactive_environment()
+            else DDPStrategy(find_unused_parameters=True)
+        )
 
     trainer_kwargs = {
         'max_epochs': max_epochs,

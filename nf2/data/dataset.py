@@ -346,7 +346,7 @@ class RandomCoordinateDataset(NF2Dataset):
         self.batch_size = int(batch_size)
         self.float_tensor = torch.FloatTensor
         self.z_sampling_exponent = torch.tensor(z_sampling_exponent, dtype=torch.float32)
-        self.length = length if length is not None else 1
+        self.length = int(length) if length is not None else 1
 
     def __len__(self):
         return self.length
