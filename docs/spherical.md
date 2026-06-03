@@ -2,9 +2,9 @@
 
 Spherical runs use `data.geometry: spherical` and train a global or large-field-of-view volume in spherical coordinates. They are intended for full-disk vector maps, synoptic maps, and combined full-disk plus synoptic constraints.
 
-The full-disk plus synoptic example configuration is:
+The full-disk plus synoptic bundled config name is:
 
-- `examples/configs/spherical/hmi_full_disk.yaml`
+- `nf2/spherical/hmi_full_disk.yaml`
 
 ## How The YAML Is Configured
 
@@ -35,7 +35,7 @@ Fill the placeholders from the command line:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/spherical/hmi_full_disk.yaml \
+  --config nf2/spherical/hmi_full_disk.yaml \
   --run_path ./runs/hmi_spherical \
   --work_path ./runs/hmi_spherical/work \
   --full_disk_Br ./data/full_disk/Br.fits \
@@ -66,7 +66,7 @@ data:
 
 ## Spherical Single-Run Example
 
-Spherical runs combine full-disk HMI vector data with synoptic maps and train in a spherical coordinate volume. The example config is `examples/configs/spherical/hmi_full_disk.yaml`.
+Spherical runs combine full-disk HMI vector data with synoptic maps and train in a spherical coordinate volume. The example config is `nf2/spherical/hmi_full_disk.yaml`.
 
 ### 1. Download Full-Disk HMI Data
 
@@ -97,11 +97,11 @@ You can also pass `--carrington_rotation` directly. Use `--synoptic_product mr_p
 
 ### 3. Run The Spherical Config
 
-Fill the placeholders with the downloaded files. The full-disk error placeholders can point to dedicated uncertainty maps; if those are not available, use the same field maps for a quick example and prepare proper uncertainties for production runs.
+Fill the placeholders with the downloaded files. The full-disk error placeholders point to optional uncertainty maps; omit the `--full_disk_*_err` arguments if those files are not available.
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/spherical/hmi_full_disk.yaml" \
+  --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_hmi" \
   --work_path "./runs/spherical_hmi/work" \
   --wandb_project "nf2" \
@@ -109,9 +109,9 @@ nf2-extrapolate \
   --full_disk_Br "./data/hmi_spherical/full_disk/*Br.fits" \
   --full_disk_Bt "./data/hmi_spherical/full_disk/*Bt.fits" \
   --full_disk_Bp "./data/hmi_spherical/full_disk/*Bp.fits" \
-  --full_disk_Br_err "./data/hmi_spherical/full_disk/*Br.fits" \
-  --full_disk_Bt_err "./data/hmi_spherical/full_disk/*Bt.fits" \
-  --full_disk_Bp_err "./data/hmi_spherical/full_disk/*Bp.fits" \
+  --full_disk_Br_err "./data/hmi_spherical/full_disk/*Br_err.fits" \
+  --full_disk_Bt_err "./data/hmi_spherical/full_disk/*Bt_err.fits" \
+  --full_disk_Bp_err "./data/hmi_spherical/full_disk/*Bp_err.fits" \
   --synoptic_Br "./data/hmi_spherical/synoptic/*Br.fits" \
   --synoptic_Bt "./data/hmi_spherical/synoptic/*Bt.fits" \
   --synoptic_Bp "./data/hmi_spherical/synoptic/*Bp.fits"

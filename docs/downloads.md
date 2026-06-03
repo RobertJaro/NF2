@@ -52,7 +52,7 @@ nf2-download \
 
 By default, full-disk vector data are converted to Br/Bt/Bp with JSOC `HmiB2ptr`. Use `--no_convert_ptr` to download the native segments.
 
-Use the converted Br/Bt/Bp products for the spherical example configs. If you disable conversion, the native JSOC segments are useful for custom preprocessing but are not drop-in replacements for the `map` boundary examples.
+Use the converted Br/Bt/Bp products for the spherical example configs. If full-disk uncertainty maps are available, pass them as `--full_disk_Br_err`, `--full_disk_Bt_err`, and `--full_disk_Bp_err`; for series runs use `--full_disk_Br_err_pattern`, `--full_disk_Bt_err_pattern`, and `--full_disk_Bp_err_pattern`, for example `./data/hmi_spherical/full_disk/*.Br_err.fits`. If you disable conversion, the native JSOC segments are useful for custom preprocessing but are not drop-in replacements for the `map` boundary examples.
 
 ## HMI Synoptic
 

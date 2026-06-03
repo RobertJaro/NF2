@@ -1,6 +1,6 @@
 # Spherical Series Runs
 
-NF2 can run spherical sequences when the spherical boundary file entries are glob patterns or file lists. Use `examples/configs/spherical/hmi_full_disk.yaml` for the initial extrapolation and `examples/configs/spherical/hmi_full_disk_series.yaml` for the sequence.
+NF2 can run spherical sequences when the spherical boundary file entries are glob patterns or file lists. Use `nf2/spherical/hmi_full_disk.yaml` for the initial extrapolation and `nf2/spherical/hmi_full_disk_series.yaml` for the sequence.
 
 As with Cartesian series, a spherical series needs the completed first extrapolation's `last.ckpt` as `meta_path`.
 
@@ -10,7 +10,7 @@ Use the single-run guide in [spherical.md](spherical.md) for the first time step
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/spherical/hmi_full_disk.yaml" \
+  --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_initial" \
   --work_path "./runs/spherical_initial/work" \
   --wandb_project "nf2" \
@@ -26,6 +26,8 @@ nf2-extrapolate \
   --synoptic_Bp "./data/hmi_spherical/synoptic/2283.Bp.fits"
 ```
 
+The `--full_disk_Br_err`, `--full_disk_Bt_err`, and `--full_disk_Bp_err` arguments are optional. If you omit them, NF2 skips the full-disk error maps.
+
 ## 2. Use The Series Config
 
 Use the series config directly and fill its `<<...>>` placeholders from the command line. Every glob must match either one shared file or the same number of time steps as the other series components.
@@ -38,7 +40,7 @@ The series template validates and logs every 10th dataset by default while still
 
 ```bash
 nf2-extrapolate-series \
-  --config "examples/configs/spherical/hmi_full_disk_series.yaml" \
+  --config "nf2/spherical/hmi_full_disk_series.yaml" \
   --run_path "./runs/spherical_series" \
   --work_path "./runs/spherical_series/work" \
   --meta_path "./runs/spherical_initial/last.ckpt" \
@@ -55,6 +57,8 @@ nf2-extrapolate-series \
   --synoptic_Bp_pattern "./data/hmi_spherical/synoptic/*.Bp.fits" \
   --fits_reference_Br "./data/hmi_spherical/reference/20240510_000000.Br.fits"
 ```
+
+The `--full_disk_Br_err_pattern`, `--full_disk_Bt_err_pattern`, and `--full_disk_Bp_err_pattern` arguments are optional. If you omit them, NF2 runs the spherical series without full-disk error maps.
 
 ## 4. Export The Series
 

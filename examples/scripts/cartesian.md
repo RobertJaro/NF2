@@ -19,16 +19,19 @@ nf2-download \
   --segments Br,Bp,Bt,Br_err,Bp_err,Bt_err
 ```
 
-Then run the SHARP CEA config. The `sharp` dataset reads SHARP CEA maps with map metadata.
+Then run the SHARP CEA config. The `sharp` dataset reads SHARP CEA maps with map metadata. Error-map arguments are optional; omit `--Br_err`, `--Bt_err`, and `--Bp_err` if those files are not available.
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/cartesian/sharp_cea.yaml" \
+  --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea_377" \
   --work_path "./runs/sharp_cea_377/work" \
   --Br "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits" \
   --Bt "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits" \
-  --Bp "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits"
+  --Bp "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp.fits" \
+  --Br_err "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br_err.fits" \
+  --Bt_err "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits" \
+  --Bp_err "./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits"
 ```
 
 ## Plain FITS Arrays
@@ -37,7 +40,7 @@ Use `minimal_fits.yaml` for plain Br/Bt/Bp FITS data arrays without SunPy map me
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/cartesian/minimal_fits.yaml" \
+  --config "nf2/cartesian/minimal_fits.yaml" \
   --run_path "./runs/cartesian_minimal" \
   --Br "./data/plain_fits/Br.fits" \
   --Bt "./data/plain_fits/Bt.fits" \
@@ -52,7 +55,7 @@ Multi-height examples assume you already prepared matching photospheric and chro
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/cartesian/multi_height.yaml" \
+  --config "nf2/cartesian/multi_height.yaml" \
   --run_path "./runs/multi_height_initial" \
   --work_path "./runs/multi_height_initial/work" \
   --photosphere_B_los "./data/multi_height/photosphere/20240101_000000_B_los.fits" \

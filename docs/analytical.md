@@ -2,10 +2,10 @@
 
 NF2 includes Low & Lou analytical magnetic fields for benchmark and regression use. Analytical cases use the same YAML-driven training path as observational Cartesian and spherical runs, but the boundary data are generated from a configured analytical field instead of read from FITS files.
 
-Primary examples:
+Primary bundled config names:
 
-- `examples/configs/benchmark/analytical_case1.yaml`
-- `examples/configs/benchmark/analytical_case2.yaml`
+- `nf2/benchmark/analytical_case1.yaml`
+- `nf2/benchmark/analytical_case2.yaml`
 
 These examples are intended for fast smoke tests, documentation, and quantitative validation of the training and export pipeline.
 
@@ -25,7 +25,7 @@ The benchmark configs intentionally keep the run compact:
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/benchmark/analytical_case1.yaml" \
+  --config "nf2/benchmark/analytical_case1.yaml" \
   --run_path "./runs/benchmark/case1" \
   --work_path "./runs/benchmark/case1/work"
 ```
@@ -34,7 +34,7 @@ nf2-extrapolate \
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/benchmark/analytical_case2.yaml" \
+  --config "nf2/benchmark/analytical_case2.yaml" \
   --run_path "./runs/benchmark/case2" \
   --work_path "./runs/benchmark/case2/work"
 ```
@@ -100,7 +100,7 @@ Run the example by filling the path placeholders:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/benchmark/analytical_case1.yaml \
+  --config nf2/benchmark/analytical_case1.yaml \
   --run_path ./runs/analytical_case1 \
   --work_path ./runs/analytical_case1/work
 ```

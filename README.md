@@ -63,7 +63,7 @@ Run an extrapolation from a YAML configuration:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/cartesian/sharp_cea.yaml \
+  --config nf2/cartesian/sharp_cea.yaml \
   --run_path "./runs/ar377" \
   --work_path "/scratch/ar377" \
   --Br "/data/Br.fits" \
@@ -127,17 +127,17 @@ from nf2 import CartesianOutput, SphericalOutput, run, run_series
 
 ## Examples
 
-Example configurations live in [examples/configs](examples/configs); see the [examples overview](examples/README.md) for guidance by run type:
+Example configurations are bundled with the package and can be passed as names such as `nf2/cartesian/sharp_cea.yaml`. Source templates live in [nf2/configs](nf2/configs); see the [examples overview](examples/README.md) for guidance by run type:
 
-- `cartesian/sharp_cea.yaml`
-- `cartesian/minimal_fits.yaml`
-- `cartesian/auto_disambiguation.yaml`
-- `cartesian/multi_height.yaml`
-- `cartesian/sharp_cea_series.yaml`
-- `cartesian/multi_height_series.yaml`
-- `spherical/hmi_full_disk.yaml`
-- `benchmark/analytical_case1.yaml`
-- `benchmark/analytical_case2.yaml`
+- `nf2/cartesian/sharp_cea.yaml`
+- `nf2/cartesian/minimal_fits.yaml`
+- `nf2/cartesian/auto_disambiguation.yaml`
+- `nf2/cartesian/multi_height.yaml`
+- `nf2/cartesian/sharp_cea_series.yaml`
+- `nf2/cartesian/multi_height_series.yaml`
+- `nf2/spherical/hmi_full_disk.yaml`
+- `nf2/benchmark/analytical_case1.yaml`
+- `nf2/benchmark/analytical_case2.yaml`
 
 Notebooks are available in [examples/notebooks](examples/notebooks), including a Colab SHARP CEA tutorial, local SHARP CEA, Cartesian series, spherical HMI, and analytical benchmark runs. Command-line examples for downloads, extrapolations, exports, metrics, and series runs are split by topic under [examples/scripts](examples/scripts).
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nf2"
-version = "0.4.0"
+version = "0.4.1"
 description = "Neural non-linear force-free magnetic field extrapolation framework"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
@@ -64,6 +64,9 @@ nf2-noaa-to-sharp = "nf2.data.noaa_to_sharp:main"
 [tool.setuptools.packages.find]
 include = ["nf2*"]
 exclude = ["config_yaml*", "docs*", "examples*", "notebooks*", "scripts*"]
+
+[tool.setuptools.package-data]
+"nf2.configs" = ["benchmark/*.yaml", "cartesian/*.yaml", "spherical/*.yaml"]
 
 [tool.ruff]
 line-length = 120

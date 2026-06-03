@@ -22,7 +22,7 @@ Use `nf2-extrapolate` for one run:
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/cartesian/sharp_cea.yaml" \
+  --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea" \
   --Br "./data/Br.fits" \
   --Bt "./data/Bt.fits" \
@@ -33,7 +33,7 @@ Use `nf2-extrapolate-series` when file placeholders are glob patterns:
 
 ```bash
 nf2-extrapolate-series \
-  --config "examples/configs/cartesian/multi_height_series.yaml" \
+  --config "nf2/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --photosphere_B_los_pattern "./data/photosphere/*B_los.fits"
 ```

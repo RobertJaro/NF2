@@ -1,5 +1,6 @@
 import pytest
 
+from nf2.train.util import _resolve_bundled_config, load_yaml_config
 from nf2.train.config import normalize_config
 
 
@@ -30,6 +31,79 @@ def test_map_errors_merge_into_file_mapping():
     files = config["data"]["boundaries"][0]["files"]
     assert files["Br"] == "br.fits"
     assert files["Br_err"] == "br_err.fits"
+
+
+def test_load_bundled_config_template_by_name():
+    config = load_yaml_config(
+        "nf2/cartesian/minimal_fits.yaml",
+        ["--run_path", "./runs/minimal", "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits"],
+    )
+
+    assert config["path"] == "./runs/minimal"
+    assert config["data"]["boundaries"][0]["fits_path"]["Br"] == "Br.fits"
+
+
+def test_load_bundled_config_template_from_documented_examples_path():
+    template = _resolve_bundled_config("examples/configs/cartesian/minimal_fits.yaml")
+
+    assert template is not None
+    assert template.name == "minimal_fits.yaml"
+
+
+def test_unset_bundled_error_placeholders_are_skipped():
+    with pytest.warns(UserWarning, match="Skipping optional error-file configuration"):
+        config = load_yaml_config(
+            "nf2/cartesian/sharp_cea.yaml",
+            ["--run_path", "./runs/sharp", "--work_path", "./runs/sharp/work",
+             "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits"],
+        )
+
+    boundary = config["data"]["boundaries"][0]
+    validation = config["data"]["validation"][0]
+    assert "error_path" not in boundary
+    assert "error_path" not in validation
+
+
+def test_set_bundled_error_placeholders_are_kept():
+    config = load_yaml_config(
+        "nf2/cartesian/sharp_cea.yaml",
+        [
+            "--run_path", "./runs/sharp",
+            "--work_path", "./runs/sharp/work",
+            "--Br", "Br.fits",
+            "--Bt", "Bt.fits",
+            "--Bp", "Bp.fits",
+            "--Br_err", "Br_err.fits",
+            "--Bt_err", "Bt_err.fits",
+            "--Bp_err", "Bp_err.fits",
+        ],
+    )
+
+    assert config["data"]["boundaries"][0]["error_path"]["Br_err"] == "Br_err.fits"
+    assert config["data"]["validation"][0]["error_path"]["Bp_err"] == "Bp_err.fits"
+
+
+def test_dependent_error_references_are_skipped_when_source_errors_are_skipped():
+    with pytest.warns(UserWarning, match="Skipping optional error-file"):
+        config = load_yaml_config(
+            "nf2/spherical/hmi_full_disk_series.yaml",
+            [
+                "--run_path", "./runs/spherical_series",
+                "--work_path", "./runs/spherical_series/work",
+                "--meta_path", "./runs/spherical_initial/last.ckpt",
+                "--wandb_project", "nf2",
+                "--run_name", "spherical series",
+                "--full_disk_Br_pattern", "full_disk/*.Br.fits",
+                "--full_disk_Bt_pattern", "full_disk/*.Bt.fits",
+                "--full_disk_Bp_pattern", "full_disk/*.Bp.fits",
+                "--synoptic_Br_pattern", "synoptic/*.Br.fits",
+                "--synoptic_Bt_pattern", "synoptic/*.Bt.fits",
+                "--synoptic_Bp_pattern", "synoptic/*.Bp.fits",
+            ],
+        )
+
+    assert "Br_err" not in config["data"]["boundaries"][0]["files"]
+    assert "Br_err" not in config["data"]["validation"][0]["files"]
 
 
 def test_map_errors_merge_into_file_series():

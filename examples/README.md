@@ -1,6 +1,6 @@
 # NF2 Examples
 
-This directory collects runnable NF2 examples for command-line runs, YAML configuration templates, and notebooks. The examples are intended to be copied, edited, and reused with local data paths.
+This directory collects runnable NF2 examples for command-line runs, reusable YAML configuration templates, and notebooks. The examples are intended to be copied, edited, and reused with local data paths.
 
 Most YAML files use `<<...>>` placeholders so one template can be reused with different input files, scratch paths, and output directories. The placeholders can be filled from the command line with `nf2-extrapolate` or replaced directly in a local copy of the YAML file. Spherical series configs can also use `[[dataset.path.to.value]]` references for values resolved during dataset loading, such as the current time step's `[[full_disk.files.Br]]`.
 
@@ -13,20 +13,20 @@ export WANDB_MODE=offline
 
 ## Directory Overview
 
-- [configs](configs): YAML templates for single runs, series runs, and analytical benchmarks.
+- [../nf2/configs](../nf2/configs): bundled YAML templates for single runs, series runs, and analytical benchmarks.
 - [scripts](scripts): command-line guides showing how to download data, run configs, export results, and compute metrics.
 - [notebooks](notebooks): interactive examples for local Jupyter and Google Colab.
 
 ## Configuration Templates
 
-The configuration templates live under [configs](configs). They follow the public NF2 configuration schema and can be used directly with the command-line tools.
+The configuration templates live under [../nf2/configs](../nf2/configs) so they are installed with the package. They follow the public NF2 configuration schema and can be used directly with the command-line tools through names such as `nf2/cartesian/sharp_cea.yaml`.
 
 ### Benchmark Analytical Cases
 
 Use these when you want a self-contained smoke test or a compact analytical NLFF benchmark. They generate Low & Lou fields internally and do not require external data.
 
-- [configs/benchmark/analytical_case1.yaml](configs/benchmark/analytical_case1.yaml): analytical case 1 with compact batch sizes, `1000` sampler iterations per epoch, and `10` epochs.
-- [configs/benchmark/analytical_case2.yaml](configs/benchmark/analytical_case2.yaml): analytical case 2 with the same benchmark training setup.
+- [../nf2/configs/benchmark/analytical_case1.yaml](../nf2/configs/benchmark/analytical_case1.yaml): analytical case 1 with compact batch sizes, `1000` sampler iterations per epoch, and `10` epochs.
+- [../nf2/configs/benchmark/analytical_case2.yaml](../nf2/configs/benchmark/analytical_case2.yaml): analytical case 2 with the same benchmark training setup.
 
 Guide: [scripts/benchmark.md](scripts/benchmark.md)
 
@@ -34,16 +34,16 @@ Guide: [scripts/benchmark.md](scripts/benchmark.md)
 
 Use these for local Cartesian volumes above planar boundary maps.
 
-- [configs/cartesian/minimal_fits.yaml](configs/cartesian/minimal_fits.yaml): minimal Cartesian run for plain Br/Bt/Bp FITS arrays. Uses `type: fits` and `load_map: false`.
-- [configs/cartesian/sharp_cea.yaml](configs/cartesian/sharp_cea.yaml): SHARP CEA vector magnetogram run with map metadata.
-- [configs/cartesian/auto_disambiguation.yaml](configs/cartesian/auto_disambiguation.yaml): Cartesian LOS/transverse/azimuth run with azimuth disambiguation support.
-- [configs/cartesian/multi_height.yaml](configs/cartesian/multi_height.yaml): single multi-height Cartesian extrapolation with photospheric and chromospheric boundaries.
+- [../nf2/configs/cartesian/minimal_fits.yaml](../nf2/configs/cartesian/minimal_fits.yaml): minimal Cartesian run for plain Br/Bt/Bp FITS arrays. Uses `type: fits` and `load_map: false`.
+- [../nf2/configs/cartesian/sharp_cea.yaml](../nf2/configs/cartesian/sharp_cea.yaml): SHARP CEA vector magnetogram run with map metadata.
+- [../nf2/configs/cartesian/auto_disambiguation.yaml](../nf2/configs/cartesian/auto_disambiguation.yaml): Cartesian LOS/transverse/azimuth run with azimuth disambiguation support.
+- [../nf2/configs/cartesian/multi_height.yaml](../nf2/configs/cartesian/multi_height.yaml): single multi-height Cartesian extrapolation with photospheric and chromospheric boundaries.
 
 Guide: [scripts/cartesian.md](scripts/cartesian.md)
 
 ### Cartesian Series Runs
 
-Use [configs/cartesian/sharp_cea_series.yaml](configs/cartesian/sharp_cea_series.yaml) for a single-height SHARP CEA Cartesian series and [configs/cartesian/multi_height_series.yaml](configs/cartesian/multi_height_series.yaml) for a time series of Cartesian multi-height extrapolations.
+Use [../nf2/configs/cartesian/sharp_cea_series.yaml](../nf2/configs/cartesian/sharp_cea_series.yaml) for a single-height SHARP CEA Cartesian series and [../nf2/configs/cartesian/multi_height_series.yaml](../nf2/configs/cartesian/multi_height_series.yaml) for a time series of Cartesian multi-height extrapolations.
 
 Series runs require a completed first single extrapolation. That first run's `last.ckpt` provides the `meta_path` start point for the sequence, and the series then continues from that trained NF2 state.
 
@@ -51,13 +51,13 @@ Guide: [scripts/cartesian_series.md](scripts/cartesian_series.md)
 
 ### Spherical Single Runs
 
-Use [configs/spherical/hmi_full_disk.yaml](configs/spherical/hmi_full_disk.yaml) for spherical HMI extrapolations that combine full-disk vector data with Carrington synoptic maps.
+Use [../nf2/configs/spherical/hmi_full_disk.yaml](../nf2/configs/spherical/hmi_full_disk.yaml) for spherical HMI extrapolations that combine full-disk vector data with Carrington synoptic maps.
 
 Guide: [scripts/spherical.md](scripts/spherical.md)
 
 ### Spherical Series Runs
 
-Use [configs/spherical/hmi_full_disk_series.yaml](configs/spherical/hmi_full_disk_series.yaml) for spherical HMI sequences. Series runs require the completed first spherical extrapolation's `last.ckpt` as `meta_path`; the series template validates every 10th dataset by default and still writes one `.nf2` file per dataset.
+Use [../nf2/configs/spherical/hmi_full_disk_series.yaml](../nf2/configs/spherical/hmi_full_disk_series.yaml) for spherical HMI sequences. Series runs require the completed first spherical extrapolation's `last.ckpt` as `meta_path`; the series template validates every 10th dataset by default and still writes one `.nf2` file per dataset.
 
 Guide: [scripts/spherical_series.md](scripts/spherical_series.md)
 
@@ -81,7 +81,7 @@ Typical quality checks include boundary agreement, `divB`, current-weighted `the
 
 ## Common Usage Pattern
 
-1. Choose the closest YAML template in [configs](configs).
+1. Choose the closest YAML template in [../nf2/configs](../nf2/configs).
 2. Copy the template or pass placeholder values with `nf2-extrapolate`.
 3. Set `run_path` to a writable output directory, usually under `runs/`.
 4. Keep the produced `extrapolation_result.nf2`; it is the main input for exports and metrics.
@@ -91,7 +91,7 @@ Example placeholder invocation:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/cartesian/minimal_fits.yaml \
+  --config nf2/cartesian/minimal_fits.yaml \
   --run_path ./runs/minimal \
   --Br ./data/Br.fits \
   --Bt ./data/Bt.fits \

@@ -7,7 +7,7 @@ include requirements.txt
 include .readthedocs.yaml
 
 recursive-include docs *.md *.py
-recursive-include examples *.md *.yaml *.ipynb
+recursive-include examples *.md *.ipynb
 recursive-include images *.jpg *.jpeg
 recursive-include conda-recipe *.yaml
 

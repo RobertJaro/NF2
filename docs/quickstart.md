@@ -17,7 +17,7 @@ Run a compact analytical smoke test. This does not require JSOC access or input 
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/benchmark/analytical_case1.yaml \
+  --config nf2/benchmark/analytical_case1.yaml \
   --run_path ./runs/benchmark/case1 \
   --work_path ./runs/benchmark/case1/work
 ```
@@ -35,7 +35,7 @@ The analytical example is intentionally small, but it still trains a neural fiel
 Run a single observational extrapolation from a YAML configuration:
 
 ```bash
-nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
+nf2-extrapolate --config nf2/cartesian/sharp_cea.yaml \
   --run_path ./runs/ar377 \
   --work_path /scratch/ar377 \
   --Br /data/Br.fits \
@@ -48,7 +48,7 @@ The observational command above is a template. Replace `/data/Br.fits`, `/data/B
 Run a time series:
 
 ```bash
-nf2-extrapolate-series --config examples/configs/cartesian/sharp_cea_series.yaml
+nf2-extrapolate-series --config nf2/cartesian/sharp_cea_series.yaml
 ```
 
 Series runs need one completed single extrapolation before the series starts. First run the initial time step with `nf2-extrapolate`, then pass that run's `last.ckpt` as `--meta_path` and pass glob patterns such as `--Br_pattern "./data/*.Br.fits"`. Each component pattern must expand to the same number of files, and sorted filenames should pair the same time step across `Br`, `Bt`, `Bp`, and optional error maps. See [Series runs](series.md) for complete commands.
@@ -96,7 +96,7 @@ Run the extrapolation with the downloaded files:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/cartesian/sharp_cea.yaml \
+  --config nf2/cartesian/sharp_cea.yaml \
   --run_path ./runs/ar377 \
   --Br ./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Br.fits \
   --Bt ./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt.fits \
@@ -105,6 +105,8 @@ nf2-extrapolate \
   --Bt_err ./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bt_err.fits \
   --Bp_err ./data/sharp_cea_377/hmi.sharp_cea_720s.377.20110215_000000_TAI.Bp_err.fits
 ```
+
+The `--Br_err`, `--Bt_err`, and `--Bp_err` arguments are optional. If you omit them, NF2 skips the error maps and uses the same bundled config.
 
 Use the generated reference pages for complete command and configuration options.
 For interactive walkthroughs, open the configurable notebooks in `examples/notebooks/`.

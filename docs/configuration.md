@@ -69,7 +69,7 @@ data:
 Run with:
 
 ```bash
-nf2-extrapolate --config examples/configs/cartesian/sharp_cea.yaml \
+nf2-extrapolate --config nf2/cartesian/sharp_cea.yaml \
   --run_path ./runs/ar377 \
   --work_path /scratch/ar377 \
   --Br /data/Br.fits \
@@ -162,7 +162,7 @@ files:
   B_azi: ./B_azi.fits
 ```
 
-Cartesian and spherical vector boundaries use `Br`, `Bt`, and `Bp` files. Error maps can be placed under `errors`; NF2 routes them to the loader-specific internal form.
+Cartesian and spherical vector boundaries use `Br`, `Bt`, and `Bp` files. Error maps can be placed under `errors`; NF2 routes them to the loader-specific internal form. In bundled templates, unresolved error placeholders are optional and are skipped when the matching command-line arguments are omitted.
 
 ## Potential Boundary
 
@@ -251,8 +251,10 @@ weight:
 
 Explicit losses are useful when you want the YAML to record the full scientific objective. If `losses` is omitted, NF2 inserts geometry-appropriate defaults. When tuning a run, change one loss weight or schedule at a time and compare metrics on the same exported volume.
 
-## Example Layout
+## Bundled Config Names
 
-- `examples/configs/cartesian`: observational Cartesian configs.
-- `examples/configs/spherical`: spherical full-disk/synoptic configs.
-- `examples/configs/benchmark`: analytical benchmark configs.
+Installed NF2 includes reusable YAML templates. Pass them to `--config` with the `nf2/...` prefix from any working directory:
+
+- `nf2/cartesian`: observational Cartesian configs.
+- `nf2/spherical`: spherical full-disk/synoptic configs.
+- `nf2/benchmark`: analytical benchmark configs.

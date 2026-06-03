@@ -49,7 +49,7 @@ Run it with custom files:
 
 ```bash
 nf2-extrapolate \
-  --config examples/configs/cartesian/minimal_fits.yaml \
+  --config nf2/cartesian/minimal_fits.yaml \
   --run_path ./runs/ar377 \
   --Br ./data/ar377/Br.fits \
   --Bt ./data/ar377/Bt.fits \

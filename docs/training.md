@@ -1,6 +1,6 @@
 # Training
 
-Training behavior is controlled by the `training`, `losses`, `loss_scaling`, `data.sampler`, and `data.validation` sections of the YAML config. The examples in `examples/configs` are the best starting point for complete files.
+Training behavior is controlled by the `training`, `losses`, `loss_scaling`, `data.sampler`, and `data.validation` sections of the YAML config. The bundled templates, such as `nf2/cartesian/sharp_cea.yaml`, are the best starting point for complete files.
 
 ```{toctree}
 :maxdepth: 1

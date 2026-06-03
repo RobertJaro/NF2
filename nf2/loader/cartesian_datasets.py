@@ -2,6 +2,7 @@ import glob
 import os
 
 import numpy as np
+from astropy import units as u
 from astropy.io import fits
 from astropy.nddata import block_reduce
 from sunpy.map import Map

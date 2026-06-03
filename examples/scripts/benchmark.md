@@ -14,7 +14,7 @@ The benchmark configs intentionally keep the run compact:
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/benchmark/analytical_case1.yaml" \
+  --config "nf2/benchmark/analytical_case1.yaml" \
   --run_path "./runs/benchmark/case1" \
   --work_path "./runs/benchmark/case1/work"
 ```
@@ -23,7 +23,7 @@ nf2-extrapolate \
 
 ```bash
 nf2-extrapolate \
-  --config "examples/configs/benchmark/analytical_case2.yaml" \
+  --config "nf2/benchmark/analytical_case2.yaml" \
   --run_path "./runs/benchmark/case2" \
   --work_path "./runs/benchmark/case2/work"
 ```
