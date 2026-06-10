@@ -79,6 +79,29 @@ nf2-extrapolate --config nf2/cartesian/sharp_cea.yaml \
 
 This is useful when the same example config should run on different file systems.
 
+Placeholders can include defaults with `<<name;default>>`. If the command-line argument is omitted, the default YAML fragment is used; if no default is present, the config loader raises an error. Defaults can be scalar values or complete YAML snippets:
+
+```yaml
+data:
+  z_range: <<z_range;[0, 100]>>
+losses:
+  - type: force_free
+    name: force_free
+    weight: <<force_free_weight;1.0e-3>>
+  - type: potential
+    name: potential
+    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
+```
+
+The bundled Cartesian configs expose these defaults, so `--z_range 0 200` sets the height range to `[0, 200]`, and `--force_free_weight 2.0e-3` updates both the force-free loss weight and the potential-loss starting weight.
+
+Placeholder resolution happens before YAML parsing:
+
+- `--name value` replaces every matching `<<name>>` or `<<name;default>>`.
+- Multi-value arguments such as `--z_range 0 200` are rendered as YAML lists, for example `[0, 200]`.
+- If the CLI argument is missing and the placeholder has a default, the default text is inserted as YAML.
+- If the CLI argument is missing and the placeholder has no default, loading fails with a missing-argument error.
+
 Spherical series configs use a separate `[[dataset.path.to.value]]` notation for values resolved during dataset loading. For example, `[[full_disk.files.Br]]` points to the current expanded full-disk `Br` file and is not filled from the command line.
 
 ## Data
@@ -103,7 +126,7 @@ Cartesian-specific keys:
 - `potential_boundary`: explicit potential boundary data. FFT potential fields are used by default; set `method: direct` to use the Green's-function fallback. Use `{type: none}` to disable.
 - `iterations`: number of random sampler batches per epoch-like pass.
 
-For a first Cartesian run, set `z_range` explicitly so the extrapolated height is intentional. Use a lower range for smoke tests and memory-limited checks, then increase it for the scientific volume. Keep the default potential boundary unless you are running analytical benchmarks, custom side-boundary experiments, or a config that deliberately disables it.
+The bundled Cartesian configs default to `z_range: [0, 100]` Mm through `<<z_range;[0, 100]>>`. Override it from the command line when the extrapolated height should differ, for example `--z_range 0 150`. Use a lower range for smoke tests and memory-limited checks, then increase it for the scientific volume. Keep the default potential boundary unless you are running analytical benchmarks, custom side-boundary experiments, or a config that deliberately disables it.
 
 Spherical-specific keys:
 
@@ -195,6 +218,7 @@ model:
 Supported `field` values:
 
 - `vector_potential`: predicts `A` and derives `B = curl(A)`.
+- `scaled_vector_potential`: predicts `A` from radially compressed coordinates, scales it by `(r / R_sun)^-p`, and derives `B = curl(A)`. The default `radial_power` is `2`, matching a dipole-like vector-potential falloff. The default `coordinate_radial_power` is `4`, so the SIREN input scale is about `0.35` at `1.3 R_sun`.
 - `b`: predicts `B` directly.
 
 ## Training
@@ -235,7 +259,7 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: 1.0e-3
+    weight: <<force_free_weight;1.0e-3>>
     datasets: [random]
 ```
 
@@ -245,7 +269,7 @@ Scheduled weights are also supported:
 weight:
   type: step
   steps: 5000
-  start: 1.0e-4
+  start: <<force_free_weight;1.0e-3>>
   end: 0.0
 ```
 

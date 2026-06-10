@@ -22,7 +22,7 @@ def test_output_metric_registry_drives_mapping_and_reference():
 
 def test_output_metric_keys_are_unambiguous():
     assert OUTPUT_METRICS["j"].outputs == ("j",)
-    assert OUTPUT_METRICS["j_vec"].outputs == ("j_vec",)
+    assert "j_vec" not in OUTPUT_METRICS
     assert OUTPUT_METRICS["energy_gradient"].outputs == ("energy_gradient",)
     assert OUTPUT_METRICS["spherical_energy_gradient"].outputs == ("spherical_energy_gradient",)
     assert OUTPUT_METRICS["free_energy"].outputs == ("free_energy",)
@@ -44,8 +44,7 @@ def test_output_metric_functions_return_declared_keys_for_core_metrics():
             continue
         assert set(metric.func(**state)) == set(metric.outputs)
 
-    assert metric_mapping["j"](**state)["j"].shape == (2, 2, 2)
-    assert metric_mapping["j_vec"](**state)["j_vec"].shape == (2, 2, 2, 3)
+    assert metric_mapping["j"](**state)["j"].shape == (2, 2, 2, 3)
 
 
 def test_normalize_metric_names_accepts_none_string_and_iterables():
@@ -54,11 +53,10 @@ def test_normalize_metric_names_accepts_none_string_and_iterables():
     assert normalize_metric_names(("j", "energy")) == ["j", "energy"]
 
 
-def test_vtk_metric_split_treats_j_as_scalar_and_j_vec_as_vector():
+def test_vtk_metric_split_treats_j_as_vector():
     vectors, scalars = split_vectors_scalars({
-        "j": np.zeros((2, 2, 2)),
-        "j_vec": np.zeros((2, 2, 2, 3)),
+        "j": np.zeros((2, 2, 2, 3)),
     })
 
-    assert set(scalars) == {"j"}
-    assert set(vectors) == {"j_vec"}
+    assert scalars == {}
+    assert set(vectors) == {"j"}

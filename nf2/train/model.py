@@ -3,6 +3,8 @@ import torch
 from torch import nn
 from torch.nn.functional import linear
 
+SOLAR_RADIUS_Mm = 695.7
+
 
 class Sine(nn.Module):
     def __init__(self, w0=1.0):
@@ -40,7 +42,7 @@ class SirenLayer(nn.Module):
 class SirenModel(nn.Module):
     """SIREN network used for all trainable NF2 field models."""
 
-    def __init__(self, in_dim=3, out_dim=3, dim=512, n_layers=8, w0=1.0, w0_init=5.0, **kwargs):
+    def __init__(self, in_dim=3, out_dim=3, dim=256, n_layers=8, w0=1.0, w0_init=5.0, **kwargs):
         super().__init__()
         self.num_layers = n_layers
         self.dim_hidden = dim
@@ -80,19 +82,41 @@ class VectorPotentialModel(SirenModel):
 
     def forward(self, coords, compute_jacobian=True):
         a = super().forward(coords)
-        jac_matrix = jacobian(a, coords)
-        dAy_dx = jac_matrix[:, 1, 0]
-        dAz_dx = jac_matrix[:, 2, 0]
-        dAx_dy = jac_matrix[:, 0, 1]
-        dAz_dy = jac_matrix[:, 2, 1]
-        dAx_dz = jac_matrix[:, 0, 2]
-        dAy_dz = jac_matrix[:, 1, 2]
-        rot_x = dAz_dy - dAy_dz
-        rot_y = dAx_dz - dAz_dx
-        rot_z = dAy_dx - dAx_dy
-        b = torch.stack([rot_x, rot_y, rot_z], -1)
+        b = curl(a, coords)
 
         out = {"b": b, "a": a}
+        if compute_jacobian:
+            out["jac_matrix"] = jacobian(b, coords)
+        return out
+
+
+class ScaledVectorPotentialModel(VectorPotentialModel):
+    """Vector-potential model with radial coordinate and A power-law envelopes."""
+
+    def __init__(self, radial_power=2.0, coordinate_radial_power=4.0,
+                 base_radius=None, Mm_per_ds=None, eps=1e-6, **kwargs):
+        super().__init__(**kwargs)
+        if base_radius is None:
+            if Mm_per_ds is None:
+                raise ValueError("ScaledVectorPotentialModel requires 'Mm_per_ds' when 'base_radius' is not set.")
+            base_radius = SOLAR_RADIUS_Mm / Mm_per_ds
+        if base_radius <= 0:
+            raise ValueError("base_radius must be positive.")
+        self.radial_power = radial_power
+        self.coordinate_radial_power = coordinate_radial_power
+        self.base_radius = base_radius
+        self.eps = eps
+
+    def forward(self, coords, compute_jacobian=True):
+        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.eps)
+        normalized_radius = radius / self.base_radius
+        coordinate_scale = normalized_radius.pow(-self.coordinate_radial_power)
+        network_coords = coords * coordinate_scale
+        a = SirenModel.forward(self, network_coords)
+        a = a * normalized_radius.pow(-self.radial_power)
+        b = curl(a, coords)
+
+        out = {"b": b, "a": a, "network_coords": network_coords, "coordinate_scale": coordinate_scale}
         if compute_jacobian:
             out["jac_matrix"] = jacobian(b, coords)
         return out
@@ -118,6 +142,20 @@ def calculate_current_from_jacobian(jac_matrix, f=torch):
     rot_y = dBx_dz - dBz_dx
     rot_z = dBy_dx - dBx_dy
     return f.stack([rot_x, rot_y, rot_z], -1)
+
+
+def curl(vector, coords):
+    jac_matrix = jacobian(vector, coords)
+    dVy_dx = jac_matrix[:, 1, 0]
+    dVz_dx = jac_matrix[:, 2, 0]
+    dVx_dy = jac_matrix[:, 0, 1]
+    dVz_dy = jac_matrix[:, 2, 1]
+    dVx_dz = jac_matrix[:, 0, 2]
+    dVy_dz = jac_matrix[:, 1, 2]
+    rot_x = dVz_dy - dVy_dz
+    rot_y = dVx_dz - dVz_dx
+    rot_z = dVy_dx - dVx_dy
+    return torch.stack([rot_x, rot_y, rot_z], -1)
 
 
 def jacobian(output, coords):

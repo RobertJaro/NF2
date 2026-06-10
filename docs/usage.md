@@ -60,3 +60,5 @@ nf2.run(
 out = nf2.load("./runs/case1/extrapolation_result.nf2")
 cube = out.load_cube(Mm_per_pixel=1.0, height_range=[0, 80], metrics=["j"])
 ```
+
+`cube["metrics"]["j"]` is the full current-density vector on the sampled grid.

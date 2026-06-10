@@ -4,8 +4,7 @@
 
 | Metric | Output Key(s) | Description |
 | --- | --- | --- |
-| j | j | Current-density magnitude \|J\|. |
-| j_vec | j_vec | Current-density vector. |
+| j | j | Current-density vector. |
 | alpha | alpha | Force-free alpha, computed as (J . B) / \|B\|^2. |
 | b_nabla_bz | b_nabla_bz | Vertical magnetic tension-related derivative. |
 | energy | energy | Magnetic energy density. |

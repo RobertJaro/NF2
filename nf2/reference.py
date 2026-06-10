@@ -67,12 +67,15 @@ CONFIG_OPTIONS = [
     ("data.persistent_workers", "bool", "true", "Keep training DataLoader workers alive while a loader is active."),
     ("data.preload_data_modules", "bool", "true", "For series runs, preload all step data modules up front instead of loading each step lazily."),
     ("data.data_module_workers", "int", "data.num_workers", "Series-only multiprocessing workers used to preload per-step data modules."),
-    ("model.field", "vector_potential | b", "vector_potential", "Field representation."),
+    ("model.field", "vector_potential | scaled_vector_potential | b", "vector_potential", "Field representation."),
     ("model.network.type", "siren", "siren", "Only SIREN networks are supported."),
     ("model.network.hidden_dim", "int", "256 cartesian, 512 spherical", "SIREN hidden width."),
     ("model.network.layers", "int", "model default", "Number of SIREN layers."),
     ("model.network.w0", "float", "model default", "SIREN frequency scale for hidden layers."),
     ("model.network.w0_initial", "float", "model default", "SIREN frequency scale for the first layer."),
+    ("model.radial_power", "float", "2.0", "Radial power for `scaled_vector_potential`, applied as `(r / R_sun)^-radial_power`."),
+    ("model.coordinate_radial_power", "float", "4.0", "Radial power for compressing SIREN input coordinates in `scaled_vector_potential`, applied as `coords * (r / R_sun)^-coordinate_radial_power`."),
+    ("model.base_radius", "float", "R_sun in model units", "Reference radius for `scaled_vector_potential`; omit for spherical runs."),
     ("training.epochs", "int", "15", "Number of Lightning epochs."),
     ("training.optimizer.start", "float", "5e-4", "Initial learning rate."),
     ("training.optimizer.end", "float", "5e-5", "Final learning rate."),
@@ -345,7 +348,7 @@ CLI_COMMANDS = [
         "Run one YAML-configured extrapolation.",
         [
             ("--config", "required", "Path to a YAML configuration file."),
-            ("--<placeholder>", "optional", "Any command-line option matching a <<placeholder>> in the YAML fills that value."),
+            ("--<placeholder>", "optional", "Fills <<placeholder>> or <<placeholder;default>> before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Multiple values are supported for list placeholders such as --z_range 0 150."),
         ],
     ),
     (
@@ -354,7 +357,7 @@ CLI_COMMANDS = [
         [
             ("--config", "required", "Path to a series YAML configuration file."),
             ("--reload", "false", "Rebuild work_path/data_module.pkl instead of reusing the saved series data module state."),
-            ("--<placeholder>", "optional", "Fills matching <<placeholder>> values, including glob patterns for series files."),
+            ("--<placeholder>", "optional", "Fills <<placeholder>> or <<placeholder;default>> before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Supports glob patterns and multi-value list placeholders."),
         ],
     ),
     (

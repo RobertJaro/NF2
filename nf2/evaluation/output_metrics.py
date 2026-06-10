@@ -32,14 +32,9 @@ def normalize_metric_names(metrics: str | Iterable[str] | None) -> list[str]:
     return list(metrics)
 
 
-def current_density_vector(jac_matrix, **kwargs):
-    j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
-    return {'j_vec': j.to(u.G / u.s)}
-
-
 def current_density(jac_matrix, **kwargs):
-    j = current_density_vector(jac_matrix)['j_vec']
-    return {'j': np.sqrt(np.sum(j ** 2, axis=-1)).to(u.G / u.s)}
+    j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
+    return {'j': j.to(u.G / u.s)}
 
 
 def b_nabla_bz(b, jac_matrix, **kwargs):
@@ -362,8 +357,7 @@ def squashing_factor(b, interp_ratio=3, x_range=None, y_range=None, z_range=None
 
 
 OUTPUT_METRICS = {
-    'j': OutputMetric('j', current_density, 'Current-density magnitude |J|.', ('j',)),
-    'j_vec': OutputMetric('j_vec', current_density_vector, 'Current-density vector.', ('j_vec',)),
+    'j': OutputMetric('j', current_density, 'Current-density vector.', ('j',)),
     'alpha': OutputMetric('alpha', alpha, 'Force-free alpha, computed as (J . B) / |B|^2.', ('alpha',)),
     'b_nabla_bz': OutputMetric(
         'b_nabla_bz', b_nabla_bz, 'Vertical magnetic tension-related derivative.', ('b_nabla_bz',)

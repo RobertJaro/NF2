@@ -71,6 +71,8 @@ nf2-extrapolate \
   --Bp "/data/Bp.fits"
 ```
 
+Bundled Cartesian configs default to `z_range: [0, 100]` and `force_free_weight: 1.0e-3`; override them with arguments such as `--z_range 0 150` and `--force_free_weight 2.0e-3`.
+
 Download HMI SHARP data:
 
 ```bash
@@ -117,7 +119,7 @@ out = nf2.load("path/to/extrapolation_result.nf2")
 cube = out.load_cube(Mm_per_pixel=0.72, metrics=["j", "alpha"])
 ```
 
-`j` is the current-density magnitude `|J|`. Request `j_vec` when you need the full current-density vector, for example for custom force-free alignment metrics.
+`j` is the full current-density vector in both loader results and file exports.
 
 Direct helpers are also available:
 

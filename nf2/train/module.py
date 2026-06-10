@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ExponentialLR
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, VectorPotentialModel
+from nf2.train.model import BModel, ScaledVectorPotentialModel, VectorPotentialModel
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     HeightTransformModel
 
@@ -31,7 +31,7 @@ class NF2Module(LightningModule):
             data_config (dict): Configuration dictionary containing data parameters like coordinate ranges,
                               dataset-specific parameters, and data preprocessing settings.
             model_kwargs (dict, optional): Model configuration dictionary containing:
-                - type (str): Model type, one of ['b', 'vector_potential']
+                - type (str): Model type, one of ['b', 'vector_potential', 'scaled_vector_potential']
                 - dim (int): Hidden dimension size of the neural network
                 Additional model-specific parameters
             loss_config (list, optional): List of dictionaries containing loss configurations:
@@ -68,8 +68,11 @@ class NF2Module(LightningModule):
             model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
+        elif model_type == 'scaled_vector_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model = ScaledVectorPotentialModel(**model_kwargs)
         else:
-            valid_options = ['b', 'vector_potential']
+            valid_options = ['b', 'vector_potential', 'scaled_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model

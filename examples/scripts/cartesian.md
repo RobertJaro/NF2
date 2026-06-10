@@ -49,6 +49,8 @@ nf2-extrapolate \
 
 Use this path when your FITS files only contain array data and do not need coordinate information from FITS/WCS headers.
 
+Use `--z_range z_min z_max` with any Cartesian extrapolation command to adjust the height of the extrapolated volume to the size of the horizontal domain. For example, `--z_range 0 150` raises the top boundary to 150 Mm; the bundled Cartesian default is `[0, 100]`.
+
 ## Multi-Height Cartesian Data
 
 Multi-height examples assume you already prepared matching photospheric and chromospheric FITS files. No generic download command is provided because the source instruments and preprocessing are project-specific.

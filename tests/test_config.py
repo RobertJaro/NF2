@@ -43,11 +43,81 @@ def test_load_bundled_config_template_by_name():
     assert config["data"]["boundaries"][0]["fits_path"]["Br"] == "Br.fits"
 
 
+def test_default_cartesian_config_uses_100_mm_z_range():
+    with pytest.warns(UserWarning, match="Skipping optional error-file configuration"):
+        config = load_yaml_config(
+            "nf2/cartesian/sharp_cea.yaml",
+            ["--run_path", "./runs/sharp", "--work_path", "./runs/sharp/work",
+             "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits"],
+        )
+
+    assert config["data"]["z_range"] == [0, 100]
+
+
+def test_cartesian_z_range_can_be_overridden_from_cli_args():
+    with pytest.warns(UserWarning, match="Skipping optional error-file configuration"):
+        config = load_yaml_config(
+            "nf2/cartesian/sharp_cea.yaml",
+            ["--run_path", "./runs/sharp", "--work_path", "./runs/sharp/work",
+             "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits",
+             "--z_range", "0", "150"],
+        )
+
+    assert config["data"]["z_range"] == [0.0, 150.0]
+
+
+def test_default_cartesian_potential_start_matches_force_free_weight():
+    config = load_yaml_config(
+        "nf2/cartesian/minimal_fits.yaml",
+        ["--run_path", "./runs/minimal", "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits"],
+    )
+
+    losses = {loss["name"]: loss for loss in config["losses"]}
+    assert losses["potential"]["weight"]["start"] == losses["force_free"]["weight"]
+
+
+def test_cartesian_force_free_weight_can_be_overridden_from_cli_args():
+    config = load_yaml_config(
+        "nf2/cartesian/minimal_fits.yaml",
+        ["--run_path", "./runs/minimal", "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits",
+         "--force_free_weight", "2.0e-3"],
+    )
+
+    losses = {loss["name"]: loss for loss in config["losses"]}
+    assert losses["force_free"]["weight"] == 2.0e-3
+    assert losses["potential"]["weight"]["start"] == 2.0e-3
+
+
+def test_missing_required_placeholder_raises_error():
+    with pytest.raises(ValueError, match="Bp"):
+        load_yaml_config(
+            "nf2/cartesian/minimal_fits.yaml",
+            ["--run_path", "./runs/minimal", "--Br", "Br.fits", "--Bt", "Bt.fits"],
+        )
+
+
 def test_load_bundled_config_template_from_documented_examples_path():
     template = _resolve_bundled_config("examples/configs/cartesian/minimal_fits.yaml")
 
     assert template is not None
     assert template.name == "minimal_fits.yaml"
+
+
+def test_scaled_vector_potential_model_field_is_supported():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+            },
+            "model": {"field": "scaled_vector_potential"},
+            "losses": [
+                {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
+            ],
+        }
+    )
+
+    assert config["model"]["type"] == "scaled_vector_potential"
 
 
 def test_unset_bundled_error_placeholders_are_skipped():

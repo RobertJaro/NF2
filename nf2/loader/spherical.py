@@ -23,7 +23,7 @@ class SphericalDataModule(BaseDataModule):
                  max_radius=1.3,
                  Mm_per_ds=100,
                  Gauss_per_dB=1000, work_path=None,
-                 batch_size=4096, type=None, geometry=None, overview_id=None, **kwargs):
+                 batch_size=4096, iterations=None, type=None, geometry=None, overview_id=None, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
                            'fits_reference': SphericalFITSReferenceDataset,
@@ -38,6 +38,7 @@ class SphericalDataModule(BaseDataModule):
         self.cube_shape = [1, max_radius]
         self.spatial_norm = 1 * u.solRad
         self.overview_id = overview_id
+        self.iterations = iterations
 
         # init boundary datasets
         general_config = {'work_path': work_path, 'batch_size': batch_size, 'Gauss_per_dB': Gauss_per_dB,
@@ -79,6 +80,8 @@ class SphericalDataModule(BaseDataModule):
                 if k not in config:
                     config[k] = v
             if c_type in ['random_spherical', 'random_radial_grouped']:
+                if self.iterations is not None and 'length' not in config:
+                    config['length'] = self.iterations
                 self._apply_random_reference_map(config)
             config['requires_jacobian'] = requires_jacobian
             os.makedirs(config['work_path'], exist_ok=True)

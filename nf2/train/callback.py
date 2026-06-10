@@ -127,7 +127,7 @@ class SphericalSlicesCallback(Callback):
                 height = coords[j, :, :, 0].mean()
                 b_slice = b[j, :, :, i]
                 v_min_max = np.nanmax(np.abs(b_slice))
-                v_min_max = max(v_min_max, 1)
+                v_min_max = max(v_min_max, 0.01)
                 im = plot_axs[i, j].imshow(b_slice, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
                                             origin='lower', extent=None)
                 divider = make_axes_locatable(plot_axs[i, j])
@@ -340,7 +340,7 @@ class SlicesCallback(Callback):
                 height = coords[:, :, j, 2].mean() * self.Mm_per_ds
                 b_slice = b[:, :, j, i]
                 v_min_max = np.nanmax(np.abs(b_slice))
-                v_min_max = max(v_min_max, 1)
+                v_min_max = max(v_min_max, 0.01)
                 ax = plot_axs[i, j]
                 im = ax.imshow(b_slice.T, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
                                origin='lower', extent=extent, aspect='equal')

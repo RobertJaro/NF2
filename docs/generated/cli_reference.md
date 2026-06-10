@@ -8,7 +8,7 @@ Run one YAML-configured extrapolation.
 | Option | Default | Description |
 | --- | --- | --- |
 | `--config` | required | Path to a YAML configuration file. |
-| `--<placeholder>` | optional | Any command-line option matching a `<<placeholder>>` in the YAML fills that value. |
+| `--<placeholder>` | optional | Fills `<<placeholder>>` or `<<placeholder;default>>` before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Multiple values are supported for list placeholders such as --z_range 0 150. |
 
 
 ## `nf2-extrapolate-series`
@@ -20,7 +20,7 @@ Run a YAML-configured time series.
 | --- | --- | --- |
 | `--config` | required | Path to a series YAML configuration file. |
 | `--reload` | false | Rebuild work_path/data_module.pkl instead of reusing the saved series data module state. |
-| `--<placeholder>` | optional | Fills matching `<<placeholder>>` values, including glob patterns for series files. |
+| `--<placeholder>` | optional | Fills `<<placeholder>>` or `<<placeholder;default>>` before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Supports glob patterns and multi-value list placeholders. |
 
 
 ## `nf2-download`

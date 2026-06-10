@@ -147,7 +147,7 @@ Cartesian configs commonly set `z_range`, a random volume sampler, a potential b
 ```yaml
 data:
   geometry: cartesian
-  z_range: [0, 80]
+  z_range: <<z_range;[0, 100]>>
   sampler:
     type: height
     batch_size: 16384
@@ -167,7 +167,7 @@ data:
       type: slices
 ```
 
-`z_range` is measured in Mm. The random sampler provides volume points for force-free and divergence-related losses. The potential boundary adds side/top boundary constraints by default; set `type: none` to disable it. Validation datasets drive callbacks and metrics during training.
+`z_range` is measured in Mm and defaults to `[0, 100]` in the bundled Cartesian configs. Override it with command-line values such as `--z_range 0 150` to adjust the height of the extrapolation to the size of the horizontal domain. The random sampler provides volume points for force-free and divergence-related losses. The potential boundary adds side/top boundary constraints by default; set `type: none` to disable it. Validation datasets drive callbacks and metrics during training.
 
 ## Losses
 
@@ -181,15 +181,15 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: 1.0e-3
+    weight: <<force_free_weight;1.0e-3>>
     datasets: [random]
   - type: potential
     name: potential
-    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
     datasets: [random]
 ```
 
-The `datasets` entries refer to dataset ids from `data.boundaries`, `data.sampler`, or generated defaults such as `random` and `potential`.
+The bundled Cartesian configs expose `force_free_weight` as a placeholder default. Passing `--force_free_weight 2.0e-3` updates the force-free loss and the potential-loss starting weight together. The `datasets` entries refer to dataset ids from `data.boundaries`, `data.sampler`, or generated defaults such as `random` and `potential`.
 
 ## Python API
 
@@ -214,7 +214,7 @@ nf2.run(
                 },
             }
         ],
-        "z_range": [0, 80],
+        "z_range": [0, 100],
     },
     training={"epochs": 30},
 )

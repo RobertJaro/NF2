@@ -76,8 +76,7 @@ Available derived quantities are:
 
 | `--metrics` name | Exported array key | Notes |
 | --- | --- | --- |
-| `j` | `j` | Current-density magnitude `|J|`. |
-| `j_vec` | `j_vec` | Current-density vector. |
+| `j` | `j` | Current-density vector. |
 | `alpha` | `alpha` | Force-free alpha, computed as `(J . B) / |B|^2`. |
 | `b_nabla_bz` | `b_nabla_bz` | Vertical magnetic tension-related derivative. |
 | `energy` | `energy` | Magnetic energy density in `erg / cm^3`. |
@@ -91,6 +90,5 @@ Available derived quantities are:
 | `squashing_factor` | `squashing_factor`, `twist` | Squashing factor and twist diagnostics; requires optional GPU/CuPy/FastQSL dependencies. |
 
 Exported array keys now match the requested metric name wherever a metric produces one quantity. `squashing_factor` also writes `twist` because the field-line calculation naturally produces both diagnostics.
-Use `--metrics j j_vec ...` when you want both the current-density magnitude and the full current-density vector in the exported file.
 
 Available export quantities and quality metrics are also listed in the generated [export and metrics reference](generated/export_metrics_reference.md).

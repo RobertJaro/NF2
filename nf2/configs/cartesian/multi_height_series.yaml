@@ -38,7 +38,7 @@ data:
     type: potential
     strides: 4
   iterations: 10000
-  z_range: [0, 100]
+  z_range: <<z_range;[0, 100]>>
 training:
   reload_dataloaders_every_n_epochs: 1
   check_val_every_n_epoch: 10
@@ -54,7 +54,7 @@ losses:
     datasets: potential
   - type: force_free
     name: force_free
-    weight: 1.0e-3
+    weight: <<force_free_weight;1.0e-3>>
     datasets: [random]
   - type: potential
     name: potential

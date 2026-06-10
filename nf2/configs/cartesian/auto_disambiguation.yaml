@@ -41,7 +41,7 @@ data:
     - id: slices
       type: slices
   iterations: 10000
-  z_range: [0, 80]
+  z_range: <<z_range;[0, 100]>>
 training:
   epochs: 15
 losses:
@@ -56,11 +56,11 @@ losses:
     datasets: potential
   - type: force_free
     name: force_free
-    weight: 1.0e-3
+    weight: <<force_free_weight;1.0e-3>>
     datasets: [random]
   - type: potential
     name: potential
-    weight: { type: step, steps: 5000, start: 1.0e-4, end: 0.0 }
+    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
     datasets: [random]
 callbacks:
   - type: los_trv_azi_boundary

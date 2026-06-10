@@ -45,6 +45,8 @@ nf2-extrapolate --config nf2/cartesian/sharp_cea.yaml \
 
 The observational command above is a template. Replace `/data/Br.fits`, `/data/Bt.fits`, and `/data/Bp.fits` with one matching vector magnetogram. For SHARP CEA data, `Br`, `Bt`, and `Bp` are the radial, theta, and phi components downloaded from JSOC. For generic Cartesian FITS arrays, use the `minimal_fits.yaml` example instead of `sharp_cea.yaml` unless your files include the SHARP/SunPy map metadata expected by the `sharp` loader.
 
+For Cartesian extrapolations, use `--z_range z_min z_max` to adjust the height of the extrapolation to the size of the horizontal domain, for example `--z_range 0 150`. The bundled Cartesian configs default to `[0, 100]` Mm.
+
 Run a time series:
 
 ```bash
@@ -61,6 +63,8 @@ import nf2
 model = nf2.load("./runs/benchmark/case1/extrapolation_result.nf2")
 cube = model.load_cube(Mm_per_pixel=0.72, metrics=["j"])
 ```
+
+`cube["metrics"]["j"]` is the full current-density vector on the sampled grid.
 
 Export a result:
 

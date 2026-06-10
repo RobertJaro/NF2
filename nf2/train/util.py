@@ -1,3 +1,4 @@
+import re
 import yaml
 import warnings
 
@@ -35,15 +36,78 @@ def is_interactive_environment():
 
 def load_yaml_config(yaml_config_file, overwrite_args=None):
     overwrite_args = [] if overwrite_args is None else overwrite_args
-    assert all([k.startswith('--') for k in overwrite_args[::2]]), \
-        'Only accept --config and overwrite arguments (must start with --)'
-    overwrite_args = {k.replace('--', ''): v for k, v in zip(overwrite_args[::2], overwrite_args[1::2])}
+    overwrite_args = _parse_overwrite_args(overwrite_args)
     config_str = _read_yaml_config(yaml_config_file)
-    for overwrite_key, overwrite_value in overwrite_args.items():
-        config_str = config_str.replace('<<%s>>' % overwrite_key, overwrite_value)
+    config_str = _resolve_placeholders(config_str, overwrite_args)
     config = yaml.safe_load(config_str)
     _drop_unresolved_optional_errors(config)
+    _reject_unresolved_placeholders(config)
     return normalize_config(config)
+
+
+_PLACEHOLDER_PATTERN = re.compile(r"<<([^<>;]+)(?:;([^<>]*))?>>")
+
+
+def _resolve_placeholders(config_str, overwrite_args):
+    def replace(match):
+        key = match.group(1).strip()
+        default = match.group(2)
+        if key in overwrite_args:
+            return _format_placeholder_value(key, overwrite_args[key])
+        if default is not None:
+            return _format_placeholder_value(key, default.strip())
+        return match.group(0)
+
+    return _PLACEHOLDER_PATTERN.sub(replace, config_str)
+
+
+def _format_placeholder_value(key, value):
+    if isinstance(value, list):
+        return f"[{', '.join(str(v) for v in value)}]"
+    return str(value)
+
+
+def _parse_overwrite_args(overwrite_args):
+    parsed = {}
+    i = 0
+    while i < len(overwrite_args):
+        key = overwrite_args[i]
+        if not key.startswith("--"):
+            raise ValueError("Only accept --config and overwrite arguments (must start with --)")
+        key = key.replace("--", "", 1)
+        values = []
+        i += 1
+        while i < len(overwrite_args) and not overwrite_args[i].startswith("--"):
+            values.append(overwrite_args[i])
+            i += 1
+        if not values:
+            raise ValueError(f"--{key} requires a value")
+        parsed[key] = values[0] if len(values) == 1 else values
+    return parsed
+
+
+def _reject_unresolved_placeholders(config):
+    placeholder = _find_unresolved_placeholder(config)
+    if placeholder is not None:
+        raise ValueError(f"Missing required config argument for placeholder '{placeholder}'.")
+
+
+def _find_unresolved_placeholder(value):
+    if isinstance(value, str):
+        match = _PLACEHOLDER_PATTERN.search(value)
+        if match is not None:
+            return match.group(1).strip()
+    if isinstance(value, dict):
+        for child in value.values():
+            placeholder = _find_unresolved_placeholder(child)
+            if placeholder is not None:
+                return placeholder
+    if isinstance(value, list):
+        for child in value:
+            placeholder = _find_unresolved_placeholder(child)
+            if placeholder is not None:
+                return placeholder
+    return None
 
 
 def _read_yaml_config(yaml_config_file):

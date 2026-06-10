@@ -9,6 +9,8 @@ Choose the page that matches the geometry or run type:
 - [Analytical NLFF cases](analytical.md) provide fast benchmark and smoke-test runs.
 - [Series runs](series.md) run time sequences after an initial single extrapolation has produced the starting NF2 state.
 
+For Cartesian extrapolations, `z_range` sets the vertical height of the model volume in Mm. Choose it to match the horizontal size of the domain: smaller boxes can use a lower `z_max`, while larger active-region domains often need a taller volume. Bundled Cartesian configs default to `[0, 100]`, and command-line runs can override that with values such as `--z_range 0 150`.
+
 ## YAML Configuration Files
 
 A YAML configuration has a small set of top-level sections:
@@ -108,7 +110,7 @@ nf2.run(
                 },
             }
         ],
-        "z_range": [0, 80],
+        "z_range": [0, 100],
     },
     training={"epochs": 30},
 )

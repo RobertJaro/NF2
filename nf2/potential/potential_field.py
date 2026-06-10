@@ -118,7 +118,7 @@ def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
 
         potential = []
         iter = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=min(2, DEFAULT_NUM_WORKERS))
-        iter = iter if progress else tqdm(iter, desc='Potential Field')
+        iter = tqdm(iter, desc='Potential Field') if progress else iter
         for coord, in iter:
             coord = coord.to(device)
             p_batch = model(coord)

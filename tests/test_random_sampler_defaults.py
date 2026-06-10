@@ -1,4 +1,5 @@
 from nf2.train.config import DEFAULT_DATA_ITERATIONS, normalize_config
+from nf2.loader.spherical import SphericalDataModule
 
 
 def test_cartesian_data_iterations_default_is_release_scale():
@@ -43,3 +44,14 @@ def test_data_iterations_override_is_preserved():
     )
 
     assert config["data"]["iterations"] == 7
+
+
+def test_spherical_data_module_accepts_top_level_iterations(tmp_path):
+    data_module = SphericalDataModule(
+        boundaries=[{"id": "random", "type": "random_spherical"}],
+        validation=[{"id": "sphere", "type": "sphere"}],
+        iterations=7,
+        work_path=tmp_path,
+    )
+
+    assert len(data_module.training_datasets["random"]) == 7

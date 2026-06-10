@@ -81,12 +81,15 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| model.field | vector_potential \| b | vector_potential | Field representation. |
+| model.field | vector_potential \| scaled_vector_potential \| b | vector_potential | Field representation. |
 | model.network.type | siren | siren | Only SIREN networks are supported. |
 | model.network.hidden_dim | int | 256 cartesian, 512 spherical | SIREN hidden width. |
 | model.network.layers | int | model default | Number of SIREN layers. |
 | model.network.w0 | float | model default | SIREN frequency scale for hidden layers. |
 | model.network.w0_initial | float | model default | SIREN frequency scale for the first layer. |
+| model.radial_power | float | 2.0 | Radial power for `scaled_vector_potential`, applied as `(r / R_sun)^-radial_power`. |
+| model.coordinate_radial_power | float | 4.0 | Radial power for compressing SIREN input coordinates in `scaled_vector_potential`, applied as `coords * (r / R_sun)^-coordinate_radial_power`. |
+| model.base_radius | float | R_sun in model units | Reference radius for `scaled_vector_potential`; omit for spherical runs. |
 
 ## Training
 

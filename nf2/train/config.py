@@ -159,8 +159,8 @@ def _normalize_spherical_data(data):
 def _normalize_model(model, geometry):
     model = deepcopy(model or {})
     field = model.pop("field", "vector_potential")
-    if field not in {"b", "vector_potential"}:
-        raise ValueError("model.field must be 'b' or 'vector_potential'.")
+    if field not in {"b", "vector_potential", "scaled_vector_potential"}:
+        raise ValueError("model.field must be 'b', 'vector_potential', or 'scaled_vector_potential'.")
     network = model.pop("network", {}) or {}
     network_type = network.pop("type", "siren")
     if network_type != "siren":
