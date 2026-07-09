@@ -26,7 +26,10 @@ class RequiresJacobianDataset(Dataset):
         return batch
 
     def __getattr__(self, item):
-        return getattr(self.dataset, item)
+        dataset = self.__dict__.get('dataset')
+        if dataset is None:
+            raise AttributeError(item)
+        return getattr(dataset, item)
 
 
 class BaseDataModule(LightningDataModule):
