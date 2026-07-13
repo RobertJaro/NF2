@@ -222,10 +222,14 @@ class AziBoundaryLoss(BaseLoss):
         b_pred = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
         b_pred = img_to_los_trv_azi(b_pred, f=torch)
 
-        b_azi_true = b_true[..., 2] % torch.pi
-        b_azi_pred = b_pred[..., 2] % torch.pi
-        b_diff = (b_azi_pred - b_azi_true).pow(2) * b_true[..., 1]  # weight by transverse field
-        b_diff = b_diff
+        b_azi_true = b_true[..., 2]
+        b_azi_pred = b_pred[..., 2]
+        if self.disambiguate:
+            b_diff = torch.sin(b_azi_pred - b_azi_true).pow(2)
+        else:
+            b_delta = torch.atan2(torch.sin(b_azi_pred - b_azi_true), torch.cos(b_azi_pred - b_azi_true))
+            b_diff = b_delta.pow(2)
+        b_diff = b_diff * b_true[..., 1]  # weight by transverse field
 
         return b_diff
 

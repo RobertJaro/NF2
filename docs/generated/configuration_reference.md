@@ -121,7 +121,9 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | losses[].weight.iterations | int | required for exponential/linear | Number of optimizer steps over which to change the weight. |
 | losses[].weight.steps | int | required for step | Step interval for step schedules. |
 | losses[].datasets | str \| list[str] | loss default | Dataset ids used by the loss. |
+| losses[].weights | list[float] | [1.0, 1.0, 1.0] for boundary | Raw per-component multipliers for `boundary` losses, ordered like the dataset field components. |
 | losses[].ambiguous | bool | loss default | Enable ambiguity-aware behavior for supported azimuth/disambiguation losses. |
+| losses[].disambiguate | bool | true for boundary_azi | Use a pi-periodic azimuth loss for legacy `boundary_azi` so 180-degree ambiguous directions are equivalent. |
 | loss_scaling | list[dict] | geometry default | Spatial scaling modules for selected losses. |
 | loss_scaling[].type | exponential \| potential_fit \| b_height \| radial | geometry default | Loss-scaling module type. |
 | loss_scaling[].name | str | type | Stable loss-scaling module name. |

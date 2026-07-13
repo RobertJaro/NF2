@@ -27,7 +27,9 @@ losses:
 
 Use `datasets` to point a loss at boundary, sampler, or validation dataset ids. NF2 v0.4 uses `weight`; the legacy `lambda` key is rejected.
 
-Common Cartesian losses include `boundary`, `force_free`, and `potential`. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. Spherical configs usually combine `boundary`, `force_free`, `potential`, and sometimes `energy_gradient`.
+Common Cartesian losses include `boundary`, `force_free`, and `potential`. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. The older `boundary_azi` loss remains available for split transverse/azimuth experiments; prefer `boundary_los_trv_azi` for new ambiguity-aware LOS/transverse/azimuth runs. Spherical configs usually combine `boundary`, `force_free`, `potential`, and sometimes `energy_gradient`.
+
+For `boundary` losses, set `weights` to raw per-component multipliers in dataset component order. For spherical Br/Btheta/Bphi maps, `weights: [1.0, 0.1, 0.1]` keeps Br at full strength and gives Btheta and Bphi one tenth of the Br penalty.
 
 ## Loss Schedules
 
