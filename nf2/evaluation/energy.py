@@ -1,5 +1,3 @@
-import numpy as np
-
 from nf2.potential.potential_field import get_potential_field, get_fft_potential_field
 from nf2.evaluation.metric import energy
 
