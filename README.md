@@ -28,12 +28,6 @@ Install from PyPI:
 pip install nf2
 ```
 
-Install with conda:
-
-```bash
-conda install nf2
-```
-
 For GPU-enabled PyTorch installs, select your CUDA version at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). For CUDA 12.6, run:
 
 ```bash
@@ -45,17 +39,18 @@ For development or source installs:
 ```bash
 git clone https://github.com/RobertJaro/NF2.git
 cd NF2
-python -m pip install -r requirements.txt
-```
-
-The recommended conda environment for local development is:
-
-```bash
 conda env create -f environment.yml
 conda activate nf2
 ```
 
-See the online [installation guide](https://nf2.readthedocs.io/en/latest/installation.html) for pip, conda, local, and development installation options.
+To use uv instead:
+
+```bash
+uv sync --all-extras
+source .venv/bin/activate
+```
+
+See the online [installation guide](https://nf2.readthedocs.io/en/latest/installation.html) for pip, conda, uv, local, and development installation options.
 
 ## Quick Start
 

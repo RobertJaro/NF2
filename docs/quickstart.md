@@ -6,11 +6,16 @@ Install NF2 in a fresh Python environment:
 pip install nf2
 ```
 
-For a local source checkout, use the repository environment instead:
+To use uv instead:
 
 ```bash
-conda env create -f environment.yml
-conda activate nf2
+uv add nf2
+```
+
+For a local source checkout:
+
+```bash
+pip install .
 ```
 
 Run a compact analytical smoke test. This does not require JSOC access or input FITS files:

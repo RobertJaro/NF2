@@ -1,128 +1,110 @@
 # Installing NF2
 
-NF2 supports installation through pip and conda.
+NF2 targets Python 3.11 and 3.12.
 
-## Pip
+## Install from PyPI
 
-Install from PyPI:
+### pip
+
+Create and activate a virtual environment, then install NF2:
 
 ```bash
-pip install nf2
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install nf2
 ```
 
-## PyTorch And CUDA
+On Windows, use `.venv\Scripts\activate.bat` in Command Prompt or `.venv\Scripts\Activate.ps1` in PowerShell.
 
-For GPU-enabled PyTorch installs, use the official PyTorch selector at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/). Select your CUDA version and run the generated command before installing or running NF2.
+### uv
 
-For CUDA 12.6:
+Create and activate a Python 3.12 virtual environment, install the PyTorch build that matches the available hardware, then install NF2:
 
 ```bash
-pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+uv venv --python 3.12
+source .venv/bin/activate
+uv pip install torch torchvision --torch-backend=auto
+uv pip install nf2
 ```
 
-For the most recent default PyTorch build:
+## PyTorch and CUDA
+
+NF2 declares compatible `torch` and `torchvision` dependencies, so a normal installation includes their default builds. To use a specific CUDA build, select the appropriate command at [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/) and install PyTorch before installing NF2.
+
+For example, install the CUDA 12.6 wheels with:
 
 ```bash
-pip3 install torch torchvision
+python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
 ```
 
-Install from a local checkout:
+Or install the most recent default PyTorch build with:
 
 ```bash
-python -m pip install .
+python -m pip install torch torchvision
 ```
 
-Install for development:
+These are examples only. Use the PyTorch selector above to obtain the command for your operating system and required CUDA version.
+This is not necessary if using the uv installation described above as a compatible build will be automatically installed.
+
+## Development installation
+
+Fork the repository on GitHub, then clone your fork:
 
 ```bash
+git clone https://github.com/<your-user>/NF2.git
+cd NF2
+git remote add upstream https://github.com/RobertJaro/NF2.git
+```
+
+Choose one of the following development environments. Each installs NF2 in editable mode with the documentation, test, lint, and packaging tools.
+
+### pip
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-Build release artifacts:
+### uv
 
 ```bash
-python -m pip install build
-python -m build
+uv sync --all-extras
+source .venv/bin/activate
 ```
 
-When using conda for packaging tools, install the conda-forge package name:
-
-```bash
-conda install -c conda-forge python-build twine
-python -m build
-```
-
-The build creates:
-
-- `dist/nf2-0.4.2.tar.gz`
-- `dist/nf2-0.4.2-py3-none-any.whl`
-
-## Conda Environment
-
-Install with conda:
-
-```bash
-conda install nf2
-```
-
-Create a fresh NF2 environment:
-
-```bash
-conda create -n nf2 python=3.11 nf2
-conda activate nf2
-```
-
-If your conda setup does not already use conda-forge, add it or pass `-c conda-forge`.
-
-Create the recommended development environment from a local checkout:
+### Conda
 
 ```bash
 conda env create -f environment.yml
 conda activate nf2
 ```
 
-The environment uses conda for Python isolation and installs the NF2 runtime, documentation, and development stack with pip. The pip section is explicit so key packages such as PyTorch, Lightning, and SunPy are visible, while avoiding conda channel availability issues for pinned Python packages.
-
-## Conda Package Recipe
-
-Render the recipe:
+Build the documentation locally before opening a pull request:
 
 ```bash
-CONDA_BLD_PATH=/tmp/conda-bld conda render conda-recipe
+LC_ALL=C LANG=C SUNPY_CONFIGDIR=/tmp/sunpy MPLCONFIGDIR=/tmp/matplotlib sphinx-build -b html docs docs/_build/html
+
 ```
 
-Build the recipe:
+## Packaging
+
+Build a source distribution and wheel:
 
 ```bash
-CONDA_BLD_PATH=/tmp/conda-bld conda build conda-recipe
+python -m build
 ```
 
-The recipe lives in `conda-recipe/meta.yaml` and exposes the public command-line tools:
-
-- `nf2-extrapolate`
-- `nf2-extrapolate-series`
-- `nf2-export`
-- `nf2-metrics`
-- `nf2-download`
-- `nf2-noaa-to-sharp`
-
-## Smoke Test
+With uv, use:
 
 ```bash
-python - <<'PY'
-import nf2
-import torch
-import lightning
+uv build
+```
 
-print("NF2:", nf2.__version__)
-print("Torch:", torch.__version__)
-print("Lightning:", lightning.__version__)
-print("CUDA:", torch.cuda.is_available())
-print("CUDA device count:", torch.cuda.device_count())
-for idx in range(torch.cuda.device_count()):
-    print(f"CUDA device {idx}:", torch.cuda.get_device_name(idx))
-PY
+To render or build the Conda package recipe, first install `conda-build`:
 
-nf2-export --help
-nf2-extrapolate --help
+```bash
+conda install -c conda-forge conda-build
+conda render conda-recipe
+conda build conda-recipe
 ```
