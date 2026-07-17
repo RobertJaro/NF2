@@ -48,6 +48,24 @@ dependencies = [
   "pfsspy>=1.2",
 ]
 
+[project.optional-dependencies]
+docs = [
+  "sphinx>=7.2",
+  "myst-parser>=2",
+  "sphinx-autodoc-typehints>=2",
+  "sphinx-copybutton>=0.5",
+  "sphinxext-opengraph>=0.9",
+  "pydata-sphinx-theme>=0.15",
+]
+dev = [
+  "build>=1.2",
+  "pytest>=8",
+  "ruff>=0.5",
+  "mypy>=1.10",
+  "pre-commit>=3.7",
+  "twine>=5",
+]
+
 [project.urls]
 Homepage = "https://github.com/RobertJaro/NF2"
 Documentation = "https://nf2.readthedocs.io/"
