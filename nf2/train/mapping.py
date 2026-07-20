@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from nf2.train.callback import SphericalSlicesCallback, SlicesCallback, MetricsCallback, BoundaryCallback, \
-    LosTrvAziBoundaryCallback, DisambiguationCallback, SphericalFITSComparisonCallback
+    LosTrvAziBoundaryCallback, DisambiguationCallback, SphericalFITSComparisonCallback, SourceSurfaceCallback
 
 
 def load_callbacks(callback_configs, data_module):
@@ -10,8 +10,13 @@ def load_callbacks(callback_configs, data_module):
     Gauss_per_dB = data_module.config['Gauss_per_dB']
 
     for callback_config in deepcopy(callback_configs):
-        ds_id = callback_config.pop('ds_id')
         callback_type = callback_config.pop('type')
+        if callback_type == 'source_surface':
+            name = callback_config.pop('name', 'source_surface')
+            callbacks.append(SourceSurfaceCallback(name=name, **callback_config))
+            continue
+
+        ds_id = callback_config.pop('ds_id')
         if ds_id not in data_module.validation_datasets:
             raise ValueError(
                 f'Dataset {ds_id} not found in validation datasets. Check your configuration. '

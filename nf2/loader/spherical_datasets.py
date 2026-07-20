@@ -1,12 +1,6 @@
-import os
-import glob
 import logging
-import re
-import multiprocessing as mp
 import warnings
 from contextlib import contextmanager
-from collections import OrderedDict
-from copy import deepcopy
 
 import numpy as np
 import torch
@@ -16,17 +10,15 @@ from astropy import log as astropy_log
 from astropy.coordinates import SkyCoord
 from matplotlib import pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from lightning.pytorch import LightningDataModule
 from lightning.pytorch.utilities import rank_zero_only
 from sunpy.coordinates import frames
 from sunpy import log as sunpy_log
 from sunpy.map import Map, all_coordinates_from_map
 from sunpy.util.exceptions import SunpyMetadataWarning
 
-from nf2.data.dataset import NF2Dataset, RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset, \
-    RandomRadialGroupedCoordinateDataset, TensorsDataset
+from nf2.data.dataset import NF2Dataset, TensorsDataset
 from nf2.data.util import spherical_to_cartesian, vector_spherical_to_cartesian, cartesian_to_spherical_matrix
-from nf2.loader.base import BaseDataModule, DEFAULT_NUM_WORKERS
+from nf2.loader.oversampling import apply_boundary_oversampling, boundary_sampling_field
 
 
 SOLAR_RADIUS_Mm = (1 * u.solRad).to_value(u.Mm)
@@ -125,7 +117,7 @@ class SphericalSliceDataset(TensorsDataset):
 
     def __init__(self, b, coords, spherical_coords, Gauss_per_dB, Mm_per_ds,
                  b_err=None, transform=None,
-                 plot_overview=True, strides=1, **kwargs):
+                 plot_overview=True, strides=1, oversampling=None, **kwargs):
         ds_name = kwargs.get('ds_name')
         if plot_overview:
             self._plot(b, coords, spherical_coords, transform, ds_name)
@@ -136,17 +128,6 @@ class SphericalSliceDataset(TensorsDataset):
             b_err = b_err[::strides, ::strides] if b_err is not None else None
             transform = transform[::strides, ::strides] if transform is not None else None
         self.cube_shape = b.shape[:-1]
-        # flatten data
-        b = b.reshape((-1, 3))
-        coords = coords.reshape((-1, 3))
-        if b_err is not None:
-            b_err = b_err.reshape((-1, 3))
-        if transform is not None:
-            transform = transform.reshape((-1, 3, 3))
-
-        # normalize data
-        b /= Gauss_per_dB
-        b_err = b_err / Gauss_per_dB if b_err is not None else None
         self.Mm_per_ds = Mm_per_ds
         self.coord_scale = spherical_coord_scale(Mm_per_ds)
         self.radius_range = np.array([
@@ -166,16 +147,26 @@ class SphericalSliceDataset(TensorsDataset):
 
         nan_mask = np.isnan(b).any(-1)
         coords[nan_mask] = np.nan
-        b[nan_mask] = np.nan
+        oversampling_field = (oversampling or {}).get('field', 'magnitude')
+        oversampling_field = 'radial' if oversampling_field == 'normal' else oversampling_field
+        sampling_field = boundary_sampling_field(b, mode=oversampling_field)
 
-        tensors = {'coords': coords,
-                   'b_true': b}
+        b = b / Gauss_per_dB
+        b[nan_mask] = np.nan
+        tensors = {'coords': coords, 'b_true': b}
         if transform is not None:
             transform[nan_mask] = np.nan
             tensors['transform'] = transform
         if b_err is not None:
+            b_err = b_err / Gauss_per_dB
             b_err[nan_mask] = np.nan
             tensors['b_err'] = b_err
+
+        if oversampling is not None:
+            tensors = apply_boundary_oversampling(tensors, sampling_field, oversampling)
+            tensors = {k: v.astype(np.float32) for k, v in tensors.items()}
+        else:
+            tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
 
         super().__init__(tensors, **kwargs)
 
@@ -202,7 +193,7 @@ class SphericalSliceDataset(TensorsDataset):
 
         ax = axs[2, 0]
         im = ax.imshow(spherical_coords[..., 2].transpose(), origin='lower')
-        ax.set_title('$\phi$')
+        ax.set_title(r'$\phi$')
         divider = make_axes_locatable(ax)
         cax = divider.append_axes("right", size="5%", pad=0.05)
         fig.colorbar(im, cax=cax)
@@ -508,4 +499,3 @@ class SphericalFITSReferenceDataset(NF2Dataset):
             'reference_lon': torch.tensor(self.reference_lon[y_idx, x_idx, None], dtype=torch.float32),
             'reference_lat': torch.tensor(self.reference_lat[y_idx, x_idx, None], dtype=torch.float32),
         }
-

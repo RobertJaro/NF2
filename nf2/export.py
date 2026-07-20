@@ -37,6 +37,7 @@ def export_file(
     longitude_range: list[float] | None = None,
     pixels_per_solRad: int = 64,
     progress: bool = True,
+    trace_config: dict | None = None,
 ):
     """Export one NF2 file to a supported exchange format.
 
@@ -62,7 +63,21 @@ def export_file(
     """
     fmt = _normalize_format(fmt)
     metrics = metrics if metrics is not None else ["j"]
-    geometry = _geometry(nf2_path)
+
+    if fmt == "height":
+        from nf2.convert.nf2_height_to_npz import convert
+
+        return convert(
+            nf2_path=nf2_path,
+            out_path=out_path,
+            Mm_per_pixel=Mm_per_pixel,
+            progress=progress,
+        )
+
+    from nf2 import load
+
+    nf2_out = load(nf2_path)
+    geometry = nf2_out.state.get("data", {}).get("type")
 
     if geometry == "spherical" and fmt != "vtk":
         raise ValueError("Spherical checkpoints currently support `vtk` export only.")
@@ -80,6 +95,8 @@ def export_file(
                 longitude_range=longitude_range,
                 pixels_per_solRad=pixels_per_solRad,
                 progress=progress,
+                trace_config=trace_config,
+                nf2_out=nf2_out,
             )
 
         from nf2.convert.nf2_to_vtk import convert
@@ -93,6 +110,8 @@ def export_file(
             x_range=x_range,
             y_range=y_range,
             progress=progress,
+            trace_config=trace_config,
+            nf2_out=nf2_out,
         )
     if fmt in {"npz", "npy"}:
         from nf2.convert.nf2_to_npz import convert
@@ -106,15 +125,8 @@ def export_file(
             x_range=x_range,
             y_range=y_range,
             progress=progress,
-        )
-    if fmt == "height":
-        from nf2.convert.nf2_height_to_npz import convert
-
-        return convert(
-            nf2_path=nf2_path,
-            out_path=out_path,
-            Mm_per_pixel=Mm_per_pixel,
-            progress=progress,
+            trace_config=trace_config,
+            nf2_out=nf2_out,
         )
     if fmt in {"hdf5", "h5"}:
         from nf2.convert.nf2_to_hdf5 import convert
@@ -126,6 +138,8 @@ def export_file(
             height_range=height_range,
             metrics=metrics,
             progress=progress,
+            trace_config=trace_config,
+            nf2_out=nf2_out,
         )
     if fmt == "fits":
         from nf2.convert.nf2_to_fits import convert
@@ -137,6 +151,8 @@ def export_file(
             height_range=height_range,
             metrics=metrics,
             progress=progress,
+            trace_config=trace_config,
+            nf2_out=nf2_out,
         )
     raise ValueError(f"Unsupported export format: {fmt}")
 
@@ -201,7 +217,46 @@ def main():
     spherical.add_argument("--latitude_range", type=float, nargs=2, default=None)
     spherical.add_argument("--longitude_range", type=float, nargs=2, default=None)
     spherical.add_argument("--pixels_per_solRad", type=int, default=64)
+    tracing = parser.add_argument_group("Field-line tracing")
+    tracing.add_argument(
+        "--trace-method", choices=["euler", "rk1", "rk2", "rk3", "rk4", "rkf45"], default="rkf45"
+    )
+    tracing.add_argument("--trace-step-Mm", type=float, default=None)
+    tracing.add_argument("--trace-rtol", type=float, default=1e-5)
+    tracing.add_argument("--trace-atol", type=float, default=1e-7)
+    tracing.add_argument("--trace-min-step-Mm", type=float, default=None)
+    tracing.add_argument("--trace-max-step-Mm", type=float, default=None)
+    tracing.add_argument("--trace-max-steps", type=int, default=10_000)
+    tracing.add_argument(
+        "--trace-max-length-Mm", type=float, default=None,
+        help="Optional maximum length in Mm for each forward/backward half-line.",
+    )
+    tracing.add_argument("--trace-min-field-G", type=float, default=None)
+    tracing.add_argument("--trace-batch-size", type=int, default=65_536)
+    tracing.add_argument("--q-method", choices=["tangent", "perturbed"], default="tangent")
+    tracing.add_argument("--q-epsilon-Mm", type=float, default=None)
     args = parser.parse_args()
+
+    trace_config = {
+        "method": args.trace_method,
+        "rtol": args.trace_rtol,
+        "atol": args.trace_atol,
+        "max_steps": args.trace_max_steps,
+        "batch_size": args.trace_batch_size,
+        "q_method": args.q_method,
+    }
+    if args.trace_step_Mm is not None:
+        trace_config["step_size_Mm"] = args.trace_step_Mm
+    if args.trace_min_step_Mm is not None:
+        trace_config["min_step_size_Mm"] = args.trace_min_step_Mm
+    if args.trace_max_step_Mm is not None:
+        trace_config["max_step_size_Mm"] = args.trace_max_step_Mm
+    if args.trace_max_length_Mm is not None:
+        trace_config["max_length_Mm"] = args.trace_max_length_Mm
+    if args.trace_min_field_G is not None:
+        trace_config["min_field_G"] = args.trace_min_field_G
+    if args.q_epsilon_Mm is not None:
+        trace_config["q_epsilon_Mm"] = args.q_epsilon_Mm
 
     matched = [path for pattern in args.nf2_path for path in sorted(glob.glob(pattern))]
     if len(matched) == 1 and args.out_dir is None:
@@ -218,6 +273,7 @@ def main():
             latitude_range=args.latitude_range,
             longitude_range=args.longitude_range,
             pixels_per_solRad=args.pixels_per_solRad,
+            trace_config=trace_config,
         )
         return
 
@@ -236,6 +292,7 @@ def main():
         latitude_range=args.latitude_range,
         longitude_range=args.longitude_range,
         pixels_per_solRad=args.pixels_per_solRad,
+        trace_config=trace_config,
     )
 
 

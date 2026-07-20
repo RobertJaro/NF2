@@ -25,12 +25,14 @@ def load(path, device=None):
     import torch
     from nf2.evaluation.output import CartesianOutput, SphericalOutput
 
-    state = torch.load(path, map_location="cpu", weights_only=False)
+    if device is None:
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+    state = torch.load(path, map_location=device, weights_only=False)
     geometry = state.get("data", {}).get("type")
     if geometry == "cartesian":
-        return CartesianOutput(path, device=device)
+        return CartesianOutput(state, device=device)
     if geometry == "spherical":
-        return SphericalOutput(path, device=device)
+        return SphericalOutput(state, device=device)
     raise ValueError(f"Unsupported NF2 geometry: {geometry!r}")
 
 
@@ -110,6 +112,10 @@ def download_hmi_synoptic(*args, **kwargs):
 
 
 def __getattr__(name):
+    if name == "TraceConfig":
+        from nf2.evaluation.tracing import TraceConfig
+
+        return TraceConfig
     if name in {"CartesianOutput", "DisambiguationOutput", "HeightTransformOutput", "SphericalOutput"}:
         from nf2.evaluation import output
 
@@ -122,6 +128,7 @@ __all__ = [
     "DisambiguationOutput",
     "HeightTransformOutput",
     "SphericalOutput",
+    "TraceConfig",
     "download_hmi_full_disk",
     "download_hmi_sharp",
     "download_hmi_synoptic",

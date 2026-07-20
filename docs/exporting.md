@@ -87,8 +87,35 @@ Available derived quantities are:
 | `free_energy_direct` | `free_energy_direct` | Free magnetic energy density using the direct potential-field method. |
 | `magnetic_helicity` | `magnetic_helicity` | Magnetic helicity diagnostic; requires vector-potential output from compatible checkpoints. |
 | `los_trv_azi` | `los_trv_azi` | LOS field, transverse-field magnitude, and azimuth components. |
-| `squashing_factor` | `squashing_factor`, `twist` | Squashing factor and twist diagnostics; requires optional GPU/CuPy/FastQSL dependencies. |
+| `squashing_factor` | `squashing_factor`, `log10_q`, `q_valid`, `q_condition_number` | Boundary-to-boundary squashing factor, computed directly from the NF2 model. |
+| `twist_number` | `twist_number` | Field-line twist number, `integral(alpha dl) / (4 pi)`. |
+| `fieldline_length` | `fieldline_length` | Total boundary-to-boundary field-line length. |
+| `integrated_current_density` | `integrated_current_density` | Vector current density integrated over field-line length. |
+| `fieldline_geometry` | `open`, `closed`, `open_polarity`, `footpoint_separation`, `apex_height` or `apex_radius` | Connectivity and geometric field-line diagnostics. |
 
-Exported array keys now match the requested metric name wherever a metric produces one quantity. `squashing_factor` also writes `twist` because the field-line calculation naturally produces both diagnostics.
+Field-line quantities share one batched trace. For example, requesting Q, twist, length, current, and geometry together does not trace the central field line five times.
+
+## Field-Line Tracing
+
+The exporter samples the loaded NF2 model directly rather than interpolating an
+exported field cube. Field-line quantities requested together share one central
+forward/backward trace.
+
+```bash
+nf2-export model.nf2 --format hdf5 --out topology.hdf5 \
+  --metrics squashing_factor twist_number fieldline_length \
+            integrated_current_density fieldline_geometry \
+  --trace-method rk4 --trace-step-Mm 0.25 \
+  --q-method tangent
+```
+
+Relevant controls are `--trace-method`, `--trace-step-Mm`, `--trace-max-steps`,
+`--trace-max-length-Mm`, `--trace-min-field-G`, `--trace-batch-size`,
+`--q-method`, and `--q-epsilon-Mm`. The maximum length applies independently to
+each forward/backward half-line.
+
+See [Field-Line Tracing](field_line_tracing.md) for Cartesian and spherical
+boundaries, Q and twist definitions, Python examples, paths, convergence,
+termination states, and performance guidance.
 
 Available export quantities and quality metrics are also listed in the generated [export and metrics reference](generated/export_metrics_reference.md).

@@ -32,6 +32,11 @@ def normalize_metric_names(metrics: str | Iterable[str] | None) -> list[str]:
     return list(metrics)
 
 
+def fieldline_metric(**kwargs):
+    """Registry marker for metrics evaluated by ``BaseOutput``'s tracer."""
+    raise RuntimeError("Field-line metrics require an NF2 output object and must be evaluated through load/trace APIs.")
+
+
 def current_density(jac_matrix, **kwargs):
     j = calculate_current_from_jacobian(jac_matrix, f=np) * constants.c / (4 * np.pi)
     return {'j': j.to(u.G / u.s)}
@@ -257,9 +262,6 @@ def squashing_factor(b, interp_ratio=3, x_range=None, y_range=None, z_range=None
                                             Bx_end, By_end, Bz_end,
                                             Bx_inp, By_inp, Bz_inp, B_flag, twist_all, line_len)
 
-        if z_pos < 1e-5:
-            B0cube = Bz_0_arr.get()
-
         cupy.cuda.stream.get_current_stream().synchronize()
         Q = FastQSL.QCalcPlane(x_end_arr, y_end_arr, z_end_arr, flag_end_arr,
                                x_start_arr, y_start_arr, z_start_arr, flag_start_arr,
@@ -398,9 +400,26 @@ OUTPUT_METRICS = {
     ),
     'squashing_factor': OutputMetric(
         'squashing_factor',
-        squashing_factor,
-        'Squashing factor and twist diagnostics.',
-        ('squashing_factor', 'twist'),
+        fieldline_metric,
+        'Boundary-to-boundary squashing factor from batched NF2 field-line tracing.',
+        ('squashing_factor', 'log10_q', 'q_valid', 'q_condition_number'),
+    ),
+    'twist_number': OutputMetric(
+        'twist_number', fieldline_metric, 'Field-line twist number Tw = integral(alpha dl) / (4 pi).',
+        ('twist_number',),
+    ),
+    'fieldline_length': OutputMetric(
+        'fieldline_length', fieldline_metric, 'Total boundary-to-boundary field-line length.',
+        ('fieldline_length',),
+    ),
+    'integrated_current_density': OutputMetric(
+        'integrated_current_density', fieldline_metric, 'Vector current density integrated over field-line length.',
+        ('integrated_current_density',),
+    ),
+    'fieldline_geometry': OutputMetric(
+        'fieldline_geometry', fieldline_metric,
+        'Open/closed connectivity, apex, open polarity, and footpoint separation.',
+        ('open', 'closed', 'open_polarity', 'footpoint_separation', 'apex_height', 'apex_radius'),
     ),
 }
 

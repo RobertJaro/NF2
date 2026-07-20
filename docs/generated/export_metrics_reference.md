@@ -15,7 +15,11 @@
 | free_energy_direct | free_energy_direct | Free magnetic energy density using the direct potential-field method. |
 | magnetic_helicity | magnetic_helicity | Magnetic helicity diagnostic. |
 | los_trv_azi | los_trv_azi | LOS/transverse/azimuth field components. |
-| squashing_factor | squashing_factor, twist | Squashing factor and twist diagnostics. |
+| squashing_factor | squashing_factor, log10_q, q_valid, q_condition_number | Boundary-to-boundary squashing factor from batched NF2 field-line tracing. |
+| twist_number | twist_number | Field-line twist number Tw = integral(alpha dl) / (4 pi). |
+| fieldline_length | fieldline_length | Total boundary-to-boundary field-line length. |
+| integrated_current_density | integrated_current_density | Vector current density integrated over field-line length. |
+| fieldline_geometry | open, closed, open_polarity, footpoint_separation, apex_height, apex_radius | Open/closed connectivity, apex, open polarity, and footpoint separation. |
 
 ## Quality Metrics
 

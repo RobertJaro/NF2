@@ -38,7 +38,10 @@ def test_output_metric_functions_return_declared_keys_for_core_metrics():
     a = np.ones((2, 2, 2, 3)) * u.G * u.m
     state = {"b": b, "jac_matrix": jac_matrix, "coords": coords, "a": a}
 
-    optional_or_heavy = {"free_energy_direct", "squashing_factor"}
+    optional_or_heavy = {
+        "free_energy_direct", "squashing_factor", "twist_number", "fieldline_length",
+        "integrated_current_density", "fieldline_geometry",
+    }
     for name, metric in OUTPUT_METRICS.items():
         if name in optional_or_heavy:
             continue

@@ -17,6 +17,7 @@ The main guides collect the common run and analysis pages into a shorter top-lev
 - [Extrapolations](extrapolations.md) groups Cartesian, spherical, analytical, and series runs.
 - [Training](training.md) explains losses, loss schedules, height scaling, batch sizes, validation resolution, and memory handling.
 - [Evaluation](evaluation.md) groups export and quality-metric procedures.
+- [Field-line tracing](field_line_tracing.md) explains Cartesian and spherical lines, Q, twist, current, and topology maps.
 - [FAQ](faq.md) answers recurring operational questions.
 
 ## Reference Material

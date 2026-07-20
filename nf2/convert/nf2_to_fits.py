@@ -7,11 +7,15 @@ from astropy.io import fits
 from nf2.evaluation.output import CartesianOutput
 
 
-def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, **kwargs):
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, nf2_out=None, **kwargs):
     out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.fits')
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
-    nf2_out = CartesianOutput(nf2_path)
+    nf2_out = CartesianOutput(nf2_path) if nf2_out is None else nf2_out
+    kwargs.setdefault('compute_jacobian', False)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, height_range=height_range, **kwargs)
 
     b = output['b']

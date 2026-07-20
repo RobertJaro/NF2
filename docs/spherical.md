@@ -239,3 +239,13 @@ volume = out.load_spherical(
     metrics=["j", "alpha"],
 )
 ```
+
+## Spherical Field-Line Tracing
+
+Spherical lines are integrated in nonsingular Cartesian model coordinates
+inside the checkpoint's spherical shell. Spherical layers provide seed points
+and $(B_r,B_\theta,B_\phi)$ as `b_rtp`; the inner and outer radii define the
+tracing boundaries. Use the inner layer for open/closed topology or a coronal
+layer such as $1.4\,R_\odot$ for an S-web Q map. See
+[Field-Line Tracing](field_line_tracing.md) for coordinate conversion,
+connectivity, apex radius, Q methods, and complete spherical examples.

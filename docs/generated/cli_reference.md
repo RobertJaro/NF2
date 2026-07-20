@@ -68,6 +68,18 @@ Export NF2 results to exchange formats.
 | `--longitude_range` | 0 360 | Spherical VTK longitude range in degrees. |
 | `--pixels_per_solRad` | 64 | Spherical VTK sampling resolution. |
 | `--metrics` | j | Derived quantities to include. |
+| `--trace-method` | rkf45 | Field-line integrator: euler/rk1, rk2, rk3, rk4, or adaptive rkf45. |
+| `--trace-step-Mm` | geometry default | Field-line integration step in Mm. |
+| `--trace-rtol` | 1e-5 | RKF45 relative error tolerance. |
+| `--trace-atol` | 1e-7 | RKF45 absolute error tolerance. |
+| `--trace-min-step-Mm` | step / 1000 | Optional RKF45 minimum step in Mm. |
+| `--trace-max-step-Mm` | 10 * step | Optional RKF45 maximum step in Mm. |
+| `--trace-max-steps` | 10000 | Maximum integration steps in each direction. |
+| `--trace-max-length-Mm` | none | Maximum length in Mm for each forward/backward half-line. |
+| `--trace-min-field-G` | model default | Stop tracing below this field strength in Gauss. |
+| `--trace-batch-size` | 65536 | Maximum seed points in one tensor-native trace chunk. |
+| `--q-method` | tangent | Squashing-factor backend: tangent or perturbed. |
+| `--q-epsilon-Mm` | step / 4 | Perturbation distance for reference Q calculations. |
 | `--overwrite` | false | Replace existing series export files. |
 
 

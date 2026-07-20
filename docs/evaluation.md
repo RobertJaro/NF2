@@ -3,6 +3,7 @@
 Use the evaluation pages after training has produced an `extrapolation_result.nf2`.
 
 - [Exporting](exporting.md) writes field cubes and derived quantities to VTK, NPZ, HDF5, or FITS.
+- [Field-line tracing](field_line_tracing.md) computes Q, twist, integrated current, length, connectivity, and paths directly from an NF2 model.
 - [Quality metrics](metrics.md) computes divergence, force-free, current-alignment, and magnetic-energy diagnostics.
 
 Choose the output based on the next tool in your workflow:
@@ -20,5 +21,6 @@ Choose the output based on the next tool in your workflow:
 :caption: Evaluation
 
 exporting
+field_line_tracing
 metrics
 ```

@@ -6,6 +6,7 @@ Configurable Jupyter notebooks are provided for the main release examples:
 - [Cartesian series](../examples/notebooks/cartesian_series.ipynb)
 - [Spherical HMI](../examples/notebooks/spherical_hmi.ipynb)
 - [Analytical benchmark](../examples/notebooks/benchmark_analytical.ipynb)
+- [Field-line tracing from an NF2 file](../examples/notebooks/field_line_tracing.ipynb)
 
 Colab-ready notebooks are available for the most common remote workflows:
 

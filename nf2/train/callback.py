@@ -302,6 +302,53 @@ class SphericalFITSComparisonCallback(Callback):
         return integrated_j, r'$\int |J|\,dr$ [G]'
 
 
+class SourceSurfaceCallback(Callback):
+
+    def __init__(self, name='source_surface', resolution=(180, 360), plot=True, **kwargs):
+        self.name = name
+        if isinstance(resolution, int):
+            resolution = (resolution, resolution * 2)
+        self.latitude_resolution = int(resolution[0])
+        self.longitude_resolution = int(resolution[1])
+        self.plot = plot
+
+    @rank_zero_only
+    def on_validation_end(self, trainer, pl_module):
+        model = pl_module.model
+        if not hasattr(model, 'source_surface_height_grid'):
+            return
+        grid = model.source_surface_height_grid(
+            latitude_resolution=self.latitude_resolution,
+            longitude_resolution=self.longitude_resolution,
+            device=pl_module.device,
+        )
+        radius = grid['radius'].detach().cpu().numpy()
+        latitude = np.rad2deg(grid['latitude'].detach().cpu().numpy())
+        longitude = np.rad2deg(grid['longitude'].detach().cpu().numpy())
+
+        wandb.log({
+            f'{self.name}/min_radius': float(np.nanmin(radius)),
+            f'{self.name}/mean_radius': float(np.nanmean(radius)),
+            f'{self.name}/max_radius': float(np.nanmax(radius)),
+        })
+
+        if not _should_plot(self.plot):
+            return
+        fig, ax = plt.subplots(1, 1, figsize=(9, 4))
+        im = ax.imshow(radius, origin='lower',
+                       extent=[longitude.min(), longitude.max(), latitude.min(), latitude.max()],
+                       aspect='auto', cmap='viridis')
+        ax.set_xlabel('Longitude [deg]')
+        ax.set_ylabel('Latitude [deg]')
+        ax.set_title('Learned Source Surface Radius')
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im, cax=cax, label=r'Radius [$R_\odot$]')
+        fig.tight_layout()
+        _log_wandb_figure(f'{self.name} - Radius', fig)
+        plt.close('all')
+
+
 class SlicesCallback(Callback):
 
     def __init__(self, name, cube_shape, gauss_per_dB, Mm_per_ds, plot=True, **kwargs):

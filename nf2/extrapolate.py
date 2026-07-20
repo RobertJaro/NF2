@@ -17,8 +17,25 @@ from nf2.train.module import NF2Module, save
 from nf2.train.util import is_interactive_environment, load_yaml_config, suppress_accumulate_grad_stream_warning
 
 
+def _is_lightning_checkpoint(checkpoint_path):
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    if 'state_dict' not in checkpoint or 'optimizer_states' not in checkpoint:
+        return False
+    return True
+
+
+def _reset_checkpoint_progress(checkpoint_path, output_path):
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+    checkpoint['epoch'] = 0
+    checkpoint['global_step'] = 0
+    checkpoint.pop('loops', None)
+    checkpoint.pop('callbacks', None)
+    torch.save(checkpoint, output_path)
+    return output_path
+
+
 def run(path, data, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
-        transforms=None, loss_scaling=None, config=None, reload=False):
+        transforms=None, loss_scaling=None, config=None, reload=False, meta_path=None):
     """Run the simulation with the given configuration.
 
     This function initializes the data loader, the model, the training loop and the logging.
@@ -32,6 +49,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
         logging: Dictionary with the logging configuration.
         model: Dictionary with the model configuration.
         training: Dictionary with the training configuration.
+        meta_path: Path to an optional previous NF2 or Lightning checkpoint used as the training start state.
         config: Dictionary with the configuration for the simulation.
     """
     suppress_accumulate_grad_stream_warning()
@@ -59,7 +77,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
     config_dict = {'path': path, 'work_path': work_path, 'logging': logging,
                    'model': model, 'training': training, 'config': config, 'data': data,
                    'losses': losses, 'transforms': transforms, 'loss_scaling': loss_scaling,
-                   'callbacks': callbacks}
+                   'callbacks': callbacks, 'meta_path': meta_path}
 
     @rank_zero_only
     def _log_hparams(cfg):
@@ -74,6 +92,18 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
         artifact.download(root=path)
         shutil.move(os.path.join(path, 'model.ckpt'), os.path.join(path, 'last.ckpt'))
         data_runtime['plot_overview'] = False  # skip overview plot for restored model
+
+    last_ckpt_path = os.path.join(path, 'last.ckpt')
+    resume_checkpoint = os.path.exists(last_ckpt_path)
+    if resume_checkpoint:
+        ckpt_path = 'last'
+        meta_state_path = None
+    elif meta_path is not None and _is_lightning_checkpoint(meta_path):
+        ckpt_path = _reset_checkpoint_progress(meta_path, os.path.join(work_path, 'initial.ckpt'))
+        meta_state_path = None
+    else:
+        ckpt_path = None
+        meta_state_path = meta_path
 
     # initialize data module
     data_module_save_path = os.path.join(work_path, 'data_module.pkl')
@@ -97,12 +127,13 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
 
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
                     model_kwargs=model, loss_config=losses, transforms=transforms, loss_scaling=loss_scaling,
+                    meta_path=meta_state_path,
                     lr_params=training.get('optimizer', {"start": 5e-4, "end": 5e-5, "iterations": 1e5}))
 
     config_dict = {'path': path, 'work_path': work_path, 'logging': logging,
                    'data': data, 'model': model, 'training': training, 'config': config,
                    'losses': losses, 'transforms': transforms, 'loss_scaling': loss_scaling,
-                   'callbacks': callbacks}
+                   'callbacks': callbacks, 'meta_path': meta_path}
     val_check_interval = int(training['validation_interval']) if "validation_interval" in training else None
     val_every_n_epochs = training['check_val_every_n_epoch'] if 'check_val_every_n_epoch' in training else None
     max_epochs = int(training['epochs']) if 'epochs' in training else 15
@@ -147,7 +178,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
         trainer_kwargs['check_val_every_n_epoch'] = val_every_n_epochs
     trainer = Trainer(**trainer_kwargs)
 
-    trainer.fit(nf2, data_module, ckpt_path='last')
+    trainer.fit(nf2, data_module, ckpt_path=ckpt_path)
     save(save_path, nf2, data_module, config_dict)
     # clean up
     data_module.clear()

@@ -13,7 +13,8 @@ from torch.optim.lr_scheduler import ExponentialLR
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, ScaledVectorPotentialModel, VectorPotentialModel
+from nf2.train.model import BModel, ScaledPotentialModel, ScaledVectorPotentialModel, \
+    SourceSurfaceScaledPotentialModel, SourceSurfaceScaledVectorPotentialModel, VectorPotentialModel
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     HeightTransformModel
 
@@ -31,7 +32,9 @@ class NF2Module(LightningModule):
             data_config (dict): Configuration dictionary containing data parameters like coordinate ranges,
                               dataset-specific parameters, and data preprocessing settings.
             model_kwargs (dict, optional): Model configuration dictionary containing:
-                - type (str): Model type, one of ['b', 'vector_potential', 'scaled_vector_potential']
+                - type (str): Model type, one of ['b', 'vector_potential', 'scaled_vector_potential',
+                  'scaled_potential', 'source_surface_scaled_vector_potential',
+                  'source_surface_scaled_potential']
                 - dim (int): Hidden dimension size of the neural network
                 Additional model-specific parameters
             loss_config (list, optional): List of dictionaries containing loss configurations:
@@ -71,8 +74,23 @@ class NF2Module(LightningModule):
         elif model_type == 'scaled_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = ScaledVectorPotentialModel(**model_kwargs)
+        elif model_type == 'scaled_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model = ScaledPotentialModel(**model_kwargs)
+        elif model_type == 'source_surface_scaled_vector_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model_kwargs.pop('coord_range', None)
+            model_kwargs.pop('ds_per_pixel', None)
+            model = SourceSurfaceScaledVectorPotentialModel(**model_kwargs)
+        elif model_type == 'source_surface_scaled_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model_kwargs.pop('coord_range', None)
+            model_kwargs.pop('ds_per_pixel', None)
+            model = SourceSurfaceScaledPotentialModel(**model_kwargs)
         else:
-            valid_options = ['b', 'vector_potential', 'scaled_vector_potential']
+            valid_options = ['b', 'vector_potential', 'scaled_vector_potential',
+                             'scaled_potential', 'source_surface_scaled_vector_potential',
+                             'source_surface_scaled_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -172,7 +190,7 @@ class NF2Module(LightningModule):
             k = config.pop('type')
             if 'lambda' in config:
                 raise ValueError("Loss key 'lambda' was removed in v0.4. Use 'weight'.")
-            l = config.pop('weight')
+            weight = config.pop('weight')
             # update dataset id
             ds_id = config.pop('ds_id', 'all')
             config['ds_id'] = ds_id
@@ -182,25 +200,25 @@ class NF2Module(LightningModule):
                 ds_str = '_'.join(ds_id) if isinstance(ds_id, list) else ds_id
                 name = f'{ds_str}--{k}' if ds_str != 'all' else k
             config['name'] = name
-            if isinstance(l, dict):
-                value = torch.tensor(l['start'], dtype=torch.float32)
-                lt = 'exponential' if 'type' not in l else l['type']
+            if isinstance(weight, dict):
+                value = torch.tensor(weight['start'], dtype=torch.float32)
+                lt = 'exponential' if 'type' not in weight else weight['type']
                 if lt == 'exponential':
-                    gamma = (l['end'] / l['start']) ** (1 / l['iterations'])
-                    end = l['end']
+                    gamma = (weight['end'] / weight['start']) ** (1 / weight['iterations'])
+                    end = weight['end']
                     scheduled_weights[name] = {'gamma': gamma, 'end': end, 'type': lt}
                 elif lt == 'linear':
-                    gamma = (l['end'] - l['start']) / l['iterations']
-                    end = l['end']
+                    gamma = (weight['end'] - weight['start']) / weight['iterations']
+                    end = weight['end']
                     scheduled_weights[name] = {'gamma': gamma, 'end': end, 'type': lt}
                 elif lt == 'step':
-                    steps = l['steps']
-                    end = l['end']
+                    steps = weight['steps']
+                    end = weight['end']
                     scheduled_weights[name] = {'steps': steps, 'end': end, 'type': lt}
                 else:
                     raise ValueError(f"Invalid weight schedule type: {lt}, must be in ['exponential', 'linear', 'step']")
             else:
-                value = torch.tensor(l, dtype=torch.float32)
+                value = torch.tensor(weight, dtype=torch.float32)
             assert name not in weights, f"Duplicate name for loss: {name}"
             weights[name] = value
             # additional kwargs
@@ -371,7 +389,7 @@ class NF2Module(LightningModule):
             scheduler.step()
         self.log('Learning Rate', scheduler.get_last_lr()[0])
 
-        assert not torch.isnan(outputs['loss'].mean()), f"Loss is NaN. Check input data and run configuration."
+        assert not torch.isnan(outputs['loss'].mean()), "Loss is NaN. Check input data and run configuration."
         # log results to WANDB
         self.log_dict({f"train.{k}": v.mean() for k, v in outputs.items() if k != 'loss'})
         self.log('train.loss', outputs['loss'].mean(), prog_bar=True)

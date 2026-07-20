@@ -120,6 +120,47 @@ def test_scaled_vector_potential_model_field_is_supported():
     assert config["model"]["type"] == "scaled_vector_potential"
 
 
+def test_meta_path_is_preserved_for_single_run_configs():
+    config = normalize_config(
+        {
+            "meta_path": "./runs/previous/extrapolation_result.nf2",
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+            },
+            "losses": [
+                {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
+            ],
+        }
+    )
+
+    assert config["meta_path"] == "./runs/previous/extrapolation_result.nf2"
+
+
+def test_source_surface_scaled_potential_model_field_is_supported():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+            },
+            "model": {
+                "field": "source_surface_scaled_potential",
+                "network": {"hidden_dim": 16, "layers": 2},
+                "source_surface": {"height_range": [2.0, 2.5], "initial_height": 2.3},
+            },
+            "losses": [
+                {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
+            ],
+        }
+    )
+
+    assert config["model"]["type"] == "source_surface_scaled_potential"
+    assert config["model"]["potential"]["hidden_dim"] == 16
+    assert config["model"]["potential"]["layers"] == 2
+    assert config["model"]["source_surface"]["initial_height"] == 2.3
+
+
 def test_unset_bundled_error_placeholders_are_skipped():
     with pytest.warns(UserWarning, match="Skipping optional error-file configuration"):
         config = load_yaml_config(

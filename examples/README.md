@@ -70,6 +70,7 @@ The notebooks are useful when you want a guided, editable run instead of command
 - [notebooks/colab_sharp_cea.ipynb](notebooks/colab_sharp_cea.ipynb): Google Colab SHARP CEA example with NF2 installation steps.
 - [notebooks/cartesian_series.ipynb](notebooks/cartesian_series.ipynb): Cartesian series example, including the initial run used as the series `meta_path`.
 - [notebooks/spherical_hmi.ipynb](notebooks/spherical_hmi.ipynb): spherical HMI example.
+- [notebooks/field_line_tracing.ipynb](notebooks/field_line_tracing.ipynb): checkpoint-first Cartesian or spherical field-line metrics, topology maps, and complete paths.
 
 ## Export And Metrics
 

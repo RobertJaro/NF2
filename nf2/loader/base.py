@@ -6,6 +6,7 @@ from lightning.pytorch.utilities.combined_loader import CombinedLoader
 from torch.utils.data import DataLoader, Dataset
 
 from nf2.data.dataset import IndexedDataset, TensorsDataset
+from nf2.loader.oversampling import apply_boundary_oversampling, boundary_sampling_field
 from nf2.loader.util import _plot_B, _plot_B_error, _plot_los_trv_azi
 
 
@@ -166,7 +167,7 @@ class MapDataset(TensorsDataset):
                  bin=1, height_mapping=None, log_tau=None,
                  coordinate_center=None, center=None, origin=None,
                  plot=True, los_trv_azi=False, ambiguous_azimuth=False,
-                 wcs=None, **kwargs):
+                 wcs=None, oversampling=None, **kwargs):
         self.ds_per_pixel = (Mm_per_pixel * bin) / Mm_per_ds
         self.Mm_per_pixel = Mm_per_pixel * bin
         self.coordinate_center, center_axes = _coordinate_center_ds(coordinate_center, center, origin, Mm_per_ds)
@@ -242,9 +243,27 @@ class MapDataset(TensorsDataset):
         if los_trv_azi and ambiguous_azimuth:
             b[..., 2] = np.mod(b[..., 2], np.pi)
 
-        tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
+        if oversampling is not None:
+            sampling_field = _map_sampling_field(b, oversampling, los_trv_azi)
+            tensors = apply_boundary_oversampling(tensors, sampling_field, oversampling)
+            tensors = {k: v.astype(np.float32) for k, v in tensors.items()}
+        else:
+            tensors = {k: v.reshape((-1, *v.shape[2:])).astype(np.float32) for k, v in tensors.items()}
 
         super().__init__(tensors, **kwargs)
+
+
+def _map_sampling_field(b, oversampling, los_trv_azi):
+    field = oversampling.get('field', 'magnitude')
+    if los_trv_azi:
+        if field == 'magnitude':
+            valid = np.isfinite(b[..., :2]).any(axis=-1)
+            sampling_field = np.sqrt(np.nansum(b[..., :2] ** 2, axis=-1))
+            sampling_field[~valid] = np.nan
+            return sampling_field
+        if field in ['normal', 'radial', 'z', 'Br', 'Bz']:
+            return np.abs(b[..., 0])
+    return boundary_sampling_field(b, mode=field)
 
 
 def _coordinate_center_ds(coordinate_center=None, center=None, origin=None, Mm_per_ds=100):

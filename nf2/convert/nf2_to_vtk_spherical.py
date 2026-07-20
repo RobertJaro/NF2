@@ -8,10 +8,12 @@ from nf2.evaluation.vtk import save_vtk, split_vectors_scalars
 
 
 def convert(nf2_path, out_path=None, radius_range=None, latitude_range=None, longitude_range=None,
-            pixels_per_solRad=64, radians=False, metrics=None, **kwargs):
+            pixels_per_solRad=64, radians=False, metrics=None, nf2_out=None, **kwargs):
     out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), os.path.basename(os.path.dirname(nf2_path)) + '.vtk')
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
 
     radius_range = (radius_range if radius_range is not None else [0.999, 1.3]) * u.solRad
     angle_unit = u.rad if radians else u.deg
@@ -19,10 +21,11 @@ def convert(nf2_path, out_path=None, radius_range=None, latitude_range=None, lon
     longitude_range = (longitude_range if longitude_range is not None else [0, 360]) * angle_unit
     resolution = pixels_per_solRad * u.pix / u.solRad
     metrics = ['j'] if metrics is None else metrics
+    kwargs.setdefault('compute_jacobian', False)
 
-    output = SphericalOutput(nf2_path)
+    output = SphericalOutput(nf2_path) if nf2_out is None else nf2_out
     result = output.load(radius_range, latitude_range, longitude_range, resolution,
-                         progress=kwargs.pop('progress', True), metrics=metrics)
+                         progress=kwargs.pop('progress', True), metrics=metrics, **kwargs)
 
     vectors = {'B': result['b']}
     metrics_out = result.get('metrics', {})

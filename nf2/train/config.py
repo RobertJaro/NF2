@@ -58,7 +58,6 @@ def _reject_legacy_keys(config):
         raise ValueError("Config key 'loss' was removed in v0.4. Use 'losses' with 'weight'.")
     data = config.get("data", {}) or {}
     model = config.get("model", {}) or {}
-    normalization = data.get("normalization", {}) or {}
     if "type" in data:
         raise ValueError("Config key 'data.type' was removed in v0.4. Use 'data.geometry'.")
     if "type" in model:
@@ -159,8 +158,15 @@ def _normalize_spherical_data(data):
 def _normalize_model(model, geometry):
     model = deepcopy(model or {})
     field = model.pop("field", "vector_potential")
-    if field not in {"b", "vector_potential", "scaled_vector_potential"}:
-        raise ValueError("model.field must be 'b', 'vector_potential', or 'scaled_vector_potential'.")
+    if field not in {"b", "vector_potential", "scaled_vector_potential", "scaled_potential",
+                     "source_surface_scaled_vector_potential", "source_surface_scaled_potential"}:
+        raise ValueError(
+            "model.field must be 'b', 'vector_potential', 'scaled_vector_potential', "
+            "'scaled_potential', 'source_surface_scaled_vector_potential', "
+            "or 'source_surface_scaled_potential'.")
+    if field in {"source_surface_scaled_vector_potential", "source_surface_scaled_potential"}:
+        return _normalize_source_surface_model(model, field, geometry)
+
     network = model.pop("network", {}) or {}
     network_type = network.pop("type", "siren")
     if network_type != "siren":
@@ -173,6 +179,46 @@ def _normalize_model(model, geometry):
     if "layers" in normalized:
         normalized["n_layers"] = normalized.pop("layers")
     return normalized
+
+
+def _normalize_source_surface_model(model, field, geometry):
+    network = model.pop("network", None)
+    field_block_name = "potential" if field == "source_surface_scaled_potential" else "vector_potential"
+    if network is not None and field_block_name not in model:
+        model[field_block_name] = network
+    elif network is not None:
+        raise ValueError(f"Use model.{field_block_name} instead of model.network for source-surface models.")
+
+    field_block = _normalize_siren_block(
+        model.pop(field_block_name, {}),
+        default_hidden_dim=512 if geometry == "spherical" else 256,
+        default_layers=8,
+    )
+    source_surface = _normalize_source_surface_height_block(model.pop("source_surface", {}))
+    return {
+        "type": field,
+        field_block_name: field_block,
+        "source_surface": source_surface,
+        **model,
+    }
+
+
+def _normalize_siren_block(config, default_hidden_dim, default_layers):
+    config = deepcopy(config or {})
+    network_type = config.pop("type", "siren")
+    if network_type != "siren":
+        raise ValueError("Only SIREN networks are supported in v0.4.")
+    config.setdefault("hidden_dim", default_hidden_dim)
+    config.setdefault("layers", default_layers)
+    return config
+
+
+def _normalize_source_surface_height_block(config):
+    config = deepcopy(config or {})
+    network_type = config.pop("type", "siren")
+    if network_type != "siren":
+        raise ValueError("Only SIREN source-surface height models are supported.")
+    return config
 
 
 def _normalize_training(training):
@@ -244,6 +290,8 @@ def _validate_callback_refs(callbacks, data):
     validation_ids = _validation_ids(data)
     for callback in callbacks:
         ds_id = callback.get("ds_id")
+        if callback.get("type") == "source_surface" and ds_id is None:
+            continue
         if ds_id is None or ds_id in validation_ids:
             continue
         raise ValueError(

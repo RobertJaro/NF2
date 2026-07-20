@@ -23,12 +23,16 @@ class _SaveFileTask(Thread):
         save_vtk(self.out_path, coords=self.output['coords'], vectors=vectors, scalars=scalars, Mm_per_pix=Mm_per_pixel)
 
 
-def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, metrics=None, x_range=None, y_range=None, **kwargs):
+def convert(nf2_path, out_path=None, Mm_per_pixel=None, height_range=None, metrics=None, x_range=None, y_range=None,
+            nf2_out=None, **kwargs):
     out_path = out_path if out_path is not None \
         else os.path.join(os.path.dirname(nf2_path), nf2_path.split(os.sep)[-2] + '.vtk')
 
-    os.makedirs(os.path.dirname(out_path), exist_ok=True)
-    nf2_out = CartesianOutput(nf2_path)
+    out_dir = os.path.dirname(out_path)
+    if out_dir:
+        os.makedirs(out_dir, exist_ok=True)
+    nf2_out = CartesianOutput(nf2_path) if nf2_out is None else nf2_out
+    kwargs.setdefault('compute_jacobian', False)
     output = nf2_out.load_cube(Mm_per_pixel=Mm_per_pixel, metrics=metrics,
                                height_range=height_range, x_range=x_range, y_range=y_range, **kwargs)
 

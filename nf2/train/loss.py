@@ -1,10 +1,8 @@
 import torch
-import wandb
 from astropy import units as u
 from torch import nn
 
 from nf2.data.util import cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
-from nf2.train.model import jacobian
 
 
 class BaseLoss(nn.Module):
@@ -21,15 +19,12 @@ class ForceFreeLoss(BaseLoss):
         super().__init__(**kwargs)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
-        dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
         dBx_dy = jac_matrix[:, 0, 1]
-        dBy_dy = jac_matrix[:, 1, 1]
         dBz_dy = jac_matrix[:, 2, 1]
         dBx_dz = jac_matrix[:, 0, 2]
         dBy_dz = jac_matrix[:, 1, 2]
-        dBz_dz = jac_matrix[:, 2, 2]
         #
         rot_x = dBz_dy - dBy_dz
         rot_y = dBx_dz - dBz_dx
@@ -51,15 +46,12 @@ class SigmaJLoss(BaseLoss):
         super().__init__(**kwargs)
 
     def forward(self, b, jac_matrix, coords, *args, **kwargs):
-        dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
         dBx_dy = jac_matrix[:, 0, 1]
-        dBy_dy = jac_matrix[:, 1, 1]
         dBz_dy = jac_matrix[:, 2, 1]
         dBx_dz = jac_matrix[:, 0, 2]
         dBy_dz = jac_matrix[:, 1, 2]
-        dBz_dz = jac_matrix[:, 2, 2]
         #
         rot_x = dBz_dy - dBy_dz
         rot_y = dBx_dz - dBz_dx
@@ -113,15 +105,12 @@ class RadialLoss(BaseLoss):
 class PotentialLoss(BaseLoss):
 
     def forward(self, jac_matrix, coords, *args, **kwargs):
-        dBx_dx = jac_matrix[:, 0, 0]
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
         dBx_dy = jac_matrix[:, 0, 1]
-        dBy_dy = jac_matrix[:, 1, 1]
         dBz_dy = jac_matrix[:, 2, 1]
         dBx_dz = jac_matrix[:, 0, 2]
         dBy_dz = jac_matrix[:, 1, 2]
-        dBz_dz = jac_matrix[:, 2, 2]
         #
         rot_x = dBz_dy - dBy_dz
         rot_y = dBx_dz - dBz_dx
@@ -300,6 +289,22 @@ class BoundaryLoss(BaseLoss):
         return b_diff
 
 
+class BoundaryBrLoss(BaseLoss):
+
+    def forward(self, b, b_true, transform=None, b_err=None, *args, **kwargs):
+        transformed_b = torch.einsum('ijk,ik->ij', transform, b) if transform is not None else b
+
+        br_pred = transformed_b[..., 0]
+        br_true = b_true[..., 0]
+        if b_err is None:
+            br_err = torch.zeros_like(br_true)
+        else:
+            br_err = b_err[..., 0]
+
+        br_diff = torch.clip(torch.abs(br_pred - br_true) - br_err, 0)
+        return br_diff.pow(2)
+
+
 class WeightedHeightLoss(BaseLoss):
 
     def forward(self, coords, original_coords, height_range, *args, **kwargs):
@@ -325,7 +330,8 @@ class MinHeightLoss(BaseLoss):
         return min_height_regularization
 
 # mapping
-loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_los_trv': LosTrvBoundaryLoss,
+loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_br': BoundaryBrLoss,
+                       'boundary_los_trv': LosTrvBoundaryLoss,
                        'boundary_azi': AziBoundaryLoss,
                        'boundary_los_trv_azi': LosTrvAziBoundaryLoss, 'boundary_los': LosBoundaryLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,

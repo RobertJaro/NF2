@@ -230,6 +230,15 @@ cube = out.load_cube(height_range=[0, 80], Mm_per_pixel=0.72, metrics=["j"])
 slice0 = out.load_slice()
 ```
 
+## Cartesian Field-Line Tracing
+
+Cartesian lines are integrated through the checkpoint's axis-aligned box. The
+lower `z` face is the inner/photospheric boundary; the four sides and top are
+outer boundaries. Use `load_slice()` for topology maps or `trace()` for selected
+complete trajectories. The dedicated [Field-Line Tracing](field_line_tracing.md)
+guide explains boundary classification, normalized coordinates, Q, twist,
+integrated current, paths, and Cartesian examples.
+
 ## Multi-Height Data
 
 Multi-height configurations use multiple boundary entries with distinct ids. Each boundary can point to its own custom files and define its own plate scale and placement:
