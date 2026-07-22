@@ -305,11 +305,13 @@ class AnalyticalBoundaryDataset(TensorsDataset):
 
 class PotentialBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=None, batch_size=2 ** 12, only_top=False, **kwargs):
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=None, batch_size=2 ** 12,
+                 only_top=False, method='fft', **kwargs):
         if strides is None:
             strides = 2 if only_top else 1
         coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
-                                                         only_top=only_top, progress=(not only_top))
+                                                         only_top=only_top, method=method,
+                                                         progress=(not only_top))
         coords = coords * ds_per_pixel
         b_err = b_err / Gauss_per_dB
         b = b / Gauss_per_dB
