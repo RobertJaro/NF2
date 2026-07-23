@@ -1,5 +1,5 @@
 ---
-base_path: "/glade/work/rjarolim/nf2/spherical/comparison/377_v28"
+base_path: "/glade/work/rjarolim/nf2/spherical/377_v28"
 work_directory: "/glade/derecho/scratch/rjarolim/nf2/377_v28"
 logging:
   project: spherical

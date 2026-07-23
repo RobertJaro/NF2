@@ -50,7 +50,7 @@ def _plot_squashing_factor_Q(data, ax, y_min, y_max, z_min, z_max, z_offset):
 
 def _plot_twist(data, ax, y_min, y_max, z_min, z_max, z_offset):
     im = ax.imshow(data[0, :, :].T,
-                   origin='lower', cmap='coolwarm',
+                   origin='lower', cmap='Spectral_r',
                    extent=[y_min, y_max, z_min + z_offset, z_max], vmin=-1, vmax=1)
     return im
 

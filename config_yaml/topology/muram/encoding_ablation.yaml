@@ -26,7 +26,7 @@ data:
 model:
   type: vector_potential
   dim: 256
-  encoding_config: { type: gaussian, scale: { scale }, num_freqs: 16 }
+  encoding_config: { type: gaussian, scale: <<scale>>, num_freqs: 16 }
 
 training:
   epochs: 30

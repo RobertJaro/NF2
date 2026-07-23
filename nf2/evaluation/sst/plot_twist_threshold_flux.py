@@ -300,7 +300,7 @@ def _plot_comparison(output_dir, datasets):
             dataset['twist_map'].T,
             origin='lower',
             extent=dataset['extent'],
-            cmap='coolwarm',
+            cmap='Spectral_r',
             norm=twist_norm,
         )
 

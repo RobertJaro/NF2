@@ -119,7 +119,7 @@ def _plot_dataset(dataset: dict) -> None:
         axs[2].plot(
             [dataset['slice_line_x'], dataset['slice_line_x']],
             [-15, 15],
-            color='orange',
+            color='red',
             linestyle='--',
             linewidth=1,
         )
