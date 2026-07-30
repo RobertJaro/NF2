@@ -34,6 +34,23 @@ def _reset_checkpoint_progress(checkpoint_path, output_path):
     return output_path
 
 
+def _initialize_data_module(data_runtime, data_module_save_path, reload=False):
+    if os.path.exists(data_module_save_path) and not reload:
+        print(f'Using saved data module state: {data_module_save_path}')
+        return
+    if os.path.exists(data_module_save_path) and reload:
+        print(f'Reloading data module state: {data_module_save_path}')
+    data_module_config = deepcopy(data_runtime)
+    data_module_type = data_module_config.pop('type')
+    if data_module_type == 'cartesian':
+        data_module = CartesianDataModule(**data_module_config)
+    elif data_module_type == 'spherical':
+        data_module = SphericalDataModule(**data_module_config)
+    else:
+        raise NotImplementedError(f'Unknown data loader {data_module_type}')
+    torch.save(data_module, data_module_save_path)
+
+
 def run(path, data, work_path=None, callbacks=None, logging=None, model=None, training=None, losses=None,
         transforms=None, loss_scaling=None, config=None, reload=False, meta_path=None):
     """Run the simulation with the given configuration.
@@ -49,6 +66,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
         logging: Dictionary with the logging configuration.
         model: Dictionary with the model configuration.
         training: Dictionary with the training configuration.
+        reload: Rebuild and overwrite any saved data module state in work_path.
         meta_path: Path to an optional previous NF2 or Lightning checkpoint used as the training start state.
         config: Dictionary with the configuration for the simulation.
     """
@@ -109,15 +127,7 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
     data_module_save_path = os.path.join(work_path, 'data_module.pkl')
     @rank_zero_only
     def _init_data_module():
-        data_module_config = deepcopy(data_runtime)
-        data_module_type = data_module_config.pop('type')
-        if data_module_type == 'cartesian':
-            data_module = CartesianDataModule(**data_module_config)
-        elif data_module_type == 'spherical':
-            data_module = SphericalDataModule(**data_module_config)
-        else:
-            raise NotImplementedError(f'Unknown data loader {data_module_type}')
-        torch.save(data_module, data_module_save_path)
+        _initialize_data_module(data_runtime, data_module_save_path, reload=reload)
     _init_data_module()
     # load data module for all ranks
     data_module = torch.load(data_module_save_path, weights_only=False)
@@ -187,10 +197,14 @@ def run(path, data, work_path=None, callbacks=None, logging=None, model=None, tr
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, required=True, help='config file for the simulation')
+    parser.add_argument('--reload', action='store_true',
+                        help='Rebuild the saved data module even if work_path/data_module.pkl exists.')
     args, overwrite_args = parser.parse_known_args()
 
     yaml_config_file = args.config
     config = load_yaml_config(yaml_config_file, overwrite_args)
+    if args.reload:
+        config['reload'] = True
 
     run(**config)
 

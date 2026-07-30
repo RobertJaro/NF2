@@ -20,7 +20,7 @@ class TraceConfig:
     atol: float = 1e-7
     min_step_size: float | None = None
     max_step_size: float | None = None
-    max_steps: int = 10_000
+    max_steps: int = 2_000
     max_length: float | None = None
     min_field_strength: float = 1e-8
     boundary_tolerance: float = 1e-6

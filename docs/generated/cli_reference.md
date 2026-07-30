@@ -8,6 +8,7 @@ Run one YAML-configured extrapolation.
 | Option | Default | Description |
 | --- | --- | --- |
 | `--config` | required | Path to a YAML configuration file. |
+| `--reload` | false | Rebuild work_path/data_module.pkl instead of reusing the saved data module state. |
 | `--<placeholder>` | optional | Fills `<<placeholder>>` or `<<placeholder;default>>` before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Multiple values are supported for list placeholders such as --z_range 0 150. |
 
 
@@ -74,7 +75,7 @@ Export NF2 results to exchange formats.
 | `--trace-atol` | 1e-7 | RKF45 absolute error tolerance. |
 | `--trace-min-step-Mm` | step / 1000 | Optional RKF45 minimum step in Mm. |
 | `--trace-max-step-Mm` | 10 * step | Optional RKF45 maximum step in Mm. |
-| `--trace-max-steps` | 10000 | Maximum integration steps in each direction. |
+| `--trace-max-steps` | 2000 | Maximum integration steps in each direction. |
 | `--trace-max-length-Mm` | none | Maximum length in Mm for each forward/backward half-line. |
 | `--trace-min-field-G` | model default | Stop tracing below this field strength in Gauss. |
 | `--trace-batch-size` | 65536 | Maximum seed points in one tensor-native trace chunk. |
@@ -114,4 +115,3 @@ Resolve NOAA active-region numbers to SHARP/HARP numbers through JSOC metadata.
 | `--time` | required | Observation time used for the NOAA-to-HARP lookup. |
 | `--email` | required | JSOC export email address. |
 | `--noaa_nums` | all active regions | One or more NOAA active-region numbers to resolve. |
-

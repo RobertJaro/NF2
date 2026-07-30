@@ -18,7 +18,7 @@ class ForceFreeLoss(BaseLoss):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def forward(self, b, jac_matrix, coords, *args, **kwargs):
+    def forward(self, b, jac_matrix, coords, source_surface_gate=None, *args, **kwargs):
         dBy_dx = jac_matrix[:, 1, 0]
         dBz_dx = jac_matrix[:, 2, 0]
         dBx_dy = jac_matrix[:, 0, 1]
@@ -34,6 +34,9 @@ class ForceFreeLoss(BaseLoss):
         normalization = b.pow(2).sum(-1) + 1e-7
         jxb = torch.cross(j, b, -1)
         force_free_loss = jxb.pow(2).sum(-1) / normalization
+        if source_surface_gate is not None:
+            gate = source_surface_gate.squeeze(-1)
+            force_free_loss = force_free_loss * gate / gate.mean().clamp_min(1e-7)
 
         # check for NaNs
         assert not torch.isnan(force_free_loss).any(), 'NaNs in force-free loss computation!'
@@ -100,6 +103,24 @@ class RadialLoss(BaseLoss):
         radial_loss = torch.sum(b_cross_r**2, dim=-1) / b2
 
         return radial_loss
+
+
+class SourceSurfaceTransitionRadialLoss(BaseLoss):
+    """Select and radialize the field in the learned sigmoid transition shell."""
+
+    def forward(self, b, coords, source_surface_transition, *args, **kwargs):
+        eps = 1e-8
+        r_hat = coords / torch.linalg.norm(coords, dim=-1, keepdim=True).clamp_min(eps)
+        transverse_fraction = (
+            torch.cross(b, r_hat.detach(), dim=-1).pow(2).sum(dim=-1)
+            / b.pow(2).sum(dim=-1).clamp_min(eps)
+        )
+        transition = source_surface_transition.squeeze(-1)
+        shell_weight = 4 * transition * (1 - transition)
+        return (
+            (shell_weight * transverse_fraction).sum()
+            / shell_weight.sum().clamp_min(eps)
+        )
 
 
 class PotentialLoss(BaseLoss):
@@ -337,6 +358,7 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_br': BoundaryBrLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                        'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
                        'NaNs': NaNLoss, 'radial': RadialLoss,
+                       'source_surface_transition_radial': SourceSurfaceTransitionRadialLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
                        'sigma_j': SigmaJLoss
                        }

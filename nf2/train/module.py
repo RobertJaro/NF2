@@ -13,8 +13,8 @@ from torch.optim.lr_scheduler import ExponentialLR
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, ScaledPotentialModel, ScaledVectorPotentialModel, \
-    SourceSurfaceScaledPotentialModel, SourceSurfaceScaledVectorPotentialModel, VectorPotentialModel
+from nf2.train.model import BModel, FixedSourceSurfaceVectorPotentialModel, ScaledVectorPotentialModel, \
+    SourceSurfaceVectorPotentialModel, VectorPotentialModel
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     HeightTransformModel
 
@@ -33,8 +33,7 @@ class NF2Module(LightningModule):
                               dataset-specific parameters, and data preprocessing settings.
             model_kwargs (dict, optional): Model configuration dictionary containing:
                 - type (str): Model type, one of ['b', 'vector_potential', 'scaled_vector_potential',
-                  'scaled_potential', 'source_surface_scaled_vector_potential',
-                  'source_surface_scaled_potential']
+                  'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
                 - dim (int): Hidden dimension size of the neural network
                 Additional model-specific parameters
             loss_config (list, optional): List of dictionaries containing loss configurations:
@@ -74,23 +73,15 @@ class NF2Module(LightningModule):
         elif model_type == 'scaled_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = ScaledVectorPotentialModel(**model_kwargs)
-        elif model_type == 'scaled_potential':
+        elif model_type == 'source_surface_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
-            model = ScaledPotentialModel(**model_kwargs)
-        elif model_type == 'source_surface_scaled_vector_potential':
+            model = SourceSurfaceVectorPotentialModel(**model_kwargs)
+        elif model_type == 'fixed_source_surface_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
-            model_kwargs.pop('coord_range', None)
-            model_kwargs.pop('ds_per_pixel', None)
-            model = SourceSurfaceScaledVectorPotentialModel(**model_kwargs)
-        elif model_type == 'source_surface_scaled_potential':
-            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
-            model_kwargs.pop('coord_range', None)
-            model_kwargs.pop('ds_per_pixel', None)
-            model = SourceSurfaceScaledPotentialModel(**model_kwargs)
+            model = FixedSourceSurfaceVectorPotentialModel(**model_kwargs)
         else:
             valid_options = ['b', 'vector_potential', 'scaled_vector_potential',
-                             'scaled_potential', 'source_surface_scaled_vector_potential',
-                             'source_surface_scaled_potential']
+                             'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -271,40 +262,50 @@ class NF2Module(LightningModule):
             return bool(requires_jacobian.flatten()[0].item())
         return bool(requires_jacobian)
 
-    def _forward_dataset_group(self, batch, loader_keys, compute_jacobian):
-        if not loader_keys:
-            return {}, None, {}
-
-        coords = torch.cat([batch[k]['coords'] for k in loader_keys], 0)
-        model_out = self.model(coords, compute_jacobian=compute_jacobian)
-        model_out_keys = model_out.keys()
-
+    @staticmethod
+    def _split_model_output(model_out, loader_keys, batch_lengths):
         result_mapping = {}
         idx = 0
-        for k in loader_keys:
-            n_coords = batch[k]['coords'].shape[0]
-            result_mapping[k] = {mk: model_out[mk][idx:idx + n_coords] for mk in model_out_keys}
-            idx += n_coords
+        for key, batch_length in zip(loader_keys, batch_lengths):
+            result_mapping[key] = {
+                output_key: value[idx:idx + batch_length]
+                for output_key, value in model_out.items()
+            }
+            idx += batch_length
+        return result_mapping
 
-        return model_out, coords, result_mapping
+    def _forward_dataset_group(self, batch, loader_keys, compute_jacobian):
+        if not loader_keys:
+            return {}
+
+        coords = torch.cat([batch[key]['coords'] for key in loader_keys], 0)
+        output = self.model(coords, compute_jacobian=compute_jacobian)
+        lengths = [batch[key]['coords'].shape[0] for key in loader_keys]
+        return self._split_model_output(output, loader_keys, lengths)
 
     def training_step(self, batch, batch_nb):
         loader_keys = list(batch.keys())
 
-        # set requires grad for coords
+        # Existing coordinates must require gradients before learned transforms.
         for k in loader_keys:
-            batch[k]['coords'].requires_grad = True
+            if 'coords' in batch[k]:
+                batch[k]['coords'].requires_grad_(True)
 
         # transform batch
         self.apply_transforms(batch)
+
+        # Existing-coordinate transforms may replace their coordinate tensors.
+        for k in loader_keys:
+            if 'coords' in batch[k]:
+                batch[k]['coords'].requires_grad_(True)
 
         jacobian_loader_keys = [k for k in loader_keys if self._requires_jacobian(batch[k])]
         no_jacobian_loader_keys = [k for k in loader_keys if k not in jacobian_loader_keys]
 
         # forward step
-        jacobian_model_out, jacobian_coords, jacobian_result_mapping = self._forward_dataset_group(
+        jacobian_result_mapping = self._forward_dataset_group(
             batch, jacobian_loader_keys, compute_jacobian=True)
-        _, _, no_jacobian_result_mapping = self._forward_dataset_group(
+        no_jacobian_result_mapping = self._forward_dataset_group(
             batch, no_jacobian_loader_keys, compute_jacobian=False)
 
         result_mapping = {**jacobian_result_mapping, **no_jacobian_result_mapping}
@@ -312,10 +313,8 @@ class NF2Module(LightningModule):
         state_dict = {k: {**result_mapping[k], **batch[k]} for k in loader_keys}
 
         # global state for physics losses. Datasets that opt out of gradients do not provide jac_matrix.
-        if jacobian_loader_keys:
-            state_dict['all'] = {**jacobian_model_out, 'coords': jacobian_coords}
-        else:
-            state_dict['all'] = self._collate_states([state_dict[k] for k in loader_keys])
+        all_state_keys = jacobian_loader_keys or loader_keys
+        state_dict['all'] = self._collate_states([state_dict[k] for k in all_state_keys])
 
         loss_dict = {}
         for name, loss_module in self.loss_modules.items():
@@ -336,7 +335,22 @@ class NF2Module(LightningModule):
                 raise e
         total_loss = sum([self.weights[k] * loss_dict[k] for k in loss_dict.keys()])
 
-        return {**{k: v.detach() for k, v in loss_dict.items()}, 'loss': total_loss}
+        diagnostics = {}
+        if isinstance(self.model, SourceSurfaceVectorPotentialModel):
+            surface_radii = [
+                result_mapping[key]['source_surface_radius']
+                for key in loader_keys
+                if 'source_surface_radius' in result_mapping[key]
+                and 'grouped_coords' in batch[key]
+            ]
+            if surface_radii:
+                diagnostics['source_surface_mean_radius'] = torch.cat(surface_radii).mean().detach()
+
+        return {
+            **{k: v.detach() for k, v in loss_dict.items()},
+            **diagnostics,
+            'loss': total_loss,
+        }
 
     def apply_transforms(self, batch):
         loader_keys = list(batch.keys())
@@ -358,6 +372,7 @@ class NF2Module(LightningModule):
                 for ds_id, batch_length in zip(transform_ds_ids, batch_lengths):
                     batch[ds_id][k] = value[number_idx:number_idx + batch_length]
                     number_idx += batch_length
+
 
     @torch.no_grad()
     def on_train_batch_end(self, outputs, batch, batch_idx) -> None:

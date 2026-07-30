@@ -64,7 +64,10 @@ class BaseOutput:
         coord.requires_grad_(requires_grad)
         context = torch.enable_grad() if requires_grad else torch.no_grad()
         with context:
-            result = self.model(coord, compute_jacobian=compute_jacobian)
+            # Keep non-tensor arguments positional. DataParallel scatters keyword
+            # arguments to every GPU even when a small coordinate batch produces
+            # fewer tensor chunks, which would call an extra replica without coords.
+            result = self.model(coord, compute_jacobian)
         return {key: value.detach() for key, value in result.items()}
 
     def _trace_geometry(self):

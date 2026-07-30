@@ -20,6 +20,7 @@ def normalize_config(config: dict) -> dict:
 
     data = _normalize_data(config.pop("data", {}))
     model = _normalize_model(config.pop("model", None), data["type"])
+    transforms = _normalize_dataset_refs(config.pop("transforms", []))
     losses = _normalize_losses(config.pop("losses", None), data["type"], data)
     callbacks = _normalize_callbacks(config.pop("callbacks", None), data["type"], data)
     _validate_callback_refs(callbacks, data)
@@ -32,7 +33,7 @@ def normalize_config(config: dict) -> dict:
         "model": model,
         "training": _normalize_training(config.pop("training", {})),
         "losses": losses,
-        "transforms": _normalize_dataset_refs(config.pop("transforms", [])),
+        "transforms": transforms,
         "loss_scaling": config.pop("loss_scaling", _default_loss_scaling(data["type"], losses)),
         "callbacks": callbacks,
         "config": config,
@@ -158,14 +159,32 @@ def _normalize_spherical_data(data):
 def _normalize_model(model, geometry):
     model = deepcopy(model or {})
     field = model.pop("field", "vector_potential")
-    if field not in {"b", "vector_potential", "scaled_vector_potential", "scaled_potential",
-                     "source_surface_scaled_vector_potential", "source_surface_scaled_potential"}:
+    if field not in {"b", "vector_potential", "scaled_vector_potential",
+                     "source_surface_vector_potential", "fixed_source_surface_vector_potential"}:
         raise ValueError(
             "model.field must be 'b', 'vector_potential', 'scaled_vector_potential', "
-            "'scaled_potential', 'source_surface_scaled_vector_potential', "
-            "or 'source_surface_scaled_potential'.")
-    if field in {"source_surface_scaled_vector_potential", "source_surface_scaled_potential"}:
-        return _normalize_source_surface_model(model, field, geometry)
+            "'source_surface_vector_potential', or 'fixed_source_surface_vector_potential'.")
+
+    source_surface = model.pop("source_surface", None)
+    open_field = model.pop("open_field", None)
+    if field == "source_surface_vector_potential":
+        if geometry != "spherical":
+            raise ValueError("model.field: source_surface_vector_potential requires spherical geometry.")
+        source_surface = deepcopy(source_surface or {})
+        source_surface_type = source_surface.pop("type", "siren")
+        if source_surface_type != "siren":
+            raise ValueError("Only SIREN source-surface height models are supported.")
+        if open_field is not None:
+            model["open_field"] = open_field
+    elif field == "fixed_source_surface_vector_potential":
+        if geometry != "spherical":
+            raise ValueError("model.field: fixed_source_surface_vector_potential requires spherical geometry.")
+        source_surface = deepcopy(source_surface or {})
+        if open_field is not None:
+            model["open_field"] = open_field
+    elif source_surface is not None or open_field is not None:
+        raise ValueError(
+            "model.source_surface and model.open_field require a source-surface model.")
 
     network = model.pop("network", {}) or {}
     network_type = network.pop("type", "siren")
@@ -174,51 +193,13 @@ def _normalize_model(model, geometry):
 
     hidden_dim = network.pop("hidden_dim", model.pop("hidden_dim", 512 if geometry == "spherical" else 256))
     normalized = {"type": field, "dim": hidden_dim, **network, **model}
+    if source_surface is not None:
+        normalized["source_surface"] = source_surface
     if "w0_initial" in normalized:
         normalized["w0_init"] = normalized.pop("w0_initial")
     if "layers" in normalized:
         normalized["n_layers"] = normalized.pop("layers")
     return normalized
-
-
-def _normalize_source_surface_model(model, field, geometry):
-    network = model.pop("network", None)
-    field_block_name = "potential" if field == "source_surface_scaled_potential" else "vector_potential"
-    if network is not None and field_block_name not in model:
-        model[field_block_name] = network
-    elif network is not None:
-        raise ValueError(f"Use model.{field_block_name} instead of model.network for source-surface models.")
-
-    field_block = _normalize_siren_block(
-        model.pop(field_block_name, {}),
-        default_hidden_dim=512 if geometry == "spherical" else 256,
-        default_layers=8,
-    )
-    source_surface = _normalize_source_surface_height_block(model.pop("source_surface", {}))
-    return {
-        "type": field,
-        field_block_name: field_block,
-        "source_surface": source_surface,
-        **model,
-    }
-
-
-def _normalize_siren_block(config, default_hidden_dim, default_layers):
-    config = deepcopy(config or {})
-    network_type = config.pop("type", "siren")
-    if network_type != "siren":
-        raise ValueError("Only SIREN networks are supported in v0.4.")
-    config.setdefault("hidden_dim", default_hidden_dim)
-    config.setdefault("layers", default_layers)
-    return config
-
-
-def _normalize_source_surface_height_block(config):
-    config = deepcopy(config or {})
-    network_type = config.pop("type", "siren")
-    if network_type != "siren":
-        raise ValueError("Only SIREN source-surface height models are supported.")
-    return config
 
 
 def _normalize_training(training):
@@ -257,9 +238,14 @@ def _default_losses(geometry, data):
             losses.append({"type": "potential", "name": "potential", "weight": {"type": "step", "steps": 5000, "start": 1.0e-4, "end": 0.0}, "datasets": ["random"]})
         return losses
     boundary_ids = [cfg["id"] for cfg in data["boundaries"] if cfg["type"] == "map"]
+    volume_sampler_ids = [
+        cfg["id"] for cfg in data.get("samplers", [])
+        if cfg["type"] in {"random_spherical", "random_radial_grouped"}
+    ]
+    volume_sampler_ids = volume_sampler_ids or ["random"]
     losses = [
-        {"type": "force_free", "name": "force_free", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": ["random"]},
-        {"type": "potential", "name": "potential", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": ["random"]},
+        {"type": "force_free", "name": "force_free", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": volume_sampler_ids},
+        {"type": "potential", "name": "potential", "weight": {"start": 1.0e-4, "end": 1.0e-2, "iterations": 50000}, "datasets": volume_sampler_ids},
     ]
     if boundary_ids:
         losses.insert(0, {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": boundary_ids})

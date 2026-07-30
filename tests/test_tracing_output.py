@@ -112,6 +112,24 @@ def test_derivative_metric_enables_jacobian_when_sampling_disables_it(tmp_path):
     np.testing.assert_allclose(result["metrics"]["j"].value, 0, atol=1e-7)
 
 
+def test_model_evaluation_passes_parallel_flags_positionally(tmp_path):
+    checkpoint = tmp_path / "constant.nf2"
+    _constant_checkpoint(checkpoint)
+    output = nf2.load(checkpoint, device="cpu")
+    model = output.model
+
+    class ParallelCallRecorder:
+        def __call__(self, *args, **kwargs):
+            assert len(args) == 2
+            assert kwargs == {}
+            return model(*args)
+
+    output.model = ParallelCallRecorder()
+    result = output._sample_tensor([[0.5, 0.5, 0.5]], compute_jacobian=False)
+
+    assert result["b"].shape == (1, 3)
+
+
 def test_spherical_loader_returns_spherical_field_components(tmp_path):
     checkpoint = tmp_path / "constant_spherical.nf2"
     _constant_spherical_checkpoint(checkpoint)

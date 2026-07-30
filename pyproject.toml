@@ -45,7 +45,6 @@ dependencies = [
   "python-dateutil>=2.8",
   "wandb>=0.27",
   "drms>=0.7",
-  "pfsspy>=1.2",
 ]
 
 [project.urls]

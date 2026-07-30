@@ -27,7 +27,9 @@ def _uniform_sample(coords, compute_jacobian=False):
 
 
 def test_default_integrator_is_rkf45():
-    assert TraceConfig().method == "rkf45"
+    config = TraceConfig()
+    assert config.method == "rkf45"
+    assert config.max_steps == 2_000
 
 
 @pytest.mark.parametrize("method", ["euler", "rk1", "rk2", "rk3", "rk4", "rkf45"])

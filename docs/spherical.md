@@ -189,6 +189,92 @@ losses:
 
 Use `loss_scaling.type: radial` to scale selected volume losses across radius.
 
+### Learned source-surface domain
+
+The learned source-surface model contains three networks: a large scaled
+interior vector potential, a smaller angular open-field potential, and a small
+angular source-surface height map. The complete potential is
+
+`A = g A_interior + (1 - g) A_open`.
+
+The gate is `g = sigmoid((R_ss - r) / w)`. The large interior and open-field
+networks are each evaluated once. The small height network is evaluated once
+with live parameters for the transition-shell loss and once with fixed
+parameters for the field gate. This preserves all spatial derivatives required
+by the curl while preventing boundary and force-free objectives from moving the
+surface. The angular open potential is projected tangentially and divided by
+radius, so its curl is a divergence-free radial field with the appropriate
+radial decay. Ordinary physical coordinates are sampled throughout the full
+configured volume.
+
+The fixed model uses the same constant-width sigmoid around a configured
+spherical `height`, but retains the additive construction
+`A = A_open + g A_interior`. Its field approaches the radial open solution
+smoothly rather than becoming exactly radial at a finite radius. Use ordinary
+physical-coordinate sampling for this model.
+
+```yaml
+data:
+  samplers:
+    - id: random
+      type: random_spherical
+      radius_range: [1.0, 2.1]
+
+model:
+  field: fixed_source_surface_vector_potential
+  source_surface:
+    height: 2.0
+    transition_width: 0.1
+```
+
+```yaml
+data:
+  geometry: spherical
+  max_radius: 2.5
+  samplers:
+    - id: random
+      type: random_radial_grouped
+      radius_range: [1.0, 2.5]
+      batch_size: 16384
+      n_lat_lon_sample: 128
+
+model:
+  field: source_surface_vector_potential
+  network:
+    hidden_dim: 512
+    layers: 8
+  source_surface:
+    height_range: [2.0, 2.5]
+    transition_width: 0.1
+    hidden_dim: 64
+    layers: 3
+  open_field:
+    hidden_dim: 64
+    layers: 3
+
+losses:
+  - type: force_free
+    name: force_free
+    weight: 1.0e-2
+    datasets: [random]
+  - type: source_surface_transition_radial
+    name: source_surface_transition_radial
+    weight: 1.0e-2
+    datasets: [random]
+```
+
+The transition radiality loss uses `4 g (1 - g)` to select a narrow shell from
+the existing volume samples and minimizes `|B_t|^2 / |B|^2` there. Its
+non-detached shell weights train the height model to locate a naturally radial
+layer, while the same loss trains both field networks to radialize that layer.
+It requires no dedicated source-surface sampler or additional model pass and
+should not use `b_height` scaling.
+
+The source-surface validation callback plots the learned radius as a
+latitude-longitude map. Fixed-radius spherical-slice plots evaluate the complete
+wrapped field and mark the deformed shell intersection in cyan. Force-free and
+divergence summary metrics use only samples inside the learned shell.
+
 ## Python API
 
 Use `nf2.run(...)` with `geometry: spherical` for programmatic runs:

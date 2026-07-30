@@ -10,6 +10,7 @@ from lightning.pytorch import Callback
 from lightning.pytorch.utilities import rank_zero_only
 
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
+from nf2.train.model import FixedSourceSurfaceVectorPotentialModel, SourceSurfaceVectorPotentialModel
 
 
 def _log_norm(values, floor=1e-6):
@@ -108,6 +109,9 @@ class SphericalSlicesCallback(Callback):
         b_cube = b.reshape([*self.cube_shape, 3]).cpu().numpy()
         j_cube = j.reshape([*self.cube_shape, 3]).cpu().numpy()
         c_cube = coords.reshape([*self.cube_shape, 3]).cpu().numpy()
+        inside = outputs.get('inside_source_surface')
+        if inside is not None:
+            inside = inside.reshape(self.cube_shape).cpu().numpy().astype(bool)
 
         if 'spherical_coords' in outputs:
             c_cube = outputs['spherical_coords'].reshape([*self.cube_shape, 3]).cpu().numpy()
@@ -116,10 +120,10 @@ class SphericalSlicesCallback(Callback):
             c_cube[..., 0] *= self.Mm_per_ds / (1 * u.solRad).to_value(u.Mm)
         b_cube = vector_cartesian_to_spherical(b_cube, c_cube)
 
-        self.plot_b(b_cube, c_cube)
-        self.plot_current(j_cube, c_cube)
+        self.plot_b(b_cube, c_cube, inside=inside)
+        self.plot_current(j_cube, c_cube, inside=inside)
 
-    def plot_b(self, b, coords):
+    def plot_b(self, b, coords, inside=None):
         n_samples = b.shape[0]
         fig, plot_axs = plt.subplots(3, n_samples, figsize=(n_samples * 4, 12), squeeze=False)
         for i in range(3):
@@ -130,6 +134,8 @@ class SphericalSlicesCallback(Callback):
                 v_min_max = max(v_min_max, 0.01)
                 im = plot_axs[i, j].imshow(b_slice, cmap='gray', vmin=-v_min_max, vmax=v_min_max,
                                             origin='lower', extent=None)
+                if inside is not None:
+                    self._plot_pixel_surface_contour(plot_axs[i, j], inside[j])
                 divider = make_axes_locatable(plot_axs[i, j])
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 plt.colorbar(im, cax=cax, label='B [G]')
@@ -146,7 +152,7 @@ class SphericalSlicesCallback(Callback):
         _log_wandb_figure(f"{self.name} - B", fig)
         plt.close('all')
 
-    def plot_current(self, j, coords):
+    def plot_current(self, j, coords, inside=None):
         j = (j ** 2).sum(-1) ** 0.5
         n_samples = j.shape[0]
         width_ratios = [1] * n_samples + [0.05]
@@ -159,6 +165,8 @@ class SphericalSlicesCallback(Callback):
         for i in range(n_samples):
             height = coords[i, :, :, 0].mean()
             im = self._plot_spherical_map(plot_axs[i], j[i, :, :], coords[i], cmap='plasma', norm=norm)
+            if inside is not None:
+                self._plot_spherical_surface_contour(plot_axs[i], inside[i], coords[i])
             plot_axs[i].set_xlabel('Longitude [deg]')
             if i == 0:
                 plot_axs[i].set_ylabel('Latitude [deg]')
@@ -182,6 +190,24 @@ class SphericalSlicesCallback(Callback):
         fig.tight_layout()
         _log_wandb_figure(f"{self.name} - Integrated Current density", fig)
         plt.close('all')
+
+    @staticmethod
+    def _plot_pixel_surface_contour(ax, inside):
+        if np.all(inside) or not np.any(inside):
+            return
+        ax.contour(inside.astype(float), levels=[0.5], colors='cyan', linewidths=0.8,
+                   origin='lower')
+
+    @staticmethod
+    def _plot_spherical_surface_contour(ax, inside, coords):
+        if np.all(inside) or not np.any(inside):
+            return
+        longitude = np.rad2deg(np.unwrap(coords[..., 2], axis=1))
+        latitude = np.rad2deg(np.pi / 2 - coords[..., 1])
+        extent = [np.nanmin(longitude), np.nanmax(longitude),
+                  np.nanmin(latitude), np.nanmax(latitude)]
+        ax.contour(np.flipud(inside.astype(float)), levels=[0.5], colors='cyan',
+                   linewidths=0.8, origin='lower', extent=extent)
 
     @staticmethod
     def _plot_spherical_map(ax, values, coords, physical_units=False, **kwargs):
@@ -315,9 +341,9 @@ class SourceSurfaceCallback(Callback):
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
         model = pl_module.model
-        if not hasattr(model, 'source_surface_height_grid'):
+        if not isinstance(model, (SourceSurfaceVectorPotentialModel, FixedSourceSurfaceVectorPotentialModel)):
             return
-        grid = model.source_surface_height_grid(
+        grid = model.source_surface_radius_grid(
             latitude_resolution=self.latitude_resolution,
             longitude_resolution=self.longitude_resolution,
             device=pl_module.device,
@@ -946,6 +972,15 @@ class MetricsCallback(Callback):
         j = outputs['j'] * self.gauss_per_dB / self.Mm_per_ds
 
         div = outputs['div'] * self.gauss_per_dB / self.Mm_per_ds
+
+        inside = outputs.get('inside_source_surface')
+        if inside is not None:
+            inside = inside.reshape(-1).bool()
+            if not torch.any(inside):
+                return
+            b = b[inside]
+            j = j[inside]
+            div = div[inside]
 
         norm = torch.norm(b, dim=-1) * torch.norm(j, dim=-1) + 1e-7
         sigma = torch.norm(torch.cross(j, b, dim=-1), dim=-1) / norm

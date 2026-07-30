@@ -137,17 +137,21 @@ def test_meta_path_is_preserved_for_single_run_configs():
     assert config["meta_path"] == "./runs/previous/extrapolation_result.nf2"
 
 
-def test_source_surface_scaled_potential_model_field_is_supported():
+def test_source_surface_vector_potential_model_is_supported():
     config = normalize_config(
         {
             "data": {
                 "geometry": "spherical",
                 "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+                "samplers": [
+                    {"id": "random", "type": "random_radial_grouped"},
+                ],
             },
             "model": {
-                "field": "source_surface_scaled_potential",
+                "field": "source_surface_vector_potential",
                 "network": {"hidden_dim": 16, "layers": 2},
-                "source_surface": {"height_range": [2.0, 2.5], "initial_height": 2.3},
+                "source_surface": {"height_range": [2.0, 2.5], "transition_width": 0.1},
+                "open_field": {"hidden_dim": 8, "layers": 1},
             },
             "losses": [
                 {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
@@ -155,10 +159,97 @@ def test_source_surface_scaled_potential_model_field_is_supported():
         }
     )
 
-    assert config["model"]["type"] == "source_surface_scaled_potential"
-    assert config["model"]["potential"]["hidden_dim"] == 16
-    assert config["model"]["potential"]["layers"] == 2
-    assert config["model"]["source_surface"]["initial_height"] == 2.3
+    assert config["model"]["type"] == "source_surface_vector_potential"
+    assert config["model"]["dim"] == 16
+    assert config["model"]["n_layers"] == 2
+    assert config["model"]["source_surface"] == {
+        "height_range": [2.0, 2.5], "transition_width": 0.1}
+    assert config["model"]["open_field"] == {"hidden_dim": 8, "layers": 1}
+
+
+def test_learned_source_surface_uses_regular_volume_sampler():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+                "samplers": [{"id": "random", "type": "random_radial_grouped"}],
+            },
+            "model": {"field": "source_surface_vector_potential"},
+        }
+    )
+
+    assert config["data"]["samplers"][0]["type"] == "random_radial_grouped"
+
+
+def test_fixed_source_surface_vector_potential_model_is_supported():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+                "samplers": [
+                    {"id": "random", "type": "random_spherical", "radius_range": [1.0, 2.1]},
+                ],
+            },
+            "model": {
+                "field": "fixed_source_surface_vector_potential",
+                "source_surface": {"height": 2.0, "transition_width": 0.1},
+            },
+            "losses": [
+                {"type": "force_free", "name": "force_free", "weight": 1e-3,
+                 "datasets": ["random"]},
+            ],
+        }
+    )
+
+    assert config["model"]["type"] == "fixed_source_surface_vector_potential"
+    assert config["model"]["source_surface"] == {"height": 2.0, "transition_width": 0.1}
+    assert config["data"]["samplers"][0]["radius_range"] == [1.0, 2.1]
+
+
+def test_source_surface_volume_dataset_and_loss_are_normalized():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "iterations": 12,
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+                "samplers": [
+                    {"id": "random", "type": "random_radial_grouped", "batch_size": 32},
+                ],
+            },
+            "model": {"field": "source_surface_vector_potential"},
+            "losses": [
+                {"type": "force_free", "name": "force_free", "weight": 1e-3,
+                 "datasets": ["random"]},
+            ],
+        }
+    )
+
+    assert [sampler["type"] for sampler in config["data"]["samplers"]] == [
+        "random_radial_grouped"]
+    assert all(sampler["length"] == 12 for sampler in config["data"]["samplers"])
+    assert config["losses"][0]["ds_id"] == ["random"]
+
+
+def test_source_surface_default_losses_use_volume_sampler():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+                "samplers": [
+                    {"id": "volume", "type": "random_radial_grouped"},
+                ],
+            },
+            "model": {"field": "source_surface_vector_potential"},
+        }
+    )
+
+    losses = {loss["name"]: loss for loss in config["losses"]}
+    assert losses["force_free"]["ds_id"] == ["volume"]
+    assert losses["potential"]["ds_id"] == ["volume"]
 
 
 def test_unset_bundled_error_placeholders_are_skipped():

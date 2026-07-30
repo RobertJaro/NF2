@@ -226,7 +226,7 @@ def main():
     tracing.add_argument("--trace-atol", type=float, default=1e-7)
     tracing.add_argument("--trace-min-step-Mm", type=float, default=None)
     tracing.add_argument("--trace-max-step-Mm", type=float, default=None)
-    tracing.add_argument("--trace-max-steps", type=int, default=10_000)
+    tracing.add_argument("--trace-max-steps", type=int, default=2_000)
     tracing.add_argument(
         "--trace-max-length-Mm", type=float, default=None,
         help="Optional maximum length in Mm for each forward/backward half-line.",

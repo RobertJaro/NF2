@@ -133,6 +133,10 @@ data:
   prefetch_factor: 2
 ```
 
+Single and series runs reuse `work_path/data_module.pkl` when it already exists. Pass
+`--reload` to the extrapolation command after changing the input data configuration
+or when the saved data module must be rebuilt.
+
 For series runs, `data.num_workers` also controls the multiprocessing pool used to preload per-step data modules. Set `data.data_module_workers` only when that preload pool should differ from the PyTorch DataLoader worker count.
 
 Series configs advance to a new dataset every epoch by default. The example series configs validate every 10th dataset while still saving one `.nf2` result per dataset:

@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch import nn
+from torch.func import functional_call
 from torch.nn.functional import linear
 
 SOLAR_RADIUS_Mm = 695.7
@@ -90,43 +91,6 @@ class VectorPotentialModel(SirenModel):
         return out
 
 
-class ScaledPotentialModel(SirenModel):
-    """Scalar-potential model with radial coordinate and potential power-law envelopes."""
-
-    def __init__(self, radial_power=1.0, coordinate_radial_power=4.0,
-                 base_radius=None, Mm_per_ds=None, eps=1e-6, **kwargs):
-        super().__init__(in_dim=3, out_dim=1, **kwargs)
-        self.requires_grad_forward = True
-        if base_radius is None:
-            if Mm_per_ds is None:
-                raise ValueError("ScaledPotentialModel requires 'Mm_per_ds' when 'base_radius' is not set.")
-            base_radius = SOLAR_RADIUS_Mm / Mm_per_ds
-        if base_radius <= 0:
-            raise ValueError("base_radius must be positive.")
-        self.radial_power = radial_power
-        self.coordinate_radial_power = coordinate_radial_power
-        self.base_radius = base_radius
-        self.eps = eps
-
-    def forward(self, coords, compute_jacobian=True):
-        b, phi, network_coords, coordinate_scale = self._scaled_potential_field(coords)
-
-        out = {"b": b, "phi": phi, "network_coords": network_coords, "coordinate_scale": coordinate_scale}
-        if compute_jacobian:
-            out["jac_matrix"] = jacobian(b, coords)
-        return out
-
-    def _scaled_potential_field(self, coords):
-        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.eps)
-        normalized_radius = radius / self.base_radius
-        coordinate_scale = normalized_radius.pow(-self.coordinate_radial_power)
-        network_coords = coords * coordinate_scale
-        phi = SirenModel.forward(self, network_coords)
-        phi = phi * normalized_radius.pow(-self.radial_power)
-        b = -gradient(phi, coords)
-        return b, phi, network_coords, coordinate_scale
-
-
 class ScaledVectorPotentialModel(VectorPotentialModel):
     """Vector-potential model with radial coordinate and A power-law envelopes."""
 
@@ -144,171 +108,131 @@ class ScaledVectorPotentialModel(VectorPotentialModel):
         self.base_radius = base_radius
         self.eps = eps
 
-    def forward(self, coords, compute_jacobian=True):
+    def vector_potential(self, coords):
         radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.eps)
         normalized_radius = radius / self.base_radius
         coordinate_scale = normalized_radius.pow(-self.coordinate_radial_power)
         network_coords = coords * coordinate_scale
         a = SirenModel.forward(self, network_coords)
         a = a * normalized_radius.pow(-self.radial_power)
+        return {"a": a, "network_coords": network_coords, "coordinate_scale": coordinate_scale}
+
+    def forward(self, coords, compute_jacobian=True):
+        out = self.vector_potential(coords)
+        a = out["a"]
         b = curl(a, coords)
 
-        out = {"b": b, "a": a, "network_coords": network_coords, "coordinate_scale": coordinate_scale}
+        out["b"] = b
         if compute_jacobian:
             out["jac_matrix"] = jacobian(b, coords)
         return out
 
 
-class SourceSurfaceHeightModel(SirenModel):
-    """Bounded angular model for a warped spherical source-surface radius."""
+class SourceSurfaceHeightModel(nn.Module):
+    """Map unit directions to a bounded source-surface radius."""
 
-    def __init__(self, height_range=(2.0, 2.5), initial_height=None,
-                 hidden_dim=64, layers=3, w0=1.0, w0_initial=1.0, **kwargs):
-        super().__init__(in_dim=3, out_dim=1, dim=hidden_dim, n_layers=layers,
-                         w0=w0, w0_init=w0_initial, **kwargs)
+    def __init__(self, height_range=(1.5, 2.5), Mm_per_ds=None,
+                 hidden_dim=64, layers=3, w0=1.0, w0_initial=1.0):
+        super().__init__()
+        if Mm_per_ds is None:
+            raise ValueError("SourceSurfaceHeightModel requires 'Mm_per_ds'.")
         if len(height_range) != 2:
-            raise ValueError("source_surface.height_range must contain [min, max].")
+            raise ValueError("Source-surface height_range must contain [min, max].")
         min_height, max_height = [float(v) for v in height_range]
         if max_height <= min_height:
-            raise ValueError("source_surface.height_range max must be greater than min.")
-        initial_height = (min_height + max_height) / 2 if initial_height is None else float(initial_height)
-        if not min_height < initial_height < max_height:
-            raise ValueError("source_surface.initial_height must lie inside height_range.")
+            raise ValueError("Source-surface height_range max must be greater than min.")
+        self.mapping_module = SirenModel(
+            in_dim=3, out_dim=1, dim=hidden_dim, n_layers=layers, w0=w0, w0_init=w0_initial)
+        self.solar_radius_ds = SOLAR_RADIUS_Mm / Mm_per_ds
+        self.register_buffer('height_min', torch.tensor(min_height * self.solar_radius_ds, dtype=torch.float32))
+        self.register_buffer('height_max', torch.tensor(max_height * self.solar_radius_ds, dtype=torch.float32))
 
-        self.register_buffer('height_min', torch.tensor(min_height, dtype=torch.float32))
-        self.register_buffer('height_max', torch.tensor(max_height, dtype=torch.float32))
+    def forward(self, unit_vectors, freeze_parameters=False):
+        if freeze_parameters:
+            state = {
+                name: parameter.detach()
+                for name, parameter in self.mapping_module.named_parameters()
+            }
+            state.update(dict(self.mapping_module.named_buffers()))
+            height_logits = functional_call(self.mapping_module, state, (unit_vectors,))
+        else:
+            height_logits = self.mapping_module(unit_vectors)
 
-        initial_fraction = (initial_height - min_height) / (max_height - min_height)
-        initial_fraction = min(max(initial_fraction, 1e-4), 1 - 1e-4)
-        initial_logit = np.log(initial_fraction / (1 - initial_fraction))
-        with torch.no_grad():
-            self.out_layer.weight.zero_()
-            self.out_layer.bias.fill_(initial_logit)
-
-    def forward(self, unit_vectors):
-        x = SirenModel.forward(self, unit_vectors)
-        height_fraction = torch.sigmoid(x)
+        height_fraction = torch.sigmoid(height_logits)
         return self.height_min + height_fraction * (self.height_max - self.height_min)
 
 
-class SourceSurfaceScaledVectorPotentialModel(nn.Module):
-    """Scaled vector-potential model with a learned radial source-surface transition."""
+class SourceSurfaceOpenFieldModel(nn.Module):
+    """Map unit directions to a tangential angular vector potential."""
 
-    def __init__(self, vector_potential=None, source_surface=None,
-                 radial_power=2.0, coordinate_radial_power=4.0, radial_falloff_power=2.0, base_radius=None,
-                 Mm_per_ds=None, eps=1e-6):
+    def __init__(self, hidden_dim=64, layers=3, w0=1.0, w0_initial=1.0):
         super().__init__()
+        self.mapping_module = SirenModel(
+            in_dim=3, out_dim=3, dim=hidden_dim, n_layers=layers, w0=w0, w0_init=w0_initial)
 
-        # Model-unit geometry and shared radial scaling.
+    def forward(self, unit_vectors):
+        angular_potential = self.mapping_module(unit_vectors)
+        radial_component = (angular_potential * unit_vectors).sum(dim=-1, keepdim=True)
+        return angular_potential - radial_component * unit_vectors
+
+
+class SourceSurfaceVectorPotentialModel(nn.Module):
+    """Blend an interior potential into an open potential across a learned surface."""
+
+    requires_grad_forward = True
+
+    def __init__(self, source_surface=None, open_field=None, Mm_per_ds=None, eps=1e-6, **field_kwargs):
+        super().__init__()
         if Mm_per_ds is None:
-            raise ValueError("SourceSurfaceScaledVectorPotentialModel requires 'Mm_per_ds'.")
-        if base_radius is None:
-            base_radius = SOLAR_RADIUS_Mm / Mm_per_ds
-        if base_radius <= 0:
-            raise ValueError("base_radius must be positive.")
-        self.radial_power = radial_power
-        self.coordinate_radial_power = coordinate_radial_power
-        self.radial_falloff_power = radial_falloff_power
-        self.base_radius = base_radius
-        self.eps = eps
-        self.solar_radius_per_ds = SOLAR_RADIUS_Mm / Mm_per_ds
-        self.requires_grad_forward = True
+            raise ValueError("SourceSurfaceVectorPotentialModel requires 'Mm_per_ds'.")
 
-        # Independent SIREN configs for the field and source-surface geometry.
-        vector_potential = self._siren_config(vector_potential, default_hidden_dim=512, default_layers=8)
-        source_surface = {} if source_surface is None else dict(source_surface)
+        source_surface = dict(source_surface or {})
+        transition_width = float(source_surface.pop('transition_width', 0.1))
+        if transition_width <= 0:
+            raise ValueError('source_surface.transition_width must be positive.')
 
-        # Source-surface radii are configured in solar radii and converted once.
-        source_surface_transition_width = float(source_surface.pop('transition_width', 0.05))
-        if source_surface_transition_width <= 0:
-            raise ValueError("source_surface.transition_width must be positive.")
-        self.source_surface_eps = float(source_surface.pop('eps', 1e-6))
-        self.source_surface_transition_width = source_surface_transition_width * self.solar_radius_per_ds
-        source_surface.setdefault('height_range', [2.0, 2.5])
-        self._convert_source_surface_config_units(source_surface)
+        self.field_model = ScaledVectorPotentialModel(Mm_per_ds=Mm_per_ds, eps=eps, **field_kwargs)
+        self.open_field_model = SourceSurfaceOpenFieldModel(**(open_field or {}))
+        self.surface_model = SourceSurfaceHeightModel(Mm_per_ds=Mm_per_ds, **source_surface)
 
-        # Trainable submodels.
-        self.vector_potential = SirenModel(in_dim=3, out_dim=3, **vector_potential)
-        self.source_surface = SourceSurfaceHeightModel(**source_surface)
+        self.solar_radius_ds = SOLAR_RADIUS_Mm / Mm_per_ds
+        self.transition_width_ds = transition_width * self.solar_radius_ds
+        self.eps = float(eps)
 
-    def _convert_source_surface_config_units(self, source_surface):
-        if 'height_range' in source_surface:
-            source_surface['height_range'] = [
-                float(v) * self.solar_radius_per_ds for v in source_surface['height_range']
-            ]
-        if 'initial_height' in source_surface and source_surface['initial_height'] is not None:
-            source_surface['initial_height'] = float(source_surface['initial_height']) * self.solar_radius_per_ds
+    def source_surface_gate(self, radial_distance_ds):
+        return torch.sigmoid(radial_distance_ds / self.transition_width_ds)
 
-    @staticmethod
-    def _siren_config(config, default_hidden_dim, default_layers):
-        config = {} if config is None else dict(config)
-        network_type = config.pop('type', 'siren')
-        if network_type != 'siren':
-            raise ValueError("Only SIREN source-surface submodels are supported.")
-        hidden_dim = config.pop('hidden_dim', config.pop('dim', default_hidden_dim))
-        layers = config.pop('layers', config.pop('n_layers', default_layers))
-        w0 = config.pop('w0', 1.0)
-        w0_initial = config.pop('w0_initial', config.pop('w0_init', 1.0))
-        if config:
-            keys = ', '.join(sorted(config))
-            raise ValueError(f"Unsupported source-surface submodel config keys: {keys}")
-        return {'dim': hidden_dim, 'n_layers': layers, 'w0': w0, 'w0_init': w0_initial}
+    def forward(self, coords, compute_jacobian=True):
+        coords.requires_grad_(True)
 
-    def _scaled_vector_potential_field(self, coords):
-        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.eps)
-        normalized_radius = radius / self.base_radius
-        coordinate_scale = normalized_radius.pow(-self.coordinate_radial_power)
-        network_coords = coords * coordinate_scale
-        a = self.vector_potential(network_coords)
-        a = a * normalized_radius.pow(-self.radial_power)
+        radius_ds = coords.norm(dim=-1, keepdim=True).clamp_min(self.eps)
+        unit_vectors = coords / radius_ds
+
+        source_radius_ds = self.surface_model(unit_vectors)
+        transition = self.source_surface_gate(source_radius_ds - radius_ds)
+
+        fixed_source_radius_ds = self.surface_model(unit_vectors, freeze_parameters=True)
+        field_gate = self.source_surface_gate(fixed_source_radius_ds - radius_ds)
+
+        interior_a = self.field_model.vector_potential(coords)['a']
+        open_a = self.open_field_model(unit_vectors) / radius_ds
+        a = field_gate * interior_a + open_a
         b = curl(a, coords)
-        return b, a, network_coords, coordinate_scale
-
-    def _source_surface_radius(self, coords):
-        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.source_surface_eps)
-        unit_vectors = coords / radius
-        ss_radius_model = self.source_surface(unit_vectors)
-        return radius, ss_radius_model, unit_vectors
-
-    def _source_surface_radial_field(self, radius, ss_radius_model, unit_vectors):
-        ss_coords = unit_vectors * ss_radius_model
-        b_surface, _, _, _ = self._scaled_vector_potential_field(ss_coords)
-        br_surface = (b_surface * unit_vectors).sum(-1, keepdim=True)
-        radial_decay = (ss_radius_model / radius).clamp_min(self.source_surface_eps).pow(self.radial_falloff_power)
-        return br_surface * radial_decay * unit_vectors
-
-    def forward(self, coords, compute_jacobian=True):
-        # Vector-potential field at the requested coordinates.
-        b_vector, a, network_coords, coordinate_scale = self._scaled_vector_potential_field(coords)
-
-        # Learned warped source-surface radius in model units.
-        radius, ss_radius_model, unit_vectors = self._source_surface_radius(coords)
-
-        # Radial exterior: sample Br at the learned source surface and expand as r^-2 by default.
-        b_radial = self._source_surface_radial_field(radius, ss_radius_model, unit_vectors)
-
-        # Smoothly transition from the domain field to the source-surface-projected radial exterior.
-        transition = torch.sigmoid(
-            (radius - ss_radius_model) / self.source_surface_transition_width)
-        b = (1 - transition) * b_vector + transition * b_radial
 
         out = {
-            "b": b,
-            "a": a,
-            "b_vector_potential": b_vector,
-            "b_radial": b_radial,
-            "source_surface_weight": transition,
-            "source_surface_radius": ss_radius_model / self.solar_radius_per_ds,
-            "source_surface_radius_model": ss_radius_model,
-            "network_coords": network_coords,
-            "coordinate_scale": coordinate_scale,
+            'a': a,
+            'b': b,
+            'source_surface_gate': field_gate.detach(),
+            'source_surface_radius': source_radius_ds / self.solar_radius_ds,
+            'source_surface_transition': transition,
+            'inside_source_surface': radius_ds <= source_radius_ds,
         }
         if compute_jacobian:
-            out["jac_matrix"] = jacobian(b, coords)
+            out['jac_matrix'] = jacobian(b, coords)
         return out
 
     @torch.no_grad()
-    def source_surface_height_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
+    def source_surface_radius_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
         device = next(self.parameters()).device if device is None else device
         latitude = torch.linspace(-np.pi / 2, np.pi / 2, int(latitude_resolution), device=device)
         longitude = torch.linspace(0, 2 * np.pi, int(longitude_resolution), device=device)
@@ -318,124 +242,83 @@ class SourceSurfaceScaledVectorPotentialModel(nn.Module):
             torch.cos(lat_grid) * torch.sin(lon_grid),
             torch.sin(lat_grid),
         ], dim=-1)
-        radius_model = self.source_surface(unit_vectors.reshape(-1, 3)).reshape(lat_grid.shape)
+        radius = self.surface_model(unit_vectors.reshape(-1, 3)).reshape(lat_grid.shape)
         return {
-            'radius': radius_model / self.solar_radius_per_ds,
+            'radius': radius / self.solar_radius_ds,
             'latitude': latitude,
             'longitude': longitude,
         }
 
 
-class SourceSurfaceScaledPotentialModel(nn.Module):
-    """Scaled scalar-potential model with a learned radial source-surface transition."""
+class FixedSourceSurfaceVectorPotentialModel(nn.Module):
+    """Combine an interior field with a radial open-field background across a fixed sphere."""
 
-    def __init__(self, potential=None, source_surface=None,
-                 radial_power=1.0, coordinate_radial_power=4.0, radial_falloff_power=2.0, base_radius=None,
-                 Mm_per_ds=None, eps=1e-6):
+    requires_grad_forward = True
+
+    def __init__(self, source_surface=None, open_field=None, Mm_per_ds=None, eps=1e-6, **field_kwargs):
         super().__init__()
-
         if Mm_per_ds is None:
-            raise ValueError("SourceSurfaceScaledPotentialModel requires 'Mm_per_ds'.")
-        if base_radius is None:
-            base_radius = SOLAR_RADIUS_Mm / Mm_per_ds
-        if base_radius <= 0:
-            raise ValueError("base_radius must be positive.")
-        self.radial_power = radial_power
-        self.coordinate_radial_power = coordinate_radial_power
-        self.radial_falloff_power = radial_falloff_power
-        self.base_radius = base_radius
-        self.eps = eps
-        self.solar_radius_per_ds = SOLAR_RADIUS_Mm / Mm_per_ds
-        self.requires_grad_forward = True
+            raise ValueError("FixedSourceSurfaceVectorPotentialModel requires 'Mm_per_ds'.")
+        source_surface = dict(source_surface or {})
+        height = float(source_surface.pop('height', 2.0))
+        transition_width = float(source_surface.pop('transition_width', 0.1))
+        if source_surface:
+            raise ValueError(
+                f"Unsupported fixed source-surface options: {', '.join(sorted(source_surface))}.")
+        if height <= 0:
+            raise ValueError('source_surface.height must be positive.')
+        if transition_width <= 0:
+            raise ValueError('source_surface.transition_width must be positive.')
 
-        potential = SourceSurfaceScaledVectorPotentialModel._siren_config(
-            potential, default_hidden_dim=512, default_layers=8)
-        source_surface = {} if source_surface is None else dict(source_surface)
+        self.field_model = ScaledVectorPotentialModel(Mm_per_ds=Mm_per_ds, eps=eps, **field_kwargs)
+        self.open_field_model = SourceSurfaceOpenFieldModel(**(open_field or {}))
 
-        source_surface_transition_width = float(source_surface.pop('transition_width', 0.05))
-        if source_surface_transition_width <= 0:
-            raise ValueError("source_surface.transition_width must be positive.")
-        self.source_surface_eps = float(source_surface.pop('eps', 1e-6))
-        self.source_surface_transition_width = source_surface_transition_width * self.solar_radius_per_ds
-        source_surface.setdefault('height_range', [2.0, 2.5])
-        self._convert_source_surface_config_units(source_surface)
+        self.solar_radius_ds = SOLAR_RADIUS_Mm / Mm_per_ds
+        self.register_buffer(
+            'source_surface_radius_ds',
+            torch.tensor(height * self.solar_radius_ds, dtype=torch.float32),
+        )
+        self.transition_width_ds = transition_width * self.solar_radius_ds
+        self.eps = float(eps)
 
-        self.potential = SirenModel(in_dim=3, out_dim=1, **potential)
-        self.source_surface = SourceSurfaceHeightModel(**source_surface)
-
-    def _convert_source_surface_config_units(self, source_surface):
-        if 'height_range' in source_surface:
-            source_surface['height_range'] = [
-                float(v) * self.solar_radius_per_ds for v in source_surface['height_range']
-            ]
-        if 'initial_height' in source_surface and source_surface['initial_height'] is not None:
-            source_surface['initial_height'] = float(source_surface['initial_height']) * self.solar_radius_per_ds
-
-    def _scaled_potential_field(self, coords):
-        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.eps)
-        normalized_radius = radius / self.base_radius
-        coordinate_scale = normalized_radius.pow(-self.coordinate_radial_power)
-        network_coords = coords * coordinate_scale
-        phi = self.potential(network_coords)
-        phi = phi * normalized_radius.pow(-self.radial_power)
-        b = -gradient(phi, coords)
-        return b, phi, network_coords, coordinate_scale
-
-    def _source_surface_radius(self, coords):
-        radius = coords.pow(2).sum(-1, keepdim=True).sqrt().clamp_min(self.source_surface_eps)
-        unit_vectors = coords / radius
-        ss_radius_model = self.source_surface(unit_vectors)
-        return radius, ss_radius_model, unit_vectors
-
-    def _source_surface_radial_field(self, radius, ss_radius_model, unit_vectors):
-        ss_coords = unit_vectors * ss_radius_model
-        b_surface, _, _, _ = self._scaled_potential_field(ss_coords)
-        br_surface = (b_surface * unit_vectors).sum(-1, keepdim=True)
-        radial_decay = (ss_radius_model / radius).clamp_min(self.source_surface_eps).pow(self.radial_falloff_power)
-        return br_surface * radial_decay * unit_vectors
+    def source_surface_gate(self, radial_distance_ds):
+        return torch.sigmoid(radial_distance_ds / self.transition_width_ds)
 
     def forward(self, coords, compute_jacobian=True):
-        b_potential, phi, network_coords, coordinate_scale = self._scaled_potential_field(coords)
+        coords.requires_grad_(True)
 
-        radius, ss_radius_model, unit_vectors = self._source_surface_radius(coords)
-        b_radial = self._source_surface_radial_field(radius, ss_radius_model, unit_vectors)
+        radius_ds = coords.norm(dim=-1, keepdim=True).clamp_min(self.eps)
+        unit_vectors = coords / radius_ds
+        radial_distance_ds = self.source_surface_radius_ds - radius_ds
+        gate = self.source_surface_gate(radial_distance_ds)
 
-        transition = torch.sigmoid(
-            (radius - ss_radius_model) / self.source_surface_transition_width)
-        b = (1 - transition) * b_potential + transition * b_radial
+        interior_a = self.field_model.vector_potential(coords)['a']
+        open_a = self.open_field_model(unit_vectors) / radius_ds
+        a = open_a + gate * interior_a
+        b = curl(a, coords)
 
         out = {
-            "b": b,
-            "phi": phi,
-            "b_potential": b_potential,
-            "b_radial": b_radial,
-            "source_surface_weight": transition,
-            "source_surface_radius": ss_radius_model / self.solar_radius_per_ds,
-            "source_surface_radius_model": ss_radius_model,
-            "network_coords": network_coords,
-            "coordinate_scale": coordinate_scale,
+            'a': a,
+            'b': b,
+            'source_surface_gate': gate,
+            'source_surface_radius': torch.ones_like(radius_ds)
+                                     * (self.source_surface_radius_ds / self.solar_radius_ds),
+            'inside_source_surface': radial_distance_ds >= 0,
         }
         if compute_jacobian:
-            out["jac_matrix"] = jacobian(b, coords)
+            out['jac_matrix'] = jacobian(b, coords)
         return out
 
     @torch.no_grad()
-    def source_surface_height_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
+    def source_surface_radius_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
         device = next(self.parameters()).device if device is None else device
         latitude = torch.linspace(-np.pi / 2, np.pi / 2, int(latitude_resolution), device=device)
         longitude = torch.linspace(0, 2 * np.pi, int(longitude_resolution), device=device)
-        lat_grid, lon_grid = torch.meshgrid(latitude, longitude, indexing='ij')
-        unit_vectors = torch.stack([
-            torch.cos(lat_grid) * torch.cos(lon_grid),
-            torch.cos(lat_grid) * torch.sin(lon_grid),
-            torch.sin(lat_grid),
-        ], dim=-1)
-        radius_model = self.source_surface(unit_vectors.reshape(-1, 3)).reshape(lat_grid.shape)
-        return {
-            'radius': radius_model / self.solar_radius_per_ds,
-            'latitude': latitude,
-            'longitude': longitude,
-        }
+        radius = torch.ones(
+            (latitude.numel(), longitude.numel()), device=device,
+            dtype=self.source_surface_radius_ds.dtype,
+        ) * (self.source_surface_radius_ds / self.solar_radius_ds)
+        return {'radius': radius, 'latitude': latitude, 'longitude': longitude}
 
 
 def calculate_current(b, coords, jac_matrix=None):
@@ -469,17 +352,6 @@ def curl(vector, coords):
     rot_y = dVx_dz - dVz_dx
     rot_z = dVy_dx - dVx_dy
     return torch.stack([rot_x, rot_y, rot_z], -1)
-
-
-def gradient(scalar, coords):
-    return torch.autograd.grad(
-        scalar[:, 0],
-        coords,
-        grad_outputs=torch.ones_like(scalar[:, 0]).to(scalar),
-        retain_graph=True,
-        create_graph=True,
-        allow_unused=True,
-    )[0]
 
 
 def jacobian(output, coords):

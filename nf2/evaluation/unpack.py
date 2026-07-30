@@ -145,8 +145,10 @@ def load_coords(model, spatial_norm, b_norm, coords, device, batch_size=1000, pr
         return b
 
     if (compute_currents or
-            isinstance(model, VectorPotentialModel) or (
-                    isinstance(model, nn.DataParallel) and isinstance(model.module, VectorPotentialModel))):
+            isinstance(model, VectorPotentialModel) or getattr(model, 'requires_grad_forward', False) or (
+                    isinstance(model, nn.DataParallel) and (
+                        isinstance(model.module, VectorPotentialModel)
+                        or getattr(model.module, 'requires_grad_forward', False)))):
         return _load(coords)
     else:
         with torch.no_grad():

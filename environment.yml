@@ -23,7 +23,6 @@ dependencies:
       - "wandb>=0.27"
       - "drms>=0.7"
       # Optional analysis dependencies
-      - "pfsspy>=1.2"
       # Documentation dependencies
       - "sphinx>=7.2"
       - "myst-parser>=2"

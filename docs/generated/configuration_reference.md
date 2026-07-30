@@ -81,31 +81,24 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| model.field | vector_potential \| scaled_vector_potential \| scaled_potential \| source_surface_scaled_vector_potential \| source_surface_scaled_potential \| b | vector_potential | Field representation. |
+| model.field | vector_potential \| scaled_vector_potential \| source_surface_vector_potential \| fixed_source_surface_vector_potential \| b | vector_potential | Field representation. |
 | model.network.type | siren | siren | Only SIREN networks are supported. |
 | model.network.hidden_dim | int | 256 cartesian, 512 spherical | SIREN hidden width. |
 | model.network.layers | int | model default | Number of SIREN layers. |
 | model.network.w0 | float | model default | SIREN frequency scale for hidden layers. |
 | model.network.w0_initial | float | model default | SIREN frequency scale for the first layer. |
-| model.radial_power | float | 2.0 vector potential, 1.0 scalar potential | Radial power for scaled models, applied as `(r / R_sun)^-radial_power` to the vector or scalar potential. |
+| model.radial_power | float | 2.0 | Radial power applied to the scaled vector potential as `(r / R_sun)^-radial_power`. |
 | model.coordinate_radial_power | float | 4.0 | Radial power for compressing SIREN input coordinates in scaled models, applied as `coords * (r / R_sun)^-coordinate_radial_power`. |
-| model.radial_falloff_power | float | 2.0 | Radial Br falloff power for source-surface projection, applied as `(r_ss / r)^radial_falloff_power`. |
 | model.base_radius | float | R_sun in model units | Reference radius for `scaled_vector_potential`; omit for spherical runs. |
-| model.vector_potential.hidden_dim | int | 512 spherical | Hidden width of the source-surface vector-potential SIREN. |
-| model.vector_potential.layers | int | 8 | Number of source-surface vector-potential SIREN layers. |
-| model.vector_potential.w0 | float | 1.0 | SIREN frequency scale for source-surface vector-potential hidden layers. |
-| model.vector_potential.w0_initial | float | 1.0 | SIREN frequency scale for the source-surface vector-potential first layer. |
-| model.potential.hidden_dim | int | 512 spherical | Hidden width of the source-surface scalar-potential SIREN. |
-| model.potential.layers | int | 8 | Number of source-surface scalar-potential SIREN layers. |
-| model.potential.w0 | float | 1.0 | SIREN frequency scale for source-surface scalar-potential hidden layers. |
-| model.potential.w0_initial | float | 1.0 | SIREN frequency scale for the source-surface scalar-potential first layer. |
 | model.source_surface.height_range | list[float] | [2.0, 2.5] | Allowed learned source-surface radius range in solar radii. |
-| model.source_surface.initial_height | float \| null | range midpoint | Initial source-surface radius in solar radii. |
-| model.source_surface.transition_width | float | 0.05 | Sigmoid transition width from vector-potential field to radial Br field in solar radii. |
-| model.source_surface.hidden_dim | int | 64 | Hidden width of the source-surface SIREN. |
-| model.source_surface.layers | int | 3 | Number of source-surface SIREN layers. |
-| model.source_surface.w0 | float | 1.0 | SIREN frequency scale for source-surface hidden layers. |
-| model.source_surface.w0_initial | float | 0.1 | SIREN frequency scale for the source-surface first layer. |
+| model.source_surface.height | float | 2.0 | Fixed source-surface radius in solar radii for fixed_source_surface_vector_potential. |
+| model.source_surface.hidden_dim | int | 64 | Hidden width of the source-surface height SIREN. |
+| model.source_surface.layers | int | 3 | Number of source-surface height SIREN layers. |
+| model.source_surface.w0 | float | 1.0 | Source-surface height hidden-layer frequency scale. |
+| model.source_surface.w0_initial | float | 1.0 | Source-surface height first-layer frequency scale. |
+| model.source_surface.transition_width | float | 0.1 | Radial scale length of the sigmoid interior-potential gate in solar radii. |
+| model.open_field.hidden_dim | int | 64 | Hidden width of the tangential angular open-potential SIREN. |
+| model.open_field.layers | int | 3 | Number of tangential angular open-potential SIREN layers. |
 
 ## Training
 
@@ -128,7 +121,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | losses | list[dict] | geometry default | Training objective terms. Omit to use geometry-specific defaults. |
-| losses[].type | str | geometry default | Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, min_height, energy_gradient, energy, sigma_j. |
+| losses[].type | str | geometry default | Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, source_surface_transition_radial, min_height, energy_gradient, energy, sigma_j. |
 | losses[].name | str | type | Stable logging and scaling identifier. |
 | losses[].weight | float \| schedule | required when explicit | Loss weight. The legacy lambda key is not accepted. |
 | losses[].weight.type | exponential \| linear \| step | exponential | Schedule type when `weight` is a mapping. |

@@ -1,7 +1,6 @@
 import torch
 
-from nf2.train.model import ScaledPotentialModel, ScaledVectorPotentialModel, SirenModel, \
-    SourceSurfaceScaledPotentialModel, curl
+from nf2.train.model import ScaledVectorPotentialModel, SirenModel, curl
 
 
 def test_scaled_vector_potential_uses_default_power_laws():
@@ -55,61 +54,3 @@ def test_scaled_vector_potential_curls_scaled_a():
     out = model(coords, compute_jacobian=False)
 
     torch.testing.assert_close(out["b"], expected_b)
-
-
-def test_scaled_potential_returns_negative_scalar_potential_gradient():
-    torch.manual_seed(0)
-    model = ScaledPotentialModel(dim=8, n_layers=1, base_radius=2.0)
-    coords = torch.tensor(
-        [
-            [2.0, 0.0, 0.0],
-            [3.0, 1.0, 0.5],
-        ],
-        requires_grad=True,
-    )
-
-    radius = coords.pow(2).sum(-1, keepdim=True).sqrt()
-    normalized_radius = radius / model.base_radius
-    network_coords = coords * normalized_radius.pow(-model.coordinate_radial_power)
-    raw_phi = SirenModel.forward(model, network_coords)
-    scaled_phi = raw_phi * normalized_radius.pow(-model.radial_power)
-    expected_b = -torch.autograd.grad(
-        scaled_phi[:, 0],
-        coords,
-        grad_outputs=torch.ones_like(scaled_phi[:, 0]),
-        retain_graph=True,
-        create_graph=True,
-    )[0]
-
-    out = model(coords, compute_jacobian=False)
-
-    torch.testing.assert_close(out["phi"], scaled_phi)
-    torch.testing.assert_close(out["b"], expected_b)
-
-
-def test_source_surface_scaled_potential_radial_projection_is_radial():
-    torch.manual_seed(0)
-    model = SourceSurfaceScaledPotentialModel(
-        potential={"hidden_dim": 8, "layers": 1},
-        source_surface={"height_range": [1.5, 1.7], "initial_height": 1.6},
-        base_radius=1.0,
-        Mm_per_ds=695.7,
-    )
-    coords = torch.tensor(
-        [
-            [2.0, 0.0, 0.0],
-            [0.0, 2.0, 0.0],
-            [0.0, 0.0, 2.0],
-        ],
-        requires_grad=True,
-    )
-
-    radius, ss_radius, unit_vectors = model._source_surface_radius(coords)
-    b_radial = model._source_surface_radial_field(radius, ss_radius, unit_vectors)
-
-    torch.testing.assert_close(
-        torch.cross(b_radial, unit_vectors, dim=-1),
-        torch.zeros_like(b_radial),
-        atol=1e-6,
-        rtol=1e-6,
-    )

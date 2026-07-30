@@ -326,7 +326,7 @@ trace_config = {
     "atol": 1e-7,
     "min_step_size_Mm": 0.001,
     "max_step_size_Mm": 1.0,
-    "max_steps": 10_000,
+    "max_steps": 2_000,
     "max_length_Mm": None,
     "min_field_G": 1e-6,
     "batch_size": 2**14,
