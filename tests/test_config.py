@@ -54,6 +54,21 @@ def test_default_cartesian_config_uses_100_mm_z_range():
     assert config["data"]["z_range"] == [0, 100]
 
 
+def test_partial_optimizer_config_inherits_schedule_defaults():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "cartesian",
+                "boundaries": [{"id": "boundary", "type": "analytical", "case": 1}],
+            },
+            "training": {"optimizer": {"type": "soap"}},
+        }
+    )
+
+    assert config["training"]["optimizer"] == {
+        "type": "soap", "start": 5e-4, "end": 5e-5, "iterations": 1e5}
+
+
 def test_cartesian_z_range_can_be_overridden_from_cli_args():
     with pytest.warns(UserWarning, match="Skipping optional error-file configuration"):
         config = load_yaml_config(
@@ -164,6 +179,57 @@ def test_source_surface_vector_potential_model_is_supported():
     assert config["model"]["n_layers"] == 2
     assert config["model"]["source_surface"] == {
         "height_range": [2.0, 2.5], "transition_width": 0.1}
+    assert config["model"]["open_field"] == {"hidden_dim": 8, "layers": 1}
+
+
+def test_open_vector_potential_model_is_supported():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+            },
+            "model": {
+                "field": "open_vector_potential",
+                "network": {"hidden_dim": 16, "layers": 2},
+                "open_field": {"hidden_dim": 8, "layers": 1},
+            },
+            "losses": [
+                {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
+            ],
+        }
+    )
+
+    assert config["model"] == {
+        "type": "open_vector_potential",
+        "dim": 16,
+        "n_layers": 2,
+        "open_field": {"hidden_dim": 8, "layers": 1},
+    }
+
+
+def test_open_scaled_vector_potential_model_is_supported():
+    config = normalize_config(
+        {
+            "data": {
+                "geometry": "spherical",
+                "boundaries": [{"id": "full_disk", "type": "map", "files": {"Br": "br.fits"}}],
+            },
+            "model": {
+                "field": "open_scaled_vector_potential",
+                "radial_power": 2,
+                "coordinate_radial_power": 0,
+                "open_field": {"hidden_dim": 8, "layers": 1},
+            },
+            "losses": [
+                {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": ["full_disk"]},
+            ],
+        }
+    )
+
+    assert config["model"]["type"] == "open_scaled_vector_potential"
+    assert config["model"]["radial_power"] == 2
+    assert config["model"]["coordinate_radial_power"] == 0
     assert config["model"]["open_field"] == {"hidden_dim": 8, "layers": 1}
 
 

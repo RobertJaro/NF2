@@ -110,7 +110,8 @@ nf2-export model.nf2 --format hdf5 --out topology.hdf5 \
 ```
 
 Relevant controls are `--trace-method`, `--trace-step-Mm`, `--trace-max-steps`,
-`--trace-max-length-Mm`, `--trace-min-field-G`, `--trace-batch-size`,
+`--trace-max-length-Mm`, `--trace-max-height-Mm`, `--trace-max-radius-solRad`,
+`--trace-min-field-G`, `--trace-batch-size`,
 `--q-method`, and `--q-epsilon-Mm`. The maximum length applies independently to
 each forward/backward half-line.
 

@@ -81,11 +81,15 @@ class VectorPotentialModel(SirenModel):
     def __init__(self, **kwargs):
         super().__init__(in_dim=3, out_dim=3, **kwargs)
 
+    def vector_potential(self, coords):
+        return {"a": SirenModel.forward(self, coords)}
+
     def forward(self, coords, compute_jacobian=True):
-        a = super().forward(coords)
+        out = self.vector_potential(coords)
+        a = out["a"]
         b = curl(a, coords)
 
-        out = {"b": b, "a": a}
+        out["b"] = b
         if compute_jacobian:
             out["jac_matrix"] = jacobian(b, coords)
         return out
@@ -174,6 +178,52 @@ class SourceSurfaceOpenFieldModel(nn.Module):
         angular_potential = self.mapping_module(unit_vectors)
         radial_component = (angular_potential * unit_vectors).sum(dim=-1, keepdim=True)
         return angular_potential - radial_component * unit_vectors
+
+
+class OpenVectorPotentialModel(nn.Module):
+    """Add an unscaled interior vector potential to a radial open-field potential."""
+
+    requires_grad_forward = True
+    interior_model_class = VectorPotentialModel
+
+    def __init__(self, open_field=None, eps=1e-6, **field_kwargs):
+        super().__init__()
+        self.field_model = self.interior_model_class(**field_kwargs)
+        self.open_field_model = SourceSurfaceOpenFieldModel(**(open_field or {}))
+        self.eps = float(eps)
+
+    def forward(self, coords, compute_jacobian=True):
+        coords.requires_grad_(True)
+
+        radius = coords.norm(dim=-1, keepdim=True).clamp_min(self.eps)
+        unit_vectors = coords / radius
+
+        interior_a = self.field_model.vector_potential(coords)["a"]
+        open_a = self.open_field_model(unit_vectors) / radius
+        a = interior_a + open_a
+        b = curl(a, coords)
+
+        out = {"a": a, "b": b}
+        if compute_jacobian:
+            out["jac_matrix"] = jacobian(b, coords)
+        return out
+
+
+class OpenScaledVectorPotentialModel(OpenVectorPotentialModel):
+    """Add a decaying interior vector potential to a radial open-field potential."""
+
+    interior_model_class = ScaledVectorPotentialModel
+
+    def __init__(self, radial_power=2.0, coordinate_radial_power=0.0,
+                 Mm_per_ds=None, **kwargs):
+        if Mm_per_ds is None:
+            raise ValueError("OpenScaledVectorPotentialModel requires 'Mm_per_ds'.")
+        super().__init__(
+            radial_power=radial_power,
+            coordinate_radial_power=coordinate_radial_power,
+            Mm_per_ds=Mm_per_ds,
+            **kwargs,
+        )
 
 
 class SourceSurfaceVectorPotentialModel(nn.Module):

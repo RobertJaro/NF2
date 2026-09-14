@@ -77,6 +77,8 @@ Export NF2 results to exchange formats.
 | `--trace-max-step-Mm` | 10 * step | Optional RKF45 maximum step in Mm. |
 | `--trace-max-steps` | 2000 | Maximum integration steps in each direction. |
 | `--trace-max-length-Mm` | none | Maximum length in Mm for each forward/backward half-line. |
+| `--trace-max-height-Mm` | none | Cartesian top boundary for field-line tracing, in Mm. |
+| `--trace-max-radius-solRad` | none | Spherical outer tracing boundary, in solar radii. |
 | `--trace-min-field-G` | model default | Stop tracing below this field strength in Gauss. |
 | `--trace-batch-size` | 65536 | Maximum seed points in one tensor-native trace chunk. |
 | `--q-method` | tangent | Squashing-factor backend: tangent or perturbed. |
@@ -115,3 +117,4 @@ Resolve NOAA active-region numbers to SHARP/HARP numbers through JSOC metadata.
 | `--time` | required | Observation time used for the NOAA-to-HARP lookup. |
 | `--email` | required | JSOC export email address. |
 | `--noaa_nums` | all active regions | One or more NOAA active-region numbers to resolve. |
+

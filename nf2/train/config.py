@@ -159,15 +159,24 @@ def _normalize_spherical_data(data):
 def _normalize_model(model, geometry):
     model = deepcopy(model or {})
     field = model.pop("field", "vector_potential")
-    if field not in {"b", "vector_potential", "scaled_vector_potential",
+    if field not in {"b", "vector_potential", "open_vector_potential", "open_scaled_vector_potential",
+                     "scaled_vector_potential",
                      "source_surface_vector_potential", "fixed_source_surface_vector_potential"}:
         raise ValueError(
-            "model.field must be 'b', 'vector_potential', 'scaled_vector_potential', "
+            "model.field must be 'b', 'vector_potential', 'open_vector_potential', "
+            "'open_scaled_vector_potential', 'scaled_vector_potential', "
             "'source_surface_vector_potential', or 'fixed_source_surface_vector_potential'.")
 
     source_surface = model.pop("source_surface", None)
     open_field = model.pop("open_field", None)
-    if field == "source_surface_vector_potential":
+    if field in {"open_vector_potential", "open_scaled_vector_potential"}:
+        if geometry != "spherical":
+            raise ValueError(f"model.field: {field} requires spherical geometry.")
+        if source_surface is not None:
+            raise ValueError(f"model.source_surface is not used by {field}.")
+        if open_field is not None:
+            model["open_field"] = open_field
+    elif field == "source_surface_vector_potential":
         if geometry != "spherical":
             raise ValueError("model.field: source_surface_vector_potential requires spherical geometry.")
         source_surface = deepcopy(source_surface or {})
@@ -203,11 +212,18 @@ def _normalize_model(model, geometry):
 
 
 def _normalize_training(training):
+    training = deepcopy(training)
+    optimizer = {
+        "start": 5e-4,
+        "end": 5e-5,
+        "iterations": 1e5,
+        **training.pop("optimizer", {}),
+    }
     return {
         "epochs": 15,
-        "optimizer": {"start": 5e-4, "end": 5e-5, "iterations": 1e5},
+        "optimizer": optimizer,
         "trainer": {},
-        **deepcopy(training),
+        **training,
     }
 
 

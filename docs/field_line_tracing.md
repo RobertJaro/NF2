@@ -328,6 +328,8 @@ trace_config = {
     "max_step_size_Mm": 1.0,
     "max_steps": 2_000,
     "max_length_Mm": None,
+    "max_height_Mm": None,
+    "max_radius_solRad": None,
     "min_field_G": 1e-6,
     "batch_size": 2**14,
     "progress": True,
@@ -347,6 +349,8 @@ trace_config = {
 | `min_step_size_Mm`, `max_step_size_Mm` | Optional physical RKF45 step bounds. |
 | `max_steps` | Maximum accepted steps for each half-line. |
 | `max_length_Mm` | Maximum length of each half-line in Mm. The combined line can be twice this value. |
+| `max_height_Mm` | Optional Cartesian top boundary in Mm. Use a lower value to terminate open-region traces below the checkpoint top. |
+| `max_radius_solRad` | Optional spherical outer tracing boundary in solar radii. It must lie above the inner boundary and at or below the checkpoint outer radius. |
 | `min_field_G` | Stop when a sampled field falls below this physical strength. |
 | `boundary_tolerance` | Normalized tolerance for accepting seed points near a boundary. |
 | `batch_size` | Number of original seeds kept live; up to twice this many half-lines are evaluated together. |
@@ -439,13 +443,21 @@ bottom = out.load_spherical_layer(
         "integrated_current_density",
         "fieldline_geometry",
     ],
-    trace_config={"method": "rk2", "step_size_Mm": 0.25, "progress": True},
+    trace_config={
+        "method": "rk2",
+        "step_size_Mm": 0.25,
+        "max_radius_solRad": 1.5,
+        "progress": True,
+    },
 )
 
 open_regions = bottom["metrics"]["open"]
 closed_regions = bottom["metrics"]["closed"]
 apex_radius = bottom["metrics"]["apex_radius"]
 ```
+
+`max_radius_solRad` replaces the checkpoint's outer tracing boundary for this
+trace without changing the seed layer or the trained model.
 
 ### S-Web Layer
 

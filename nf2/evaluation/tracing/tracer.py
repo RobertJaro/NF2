@@ -357,24 +357,89 @@ class BatchedFieldLineTracer:
                         event_coords = torch.where(
                             boundary_event[terminating, None], intersections[terminating], event_coords
                         )
+                        event_step = accepted_step[terminating] * fraction
+                        event_twist = None
+                        event_current = None
+                        event_deformation = None
+
+                        # A fractional multiple of a complete RK step is not a
+                        # valid RK solution when the trajectory or integrands
+                        # vary. Reintegrate max-length events at their exact
+                        # shortened length and refine boundary events along the
+                        # numerical trajectory.
+                        terminating_deformation = previous_deformation[accepted][terminating]
+                        terminating_direction = slot_direction[stopped]
+                        if length_event.any():
+                            local_length = length_event[terminating]
+                            shortened = self._rk_step(
+                                previous_good[terminating][local_length],
+                                terminating_deformation[local_length],
+                                terminating_direction[local_length],
+                                event_step[local_length],
+                                need_jacobian, compute_twist, compute_current, tangent,
+                            )
+                            event_coords[local_length] = shortened["coords"]
+                            if compute_twist:
+                                if event_twist is None:
+                                    event_twist = step_result["twist"][accepted][terminating] * fraction
+                                event_twist[local_length] = shortened["twist"]
+                            if compute_current:
+                                if event_current is None:
+                                    event_current = (
+                                        step_result["current"][accepted][terminating] * fraction[:, None]
+                                    )
+                                event_current[local_length] = shortened["current"]
+                            if tangent:
+                                if event_deformation is None:
+                                    event_deformation = terminating_deformation + fraction[:, None, None] * (
+                                        step_result["deformation"][accepted][terminating]
+                                        - terminating_deformation
+                                    )
+                                event_deformation[local_length] = shortened["deformation"]
+
+                        if boundary_event.any():
+                            local_boundary = boundary_event[terminating]
+                            refined = self._refine_boundary_step(
+                                previous_good[terminating][local_boundary],
+                                terminating_deformation[local_boundary],
+                                terminating_direction[local_boundary],
+                                accepted_step[terminating][local_boundary],
+                                crossed_ids[boundary_event],
+                                need_jacobian, compute_twist, compute_current, tangent,
+                            )
+                            event_coords[local_boundary] = refined["coords"]
+                            event_step[local_boundary] = refined["step_size"]
+                            if compute_twist:
+                                if event_twist is None:
+                                    event_twist = step_result["twist"][accepted][terminating] * fraction
+                                event_twist[local_boundary] = refined["twist"]
+                            if compute_current:
+                                if event_current is None:
+                                    event_current = (
+                                        step_result["current"][accepted][terminating] * fraction[:, None]
+                                    )
+                                event_current[local_boundary] = refined["current"]
+                            if tangent:
+                                if event_deformation is None:
+                                    event_deformation = terminating_deformation + fraction[:, None, None] * (
+                                        step_result["deformation"][accepted][terminating]
+                                        - terminating_deformation
+                                    )
+                                event_deformation[local_boundary] = refined["deformation"]
+
                         coords[stopped] = event_coords
                         endpoint[stopped] = event_coords
-                        length[stopped] += accepted_step[terminating] * fraction
+                        length[stopped] += event_step
                         steps[stopped] += 1
                         apex[stopped] = torch.maximum(
                             apex[stopped], self.geometry.apex_coordinate(event_coords).to(dtype)
                         )
                         if compute_twist:
-                            twist[stopped] += step_result["twist"][accepted][terminating] * fraction
+                            twist[stopped] += event_twist
                         if compute_current:
-                            current[stopped] += (
-                                step_result["current"][accepted][terminating] * fraction[:, None]
-                            )
+                            current[stopped] += event_current
                         if tangent:
-                            deformation[stopped] = previous_deformation[accepted][terminating] + fraction.to(dtype)[:, None, None] * (
-                                step_result["deformation"][accepted][terminating]
-                                - previous_deformation[accepted][terminating]
-                            )
+                            deformation[stopped] = event_deformation
                         boundary_stopped = good_slots[boundary_event]
                         boundary_id[boundary_stopped] = crossed_ids[boundary_event]
                         status[boundary_stopped] = STATUS["boundary"]
@@ -433,6 +498,84 @@ class BatchedFieldLineTracer:
             for work_id, path in enumerate(paths):
                 padded_paths[:len(path), work_id] = torch.stack(path)
             result["path"] = padded_paths
+        return result
+
+    def _refine_boundary_step(self, coords, deformation, direction, step_size, boundary_id,
+                              need_jacobian, compute_twist, compute_current, tangent):
+        """Locate a boundary event and integrate all states to that event."""
+        low_step = torch.zeros_like(step_size)
+        high_step = step_size.clone()
+        low_coords = coords.clone()
+        low_residual = self.geometry.boundary_residual(low_coords, boundary_id)
+        low_result = {"coords": low_coords}
+        if compute_twist:
+            low_result["twist"] = torch.zeros_like(step_size)
+        if compute_current:
+            low_result["current"] = torch.zeros((coords.shape[0], 3), dtype=coords.dtype, device=coords.device)
+        if tangent:
+            low_result["deformation"] = deformation.clone()
+        if bool((low_residual.abs() <= torch.finfo(coords.dtype).eps * 8).all()):
+            result = {
+                "coords": self.geometry.project_to_boundary(coords, boundary_id),
+                "step_size": low_step,
+            }
+            if compute_twist:
+                result["twist"] = low_result["twist"]
+            if compute_current:
+                result["current"] = low_result["current"]
+            if tangent:
+                result["deformation"] = low_result["deformation"]
+            return result
+        high_result = self._rk_step(
+            coords, deformation, direction, high_step,
+            need_jacobian, compute_twist, compute_current, tangent,
+        )
+        high_residual = self.geometry.boundary_residual(high_result["coords"], boundary_id)
+
+        # Regula falsi converges rapidly for plane and spherical boundaries;
+        # clamping keeps a valid bracket for nearly tangent crossings.
+        for _ in range(6):
+            denominator = high_residual - low_residual
+            weight = (-low_residual / denominator.clamp_min(1e-20)).clamp(0.05, 0.95)
+            trial_step = low_step + weight * (high_step - low_step)
+            trial = self._rk_step(
+                coords, deformation, direction, trial_step,
+                need_jacobian, compute_twist, compute_current, tangent,
+            )
+            trial_residual = self.geometry.boundary_residual(trial["coords"], boundary_id)
+            outside = trial_residual >= 0
+            high_step = torch.where(outside, trial_step, high_step)
+            high_residual = torch.where(outside, trial_residual, high_residual)
+            low_step = torch.where(outside, low_step, trial_step)
+            low_residual = torch.where(outside, low_residual, trial_residual)
+            for key in ("coords", "twist", "current", "deformation"):
+                if key in trial:
+                    mask = outside
+                    while mask.ndim < trial[key].ndim:
+                        mask = mask[..., None]
+                    high_result[key] = torch.where(mask, trial[key], high_result[key])
+                    low_result[key] = torch.where(mask, low_result[key], trial[key])
+
+        denominator = high_residual - low_residual
+        weight = (-low_residual / denominator.clamp_min(1e-20)).clamp(0, 1)
+        result = {"step_size": low_step + weight * (high_step - low_step)}
+
+        def interpolate(key, low_value):
+            high_value = high_result[key]
+            local_weight = weight
+            while local_weight.ndim < high_value.ndim:
+                local_weight = local_weight[..., None]
+            return low_value + local_weight * (high_value - low_value)
+
+        result["coords"] = self.geometry.project_to_boundary(
+            interpolate("coords", low_result["coords"]), boundary_id
+        )
+        if compute_twist:
+            result["twist"] = interpolate("twist", low_result["twist"])
+        if compute_current:
+            result["current"] = interpolate("current", low_result["current"])
+        if tangent:
+            result["deformation"] = interpolate("deformation", low_result["deformation"])
         return result
 
     @staticmethod

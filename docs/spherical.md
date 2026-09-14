@@ -193,16 +193,17 @@ Use `loss_scaling.type: radial` to scale selected volume losses across radius.
 
 The learned source-surface model contains three networks: a large scaled
 interior vector potential, a smaller angular open-field potential, and a small
-angular source-surface height map. The complete potential is
+angular source-surface height map. Only the interior potential is gated:
 
-`A = g A_interior + (1 - g) A_open`.
+`A = A_open + g A_interior`.
 
 The gate is `g = sigmoid((R_ss - r) / w)`. The large interior and open-field
 networks are each evaluated once. The small height network is evaluated once
 with live parameters for the transition-shell loss and once with fixed
 parameters for the field gate. This preserves all spatial derivatives required
 by the curl while preventing boundary and force-free objectives from moving the
-surface. The angular open potential is projected tangentially and divided by
+surface. The force-free loss is unweighted and applies throughout the sampled
+volume. The angular open potential is projected tangentially and divided by
 radius, so its curl is a divergence-free radial field with the appropriate
 radial decay. Ordinary physical coordinates are sampled throughout the full
 configured volume.
@@ -212,6 +213,37 @@ spherical `height`, but retains the additive construction
 `A = A_open + g A_interior`. Its field approaches the radial open solution
 smoothly rather than becoming exactly radial at a finite radius. Use ordinary
 physical-coordinate sampling for this model.
+
+For a fixed radial boundary without a transition gate,
+`open_scaled_vector_potential` uses a decaying interior potential and an
+additive angular open potential, `A = A_interior + A_open`. The open potential
+produces an `r^-2` radial field, while the default `radial_power: 2` makes the
+interior contribution decay faster. Coordinate compression is disabled by
+default. The two potentials are combined before a single curl. Pair the model
+with an explicit `random_fixed_radius` sampler and a `radial` loss on that
+sampler.
+
+```yaml
+data:
+  samplers:
+    - id: source_surface
+      type: random_fixed_radius
+      radius: 2.5
+
+model:
+  field: open_scaled_vector_potential
+  radial_power: 2
+  coordinate_radial_power: 0
+  open_field:
+    hidden_dim: 64
+    layers: 3
+
+losses:
+  - type: radial
+    name: source_surface_radial
+    weight: 1.0e-2
+    datasets: [source_surface]
+```
 
 ```yaml
 data:

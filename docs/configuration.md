@@ -218,6 +218,8 @@ model:
 Supported `field` values:
 
 - `vector_potential`: predicts `A` and derives `B = curl(A)`.
+- `open_vector_potential`: adds a plain interior vector-potential SIREN to a tangential angular potential divided by radius, then takes one curl of the combined potential.
+- `open_scaled_vector_potential`: uses the same additive open potential with a faster-decaying scaled interior potential. Its defaults apply `radial_power: 2` without coordinate compression.
 - `scaled_vector_potential`: predicts `A` from radially compressed coordinates, scales it by `(r / R_sun)^-p`, and derives `B = curl(A)`. The default `radial_power` is `2`, matching a dipole-like vector-potential falloff. The default `coordinate_radial_power` is `4`, so the SIREN input scale is about `0.35` at `1.3 R_sun`.
 - `b`: predicts `B` directly.
 
@@ -233,6 +235,7 @@ training:
   gradient_clip_val: 0.1
   matmul_precision: medium
   optimizer:
+    type: soap
     start: 5.0e-4
     end: 5.0e-5
     iterations: 100000
@@ -242,6 +245,9 @@ training:
     precision: 32
     num_sanity_val_steps: 0
 ```
+
+`training.optimizer.type` accepts `adam` (the default) or `soap`. Additional keys in the optimizer mapping are passed to the selected optimizer. Both optimizers use `weight_decay: 0`; a configured `weight_decay` value is ignored.
+The `start`, `end`, and `iterations` keys may be omitted; they retain the defaults shown above.
 
 Entries under `training.trainer` are passed to the Lightning `Trainer` after NF2 sets its defaults.
 

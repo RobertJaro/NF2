@@ -98,9 +98,9 @@ class RadialLoss(BaseLoss):
 
         b_cross_r = torch.cross(b, r_hat, dim=-1)
 
-        b2 = torch.sum(b**2, dim=-1).detach().clamp_min(eps)
+        mean_b2 = torch.sum(b**2, dim=-1).mean().detach().clamp_min(eps)
 
-        radial_loss = torch.sum(b_cross_r**2, dim=-1) / b2
+        radial_loss = torch.sum(b_cross_r**2, dim=-1) / mean_b2
 
         return radial_loss
 
@@ -121,6 +121,24 @@ class SourceSurfaceTransitionRadialLoss(BaseLoss):
             (shell_weight * transverse_fraction).sum()
             / shell_weight.sum().clamp_min(eps)
         )
+
+
+class SourceSurfaceFluxLoss(BaseLoss):
+    """Enforce the radial ``r^-2`` flux falloff outside the source surface."""
+
+    def forward(self, b, jac_matrix, coords, source_surface_gate, *args, **kwargs):
+        eps = 1e-8
+        radius = torch.linalg.norm(coords, dim=-1).clamp_min(eps)
+        unit_vectors = (coords / radius.unsqueeze(-1)).detach()
+
+        b_radial = torch.sum(b * unit_vectors, dim=-1)
+        db_radial_dr = torch.einsum(
+            '...i,...ij,...j->...', unit_vectors, jac_matrix, unit_vectors)
+        flux_residual = radius * db_radial_dr + 2 * b_radial
+
+        outer_weight = (1 - source_surface_gate.squeeze(-1)).detach()
+        outer_weight = outer_weight / outer_weight.mean().clamp_min(eps)
+        return outer_weight * flux_residual.pow(2)
 
 
 class PotentialLoss(BaseLoss):
@@ -359,6 +377,7 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_br': BoundaryBrLoss,
                        'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
                        'NaNs': NaNLoss, 'radial': RadialLoss,
                        'source_surface_transition_radial': SourceSurfaceTransitionRadialLoss,
+                       'source_surface_flux': SourceSurfaceFluxLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,
                        'sigma_j': SigmaJLoss
                        }

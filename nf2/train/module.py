@@ -13,8 +13,9 @@ from torch.optim.lr_scheduler import ExponentialLR
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, FixedSourceSurfaceVectorPotentialModel, ScaledVectorPotentialModel, \
-    SourceSurfaceVectorPotentialModel, VectorPotentialModel
+from nf2.train.model import BModel, FixedSourceSurfaceVectorPotentialModel, OpenScaledVectorPotentialModel, \
+    OpenVectorPotentialModel, ScaledVectorPotentialModel, SourceSurfaceVectorPotentialModel, VectorPotentialModel
+from nf2.train.soap import SOAP
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
     HeightTransformModel
 
@@ -32,7 +33,8 @@ class NF2Module(LightningModule):
             data_config (dict): Configuration dictionary containing data parameters like coordinate ranges,
                               dataset-specific parameters, and data preprocessing settings.
             model_kwargs (dict, optional): Model configuration dictionary containing:
-                - type (str): Model type, one of ['b', 'vector_potential', 'scaled_vector_potential',
+                - type (str): Model type, one of ['b', 'vector_potential', 'open_vector_potential',
+                  'open_scaled_vector_potential', 'scaled_vector_potential',
                   'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
                 - dim (int): Hidden dimension size of the neural network
                 Additional model-specific parameters
@@ -42,9 +44,11 @@ class NF2Module(LightningModule):
                 - ds_id (str or list): Dataset ID(s) to apply the loss to
                 - Additional loss-specific parameters
             lr_params (dict): Learning rate scheduler configuration containing:
+                - type (str): Optimizer type, one of ['adam', 'soap']
                 - start (float): Initial learning rate
                 - end (float): Final learning rate
                 - iterations (int): Number of iterations for the schedule
+                - Additional optimizer-specific parameters. Weight decay is always zero.
             transforms (list): List of coordinate transform configurations
             meta_path (str, optional): Path to a pretrained model state file
             **kwargs: Additional keyword arguments
@@ -70,6 +74,11 @@ class NF2Module(LightningModule):
             model = BModel(**model_kwargs)
         elif model_type == 'vector_potential':
             model = VectorPotentialModel(**model_kwargs)
+        elif model_type == 'open_vector_potential':
+            model = OpenVectorPotentialModel(**model_kwargs)
+        elif model_type == 'open_scaled_vector_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model = OpenScaledVectorPotentialModel(**model_kwargs)
         elif model_type == 'scaled_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = ScaledVectorPotentialModel(**model_kwargs)
@@ -80,7 +89,8 @@ class NF2Module(LightningModule):
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = FixedSourceSurfaceVectorPotentialModel(**model_kwargs)
         else:
-            valid_options = ['b', 'vector_potential', 'scaled_vector_potential',
+            valid_options = ['b', 'vector_potential', 'open_vector_potential',
+                             'open_scaled_vector_potential', 'scaled_vector_potential',
                              'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
@@ -226,17 +236,35 @@ class NF2Module(LightningModule):
         parameters += list(self.loss_modules.parameters())
         parameters += list(self.loss_scaling_modules.parameters())
         if isinstance(self.lr_params, dict):
-            lr_start = self.lr_params['start']
-            lr_end = self.lr_params['end']
-            iterations = self.lr_params['iterations']
+            lr_start = self.lr_params.get('start', 5e-4)
+            lr_end = self.lr_params.get('end', 5e-5)
+            iterations = self.lr_params.get('iterations', 1e5)
+            self.lr_params = {
+                'start': lr_start,
+                'end': lr_end,
+                'iterations': iterations,
+                **self.lr_params,
+            }
+            optimizer_type = self.lr_params.get('type', 'adam').lower()
+            optimizer_kwargs = {
+                key: value for key, value in self.lr_params.items()
+                if key not in {'type', 'start', 'end', 'iterations', 'weight_decay'}
+            }
         elif isinstance(self.lr_params, (float, int)):
             lr_start = self.lr_params
             lr_end = self.lr_params
             iterations = 1
             self.lr_params = {'start': lr_start, 'end': lr_end, 'iterations': iterations}
+            optimizer_type = 'adam'
+            optimizer_kwargs = {}
         else:
             raise ValueError(f"Invalid lr_params: {self.lr_params}, must be dict or float/int")
-        optimizer = torch.optim.Adam(parameters, lr=lr_start)
+        if optimizer_type == 'adam':
+            optimizer = torch.optim.Adam(parameters, lr=lr_start, weight_decay=0, **optimizer_kwargs)
+        elif optimizer_type == 'soap':
+            optimizer = SOAP(parameters, lr=lr_start, weight_decay=0, **optimizer_kwargs)
+        else:
+            raise ValueError(f"Invalid optimizer type: {optimizer_type}, must be one of ['adam', 'soap']")
         scheduler = ExponentialLR(optimizer, gamma=(lr_end / lr_start) ** (1 / iterations))
 
         return [optimizer], [scheduler]

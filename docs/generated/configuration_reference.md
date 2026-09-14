@@ -81,7 +81,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| model.field | vector_potential \| scaled_vector_potential \| source_surface_vector_potential \| fixed_source_surface_vector_potential \| b | vector_potential | Field representation. |
+| model.field | vector_potential \| open_vector_potential \| open_scaled_vector_potential \| scaled_vector_potential \| source_surface_vector_potential \| fixed_source_surface_vector_potential \| b | vector_potential | Field representation. |
 | model.network.type | siren | siren | Only SIREN networks are supported. |
 | model.network.hidden_dim | int | 256 cartesian, 512 spherical | SIREN hidden width. |
 | model.network.layers | int | model default | Number of SIREN layers. |
@@ -105,9 +105,11 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | training.epochs | int | 15 | Number of Lightning epochs. |
+| training.optimizer.type | adam \| soap | adam | Optimizer implementation. SOAP uses zero weight decay. |
 | training.optimizer.start | float | 5e-4 | Initial learning rate. |
 | training.optimizer.end | float | 5e-5 | Final learning rate. |
 | training.optimizer.iterations | int | 100000 | Learning-rate schedule length. |
+| training.optimizer.* | any | optimizer default | Additional optimizer-specific keyword argument. Weight decay is fixed at zero. |
 | training.gradient_clip_val | float | 0.1 | Gradient clipping value passed to the Lightning Trainer unless overridden in training.trainer. |
 | training.matmul_precision | str | medium | Torch matmul precision setting used before training. |
 | training.reload_dataloaders_every_n_epochs | int | 1 for series | Series cadence for advancing to the next dataset. |

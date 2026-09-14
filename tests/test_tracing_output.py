@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 import torch
 from astropy import units as u
 
@@ -70,6 +71,49 @@ def test_public_loader_loads_checkpoint_once_and_tracer_reuses_model(tmp_path):
     np.testing.assert_allclose(metrics["apex_height"].to_value(u.Mm), 1, atol=2e-5)
     assert metrics["open"].item()
     assert metrics["open_polarity"].item() == 1
+
+
+def test_cartesian_tracing_accepts_lower_maximum_height(tmp_path):
+    checkpoint = tmp_path / "constant.nf2"
+    _constant_checkpoint(checkpoint)
+    output = nf2.load(checkpoint, device="cpu")
+
+    result = output.trace_field_lines(
+        [[0.5, 0.5, 0.25]],
+        metrics=["fieldline_length"],
+        trace_config={"method": "rk4", "step_size_Mm": 0.1, "max_height_Mm": 0.5},
+    )
+
+    np.testing.assert_allclose(result["fieldline_length"], 0.5, atol=2e-6)
+    np.testing.assert_allclose(result["forward_endpoint"], [[0.5, 0.5, 0.5]], atol=2e-6)
+    assert result["forward_boundary"].item() == 5
+
+
+def test_spherical_tracing_accepts_lower_maximum_radius(tmp_path):
+    checkpoint = tmp_path / "constant_spherical.nf2"
+    _constant_spherical_checkpoint(checkpoint)
+    output = nf2.load(checkpoint, device="cpu")
+    scale = (1 * u.solRad / output.m_per_ds).to_value(u.dimensionless_unscaled)
+
+    result = output.trace_field_lines(
+        [[0, 0, 1.25 * scale]],
+        metrics=["fieldline_length"],
+        trace_config={
+            "method": "rk4",
+            "step_size_Mm": 50,
+            "max_steps": 20,
+            "max_radius_solRad": 1.5,
+        },
+    )
+
+    np.testing.assert_allclose(result["fieldline_length"], 0.5 * scale, rtol=2e-6)
+    np.testing.assert_allclose(np.linalg.norm(result["forward_endpoint"], axis=-1), 1.5 * scale, rtol=2e-6)
+    assert result["forward_boundary"].item() == 1
+
+    with pytest.raises(ValueError, match="cannot exceed"):
+        output.trace_field_lines(
+            [[0, 0, 1.25 * scale]], trace_config={"max_radius_solRad": 2.1}
+        )
 
 
 def test_npz_export_includes_fieldline_metrics(tmp_path):

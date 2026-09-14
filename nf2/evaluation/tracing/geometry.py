@@ -31,6 +31,14 @@ class TraceGeometry(ABC):
     def apex_coordinate(self, coords: torch.Tensor) -> torch.Tensor:
         pass
 
+    @abstractmethod
+    def boundary_residual(self, coords: torch.Tensor, boundary_id: torch.Tensor) -> torch.Tensor:
+        """Signed distance-like residual, negative inside and zero on the selected boundary."""
+
+    @abstractmethod
+    def project_to_boundary(self, coords: torch.Tensor, boundary_id: torch.Tensor) -> torch.Tensor:
+        """Project points onto the selected boundary."""
+
     def surface_basis(self, coords: torch.Tensor, boundary_id: torch.Tensor) -> torch.Tensor:
         normal = self.boundary_normal(coords, boundary_id)
         return perpendicular_basis(normal)
@@ -118,6 +126,22 @@ class CartesianTraceGeometry(TraceGeometry):
     def apex_coordinate(self, coords):
         return coords[..., 2]
 
+    def boundary_residual(self, coords, boundary_id):
+        bounds = self._bounds(coords)
+        axis = torch.div(boundary_id, 2, rounding_mode="floor")
+        side = boundary_id % 2
+        value = coords.gather(1, axis[:, None]).squeeze(1)
+        target = bounds[axis, side]
+        return torch.where(side == 0, target - value, value - target)
+
+    def project_to_boundary(self, coords, boundary_id):
+        bounds = self._bounds(coords)
+        axis = torch.div(boundary_id, 2, rounding_mode="floor")
+        side = boundary_id % 2
+        projected = coords.clone()
+        projected.scatter_(1, axis[:, None], bounds[axis, side][:, None])
+        return projected
+
 
 class SphericalTraceGeometry(TraceGeometry):
     """Spherical shell traced in nonsingular Cartesian model coordinates."""
@@ -164,3 +188,23 @@ class SphericalTraceGeometry(TraceGeometry):
 
     def apex_coordinate(self, coords):
         return torch.linalg.vector_norm(coords, dim=-1)
+
+    def boundary_residual(self, coords, boundary_id):
+        radius = torch.linalg.vector_norm(coords, dim=-1)
+        inner = boundary_id == self.inner_boundary_id
+        target = torch.where(
+            inner,
+            torch.full_like(radius, self.radius_range[0]),
+            torch.full_like(radius, self.radius_range[1]),
+        )
+        return torch.where(inner, target - radius, radius - target)
+
+    def project_to_boundary(self, coords, boundary_id):
+        radius = torch.linalg.vector_norm(coords, dim=-1, keepdim=True).clamp_min(1e-20)
+        inner = boundary_id == self.inner_boundary_id
+        target = torch.where(
+            inner,
+            torch.full_like(boundary_id, self.radius_range[0], dtype=coords.dtype),
+            torch.full_like(boundary_id, self.radius_range[1], dtype=coords.dtype),
+        )
+        return coords * (target[:, None] / radius)

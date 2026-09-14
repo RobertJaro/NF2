@@ -231,6 +231,14 @@ def main():
         "--trace-max-length-Mm", type=float, default=None,
         help="Optional maximum length in Mm for each forward/backward half-line.",
     )
+    tracing.add_argument(
+        "--trace-max-height-Mm", type=float, default=None,
+        help="Optional Cartesian top boundary for field-line tracing, in Mm.",
+    )
+    tracing.add_argument(
+        "--trace-max-radius-solRad", type=float, default=None,
+        help="Optional spherical outer tracing boundary, in solar radii.",
+    )
     tracing.add_argument("--trace-min-field-G", type=float, default=None)
     tracing.add_argument("--trace-batch-size", type=int, default=65_536)
     tracing.add_argument("--q-method", choices=["tangent", "perturbed"], default="tangent")
@@ -253,6 +261,10 @@ def main():
         trace_config["max_step_size_Mm"] = args.trace_max_step_Mm
     if args.trace_max_length_Mm is not None:
         trace_config["max_length_Mm"] = args.trace_max_length_Mm
+    if args.trace_max_height_Mm is not None:
+        trace_config["max_height_Mm"] = args.trace_max_height_Mm
+    if args.trace_max_radius_solRad is not None:
+        trace_config["max_radius_solRad"] = args.trace_max_radius_solRad
     if args.trace_min_field_G is not None:
         trace_config["min_field_G"] = args.trace_min_field_G
     if args.q_epsilon_Mm is not None:

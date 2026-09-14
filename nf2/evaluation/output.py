@@ -70,7 +70,7 @@ class BaseOutput:
             result = self.model(coord, compute_jacobian)
         return {key: value.detach() for key, value in result.items()}
 
-    def _trace_geometry(self):
+    def _trace_geometry(self, max_height=None, max_radius=None):
         raise NotImplementedError
 
     def _default_trace_config(self):
@@ -82,11 +82,17 @@ class BaseOutput:
         """Trace a full batch of model-coordinate seed points in both directions."""
         from nf2.evaluation.tracing import BatchedFieldLineTracer, TraceConfig
 
+        max_height = None
+        max_radius = None
         if trace_config is None:
             trace_config = self._default_trace_config()
         elif isinstance(trace_config, dict):
             trace_config = dict(trace_config)
             Mm_per_ds = self.m_per_ds.to_value(u.Mm)
+            if "max_height_Mm" in trace_config:
+                max_height = trace_config.pop("max_height_Mm") / Mm_per_ds
+            if "max_radius_solRad" in trace_config:
+                max_radius = trace_config.pop("max_radius_solRad")
             if "step_size_Mm" in trace_config:
                 trace_config["step_size"] = trace_config.pop("step_size_Mm") / Mm_per_ds
             if "min_step_size_Mm" in trace_config:
@@ -108,7 +114,9 @@ class BaseOutput:
             if "max_step_size" not in trace_config:
                 default_values["max_step_size"] = None
             trace_config = TraceConfig(**{**default_values, **trace_config})
-        tracer = BatchedFieldLineTracer(self, self._trace_geometry(), trace_config)
+        tracer = BatchedFieldLineTracer(
+            self, self._trace_geometry(max_height=max_height, max_radius=max_radius), trace_config
+        )
         return tracer.trace(start_coords, metrics=metrics, q_method=q_method)
 
     def compute_fieldline_metrics(self, coords, metrics, trace_config=None, q_method=None):
@@ -267,11 +275,20 @@ class CartesianOutput(BaseOutput):
         self.time = None if self.wcs is None or len(self.wcs) == 0 else parse(self.wcs[0].wcs.dateobs)
         self.data_config = self.state['data']
 
-    def _trace_geometry(self):
+    def _trace_geometry(self, max_height=None, max_radius=None):
         from nf2.evaluation.tracing import CartesianTraceGeometry
 
+        if max_radius is not None:
+            raise ValueError("max_radius_solRad is only supported for spherical tracing.")
+        domain_height = self.max_height / self.Mm_per_ds
+        if max_height is not None:
+            if not np.isfinite(max_height) or max_height <= 0:
+                raise ValueError("Tracing max_height_Mm must be positive and finite.")
+            if max_height > domain_height:
+                raise ValueError("Tracing max_height_Mm cannot exceed the checkpoint domain height.")
+            domain_height = max_height
         return CartesianTraceGeometry([
-            self.coord_range[0], self.coord_range[1], (0, self.max_height / self.Mm_per_ds)
+            self.coord_range[0], self.coord_range[1], (0, domain_height)
         ])
 
     def _default_trace_config(self):
@@ -503,11 +520,22 @@ class SphericalOutput(BaseOutput):
         if not hasattr(self.radius_range, 'unit'):
             self.radius_range = self.radius_range * u.solRad
 
-    def _trace_geometry(self):
+    def _trace_geometry(self, max_height=None, max_radius=None):
         from nf2.evaluation.tracing import SphericalTraceGeometry
 
+        if max_height is not None:
+            raise ValueError("max_height_Mm is only supported for Cartesian tracing.")
         scale = (1 * u.solRad / self.m_per_ds).to_value(u.dimensionless_unscaled)
-        radii = self.radius_range.to_value(u.solRad) * scale
+        radius_range = self.radius_range.to_value(u.solRad).copy()
+        if max_radius is not None:
+            if not np.isfinite(max_radius):
+                raise ValueError("Tracing max_radius_solRad must be finite.")
+            if max_radius <= radius_range[0]:
+                raise ValueError("Tracing max_radius_solRad must exceed the checkpoint inner radius.")
+            if max_radius > radius_range[1]:
+                raise ValueError("Tracing max_radius_solRad cannot exceed the checkpoint outer radius.")
+            radius_range[1] = max_radius
+        radii = radius_range * scale
         return SphericalTraceGeometry(radii)
 
     def _default_trace_config(self):

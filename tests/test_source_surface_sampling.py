@@ -7,7 +7,10 @@ import nf2
 import nf2.train.callback as callback_module
 from nf2.evaluation.output import BaseOutput
 from nf2.train.callback import MetricsCallback, SourceSurfaceCallback, SphericalSlicesCallback
-from nf2.train.loss import ForceFreeLoss, SourceSurfaceTransitionRadialLoss, loss_module_mapping
+from nf2.train.loss import (
+    ForceFreeLoss, RadialLoss, SourceSurfaceFluxLoss, SourceSurfaceTransitionRadialLoss,
+    loss_module_mapping,
+)
 from nf2.train.model import (
     FixedSourceSurfaceVectorPotentialModel, SourceSurfaceVectorPotentialModel, curl,
 )
@@ -49,7 +52,7 @@ def test_learned_source_surface_uses_live_and_fixed_parameter_height_passes(monk
                      & (result["source_surface_radius"] <= 1.7))
 
 
-def test_learned_source_surface_uses_complementary_potential_gate():
+def test_learned_source_surface_gates_only_interior_potential():
     model = _source_surface_model()
     coords = torch.tensor([[1.2, 0.0, 0.0], [1.8, 0.0, 0.0]], requires_grad=True)
 
@@ -61,7 +64,7 @@ def test_learned_source_surface_uses_complementary_potential_gate():
     interior_a = model.field_model.vector_potential(coords)["a"]
     open_a = model.open_field_model(unit_vectors) / radius
 
-    torch.testing.assert_close(out["a"], transition * interior_a + (1 - transition) * open_a)
+    torch.testing.assert_close(out["a"], transition * interior_a + open_a)
     torch.testing.assert_close(out["source_surface_transition"], transition)
     torch.testing.assert_close(out["source_surface_gate"], transition.detach())
     assert not out["source_surface_gate"].requires_grad
@@ -143,7 +146,47 @@ def test_source_surface_transition_radial_loss_uses_differentiable_shell_weights
         "source_surface_transition_radial"] is SourceSurfaceTransitionRadialLoss
 
 
-def test_force_free_loss_does_not_update_learned_surface():
+def test_radial_loss_uses_shell_mean_field_strength():
+    loss = RadialLoss(name="source_surface_radial", ds_id="source_surface")
+    coords = torch.tensor([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    b = torch.tensor([[1.0, 1.0, 0.0], [0.1, 0.1, 0.0]], requires_grad=True)
+
+    value = loss(b=b, coords=coords)
+    expected = torch.tensor([1.0, 0.01]) / torch.tensor(1.01)
+    torch.testing.assert_close(value, expected)
+
+    value.mean().backward()
+    torch.testing.assert_close(b.grad[:, 0], torch.zeros(2))
+    assert torch.all(b.grad[:, 1] > 0)
+
+
+def test_source_surface_flux_loss_uses_cartesian_radial_derivative_and_detached_gate():
+    loss = SourceSurfaceFluxLoss(name="source_surface_flux", ds_id="random")
+    coords = torch.tensor([[2.0, 0.0, 0.0], [0.0, 3.0, 0.0]])
+    radius = coords.norm(dim=-1, keepdim=True)
+    unit_vectors = coords / radius
+    b = (unit_vectors / radius.pow(2)).requires_grad_()
+
+    identity = torch.eye(3).expand(coords.shape[0], -1, -1)
+    jac_matrix = (
+        identity / radius[:, None].pow(3)
+        - 3 * coords[:, :, None] * coords[:, None, :] / radius[:, None].pow(5)
+    ).requires_grad_()
+    gate = torch.tensor([[0.8], [0.2]], requires_grad=True)
+
+    value = loss(
+        b=b, jac_matrix=jac_matrix, coords=coords,
+        source_surface_gate=gate,
+    )
+    torch.testing.assert_close(value, torch.zeros_like(value), atol=1e-7, rtol=0)
+    value.mean().backward()
+    assert gate.grad is None
+    assert b.grad is not None
+    assert jac_matrix.grad is not None
+    assert loss_module_mapping["source_surface_flux"] is SourceSurfaceFluxLoss
+
+
+def test_unweighted_force_free_loss_does_not_update_learned_surface():
     model = _source_surface_model()
     coords = torch.tensor([
         [1.2, 0.0, 0.0],
@@ -233,9 +276,12 @@ def test_full_volume_training_preserves_grouped_height_scaling():
             {"type": "force_free", "name": "force_free", "weight": 1e-3, "ds_id": "random"},
             {"type": "source_surface_transition_radial",
              "name": "source_surface_transition_radial", "weight": 1e-2, "ds_id": "random"},
+            {"type": "source_surface_flux", "name": "source_surface_flux",
+             "weight": 1e-2, "ds_id": "random"},
         ],
         transforms=[],
-        loss_scaling=[{"type": "b_height", "loss_ids": ["force_free"]}],
+        loss_scaling=[{
+            "type": "b_height", "loss_ids": ["force_free", "source_surface_flux"]}],
         lr_params=1e-3,
     )
     grouped_coords = torch.tensor([

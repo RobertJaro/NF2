@@ -124,6 +124,90 @@ def test_twist_and_integrated_current_for_constant_curl_axis():
     np.testing.assert_allclose(result["integrated_current_density"], [[0, 0, 2 * a]], atol=2e-5)
 
 
+def test_boundary_step_preserves_line_integrals_with_varying_current():
+    def sample(coords, compute_jacobian=False):
+        x = coords[:, 0]
+        z = coords[:, 2]
+        exp_z = torch.exp(2 * z)
+        result = {
+            "b": torch.stack((torch.zeros_like(x), torch.zeros_like(x), 2 + x * exp_z), -1)
+        }
+        if compute_jacobian:
+            jac = torch.zeros((coords.shape[0], 3, 3), dtype=coords.dtype)
+            jac[:, 2, 0] = exp_z
+            jac[:, 2, 2] = 2 * x * exp_z
+            result["jac_matrix"] = jac
+        return result
+
+    z = np.linspace(0, 1, 21, dtype=np.float32)
+    seeds = np.stack((np.zeros_like(z), np.full_like(z, 0.5), z), -1)
+    tracer = BatchedFieldLineTracer(
+        _output(sample),
+        CartesianTraceGeometry([[-1, 1], [0, 1], [0, 1]]),
+        TraceConfig(step_size=0.25, max_steps=100),
+    )
+
+    result = tracer.trace(seeds, metrics=["integrated_current_density"])
+    expected = -(np.exp(2) - 1) / 2
+
+    np.testing.assert_allclose(result["integrated_current_density"][:, 1], expected, atol=2e-5)
+    assert np.ptp(result["integrated_current_density"][:, 1]) < 3e-5
+
+
+def test_boundary_step_preserves_twist_with_varying_alpha():
+    def sample(coords, compute_jacobian=False):
+        x, y, z = coords.unbind(-1)
+        alpha = torch.exp(2 * z)
+        result = {"b": torch.stack((-0.5 * alpha * y, 0.5 * alpha * x, torch.ones_like(x)), -1)}
+        if compute_jacobian:
+            jac = torch.zeros((coords.shape[0], 3, 3), dtype=coords.dtype)
+            jac[:, 0, 1] = -0.5 * alpha
+            jac[:, 0, 2] = -alpha * y
+            jac[:, 1, 0] = 0.5 * alpha
+            jac[:, 1, 2] = alpha * x
+            result["jac_matrix"] = jac
+        return result
+
+    z = np.linspace(0, 1, 21, dtype=np.float32)
+    seeds = np.stack((np.zeros_like(z), np.zeros_like(z), z), -1)
+    tracer = BatchedFieldLineTracer(
+        _output(sample),
+        CartesianTraceGeometry([[-1, 1], [-1, 1], [0, 1]]),
+        TraceConfig(step_size=0.25, max_steps=100),
+    )
+
+    result = tracer.trace(seeds, metrics=["twist_number"])
+    expected = (np.exp(2) - 1) / (8 * np.pi)
+
+    np.testing.assert_allclose(result["twist_number"], expected, atol=2e-5)
+    assert np.ptp(result["twist_number"]) < 3e-5
+
+
+def test_boundary_step_refines_curved_fieldline_endpoint_and_length():
+    def sample(coords, compute_jacobian=False):
+        x = coords[:, 0]
+        result = {"b": torch.stack((torch.ones_like(x), 2 * x, torch.zeros_like(x)), -1)}
+        if compute_jacobian:
+            jac = torch.zeros((coords.shape[0], 3, 3), dtype=coords.dtype)
+            jac[:, 1, 0] = 2
+            result["jac_matrix"] = jac
+        return result
+
+    x = np.linspace(0, 1, 21, dtype=np.float32)
+    seeds = np.stack((x, x ** 2, np.full_like(x, 0.5)), -1)
+    tracer = BatchedFieldLineTracer(
+        _output(sample),
+        CartesianTraceGeometry([[0, 1], [-1, 2], [0, 1]]),
+        TraceConfig(step_size=0.25, max_steps=100),
+    )
+
+    result = tracer.trace(seeds, metrics=["fieldline_length"])
+    expected_length = np.sqrt(5) / 2 + np.arcsinh(2) / 4
+
+    np.testing.assert_allclose(result["fieldline_length"], expected_length, atol=2e-5)
+    np.testing.assert_allclose(result["forward_endpoint"][:, 1], 1, atol=2e-6)
+
+
 def test_radial_spherical_connectivity_and_geometry():
     def sample(coords, compute_jacobian=False):
         radius = torch.linalg.vector_norm(coords, dim=-1, keepdim=True)
