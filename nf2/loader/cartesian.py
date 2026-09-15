@@ -14,8 +14,7 @@ from nf2.loader.base import BaseDataModule, DEFAULT_NUM_WORKERS
 from nf2.loader.muram import MURaMDataset, MURaMCubeDataset
 from nf2.loader.cartesian_datasets import (
     AnalyticalBoundaryDataset, FITSDataset, FldIncAziFITSDataset, LosFITSDataset,
-    LosTrvAziFITSDataset, NumpyDataset, PotentialBoundaryDataset, PotentialTopBoundaryDataset,
-    SHARPDataset,
+    LosTrvAziFITSDataset, NumpyDataset, PotentialBoundaryDataset, SHARPDataset,
 )
 
 
@@ -112,19 +111,24 @@ class CartesianDataModule(BaseDataModule):
         boundary_batch_size = potential_boundary.pop('batch_size', batch_size // 4)
         boundary_requires_jacobian = potential_boundary.pop('requires_jacobian', False)
         boundary_type = potential_boundary.pop('type')
-        if boundary_type == 'none':
-            pass
-        elif boundary_type == 'potential':
+
+        if boundary_type not in ['none', 'potential', 'potential_top']:
+            raise ValueError(f'Unknown boundary type: {boundary_type}')
+
+        if boundary_type != 'none':
             bz = bottom_boundary_dataset.bz
             bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
             potential_coord_range = _potential_coord_range(bottom_boundary_dataset, coord_range)
+
             boundary_ds = PotentialBoundaryDataset(bz=bz,
                                                    height_pixel=coord_range[2, -1] / ds_per_pixel,
                                                    coord_range=potential_coord_range,
                                                    ds_per_pixel=ds_per_pixel, Gauss_per_dB=Gauss_per_dB,
                                                    work_path=work_path,
                                                    requires_jacobian=boundary_requires_jacobian,
-                                                   batch_size=boundary_batch_size, **potential_boundary)
+                                                   batch_size=boundary_batch_size,
+                                                   only_top=(boundary_type == 'potential_top'),
+                                                   **potential_boundary)
             boundary_ds.config = {
                 'id': 'potential',
                 'type': boundary_type,
@@ -135,29 +139,6 @@ class CartesianDataModule(BaseDataModule):
                 **potential_boundary_state,
             }
             training_datasets['potential'] = boundary_ds
-        elif boundary_type == 'potential_top':
-            bz = bottom_boundary_dataset.bz
-            bz = np.nan_to_num(bz, nan=0)  # replace nans with 0
-            potential_coord_range = _potential_coord_range(bottom_boundary_dataset, coord_range)
-            boundary_ds = PotentialTopBoundaryDataset(bz=bz,
-                                                      height_pixel=coord_range[2, -1] / ds_per_pixel,
-                                                      coord_range=potential_coord_range,
-                                                      ds_per_pixel=ds_per_pixel, Gauss_per_dB=Gauss_per_dB,
-                                                      work_path=work_path,
-                                                      requires_jacobian=boundary_requires_jacobian,
-                                                      batch_size=boundary_batch_size, **potential_boundary)
-            boundary_ds.config = {
-                'id': 'potential',
-                'type': boundary_type,
-                'role': 'training',
-                'requires_jacobian': boundary_requires_jacobian,
-                'batch_size': boundary_batch_size,
-                'coord_range': potential_coord_range,
-                **potential_boundary_state,
-            }
-            training_datasets['potential'] = boundary_ds
-        else:
-            raise ValueError(f'Unknown boundary type: {potential_boundary["type"]}')
 
         # validation datasets
         validation_datasets = {}

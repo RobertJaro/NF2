@@ -305,28 +305,13 @@ class AnalyticalBoundaryDataset(TensorsDataset):
 
 class PotentialBoundaryDataset(TensorsDataset):
 
-    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=1, batch_size=2 ** 12, **kwargs):
-        coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides)
-        coords = coords * ds_per_pixel
-        b_err = b_err / Gauss_per_dB
-        b = b / Gauss_per_dB
-
-        # adjust coordinates in xy plane
-        c_x_min, c_x_max = coords[..., 0].min(), coords[..., 0].max()
-        c_y_min, c_y_max = coords[..., 1].min(), coords[..., 1].max()
-        target_x_min, target_x_max = coord_range[0]
-        target_y_min, target_y_max = coord_range[1]
-        coords[..., 0] = (coords[..., 0] - c_x_min) / (c_x_max - c_x_min) * (target_x_max - target_x_min) + target_x_min
-        coords[..., 1] = (coords[..., 1] - c_y_min) / (c_y_max - c_y_min) * (target_y_max - target_y_min) + target_y_min
-
-        super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
-
-
-class PotentialTopBoundaryDataset(TensorsDataset):
-
-    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=2, batch_size=2 ** 12, **kwargs):
+    def __init__(self, bz, height_pixel, coord_range, ds_per_pixel, Gauss_per_dB, strides=None, batch_size=2 ** 12,
+                 only_top=False, method='fft', **kwargs):
+        if strides is None:
+            strides = 2 if only_top else 1
         coords, b_err, b = load_potential_field_boundary(bz, height_pixel, strides,
-                                                         only_top=True, progress=False)
+                                                         only_top=only_top, method=method,
+                                                         progress=(not only_top))
         coords = coords * ds_per_pixel
         b_err = b_err / Gauss_per_dB
         b = b / Gauss_per_dB
@@ -340,7 +325,6 @@ class PotentialTopBoundaryDataset(TensorsDataset):
         coords[..., 1] = (coords[..., 1] - c_y_min) / (c_y_max - c_y_min) * (target_y_max - target_y_min) + target_y_min
 
         super().__init__({'b_true': b, 'b_err': b_err, 'coords': coords}, batch_size=batch_size, **kwargs)
-
 
 def process_map(map, slice, bin):
     if slice:

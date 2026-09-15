@@ -57,6 +57,7 @@ CONFIG_OPTIONS = [
     ("data.potential_boundary.id", "str", "ignored", "Accepted for readability; normalized away because the runtime id is `potential`."),
     ("data.potential_boundary.type", "potential | potential_top | none", "potential", "Potential side/top boundary mode."),
     ("data.potential_boundary.strides", "int", "4", "Downsample factor for potential boundary generation."),
+    ("data.potential_boundary.method", "fft | direct", "fft", "Potential-field solver."),
     ("data.z_range", "list[float]", "loader default", "Cartesian height range in Mm where supported by the loader."),
     ("data.max_radius", "float", "loader default", "Spherical outer radius in solar radii where supported by the loader."),
     ("data.iterations", "int", "10000", "Number of random sampler batches per epoch-like pass."),

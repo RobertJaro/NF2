@@ -26,82 +26,100 @@ class PotentialModel(nn.Module):
         return potential
 
 
-def get_potential(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True):
+# calculate potential field using greens function method
+def get_potential_field(b_n, height, batch_size=2048, strides=(1, 1, 1), progress=True):
+    if isinstance(strides, int): strides = (strides, strides, strides)
     cube_shape = (*b_n.shape, height)
-    strides = (strides, strides, strides) if isinstance(strides, int) else strides
-    b_n = b_n.reshape((-1,)).astype(np.float32)
-    coords = np.stack(np.mgrid[:cube_shape[0]:strides[0], :cube_shape[1]:strides[1], :cube_shape[2]:strides[2]], -1)
-    coords_shape = coords.shape
-    coords = coords.reshape((-1, 3))
-    r_p = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :1], -1).reshape((-1, 3))
-
-    # torch code
-    # r = (x * y, 3); coords = (x*y*z, 3), c = (1, 3)
-    # --> (x * y, x * y * z, 3) --> (x * y, x * y * z) --> (x * y * z)
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     batch_size = batch_size * torch.cuda.device_count() if torch.cuda.is_available() else batch_size
-    with torch.no_grad():
-        b_n = torch.tensor(b_n, dtype=torch.float32, )
-        r_p = torch.tensor(r_p, dtype=torch.float32, )
-        model = nn.DataParallel(PotentialModel(b_n, r_p)).to(device)
-
-        coords = torch.tensor(coords, dtype=torch.float32)
-        potential = []
-        loader = DataLoader(TensorDataset(coords), batch_size=batch_size, num_workers=min(8, DEFAULT_NUM_WORKERS))
-        it = tqdm(loader, desc='Potential Field') if progress else loader
-        for coord, in it:
-            coord = coord.to(device)
-            p_batch = model(coord)
-            potential += [p_batch.detach().cpu()]
-
-    potential = torch.cat(potential).view(coords_shape[:-1]).numpy()
+    coords = [np.stack(
+        np.mgrid[
+            :cube_shape[0]:strides[0],
+            :cube_shape[1]:strides[1],
+            :cube_shape[2]:strides[2],
+        ],
+        -1,
+    )]
+    potential, = compute_scalar_potential(
+        coords,
+        cube_shape,
+        b_n,
+        batch_size=batch_size,
+        progress=progress,
+    )
     if strides != (1, 1, 1):
         potential = block_replicate(potential, strides, conserve_sum=False)
-    return potential
-
-def get_potential_field(b_n, height, *args, **kwargs):
-    potential = get_potential(b_n, height, *args, **kwargs)
     b = - 1 * np.stack(np.gradient(potential, axis=[0, 1, 2], edge_order=2), axis=-1)
     return b
 
-def get_potential_boundary(b_n, height, batch_size=2048, **kwargs):
+
+def _make_boundary_face_coords(
+        cube_shape, only_top=False, include_derivative_stencil=False):
+    nx, ny, nz = cube_shape
+    face_specs = [(2, nz - 1)]
+    if not only_top:
+        face_specs += [(0, 0), (0, nx - 1), (1, 0), (1, ny - 1)]
+
+    face_coords = []
+    for axis, boundary_index in face_specs:
+        axis_coords = [np.arange(nx), np.arange(ny), np.arange(nz)]
+        axis_coords[axis] = (
+            np.arange(boundary_index - 1, boundary_index + 2)
+            if include_derivative_stencil
+            else np.array([boundary_index])
+        )
+        face_coords += [np.stack(np.meshgrid(*axis_coords, indexing='ij'), -1)]
+    return face_coords, [axis for axis, _ in face_specs]
+
+
+def _flatten_boundary_faces(face_coords, face_fields, axes):
+    coords_flat = []
+    fields_flat = []
+    for coords, fields, axis in zip(face_coords, face_fields, axes):
+        idx = [slice(None)] * 3
+        idx[axis] = 1 if coords.shape[axis] == 3 else 0
+        idx = tuple(idx)
+        coords_flat += [coords[idx].reshape((-1, 3))]
+        fields_flat += [fields[idx].reshape((-1, 3))]
+    return np.concatenate(coords_flat), np.concatenate(fields_flat)
+
+
+def get_potential_boundary(b_n, height, batch_size=None, only_top=False,
+                           method='direct', progress=False, **kwargs):
     assert not np.any(np.isnan(b_n)), 'Invalid data value'
+    if method.lower() not in {'direct', 'green', 'greens', 'fft'}:
+        raise ValueError("Potential field method must be 'fft' or 'direct'.")
 
+    if method == 'fft':
+        field = get_fft_potential_field(b_n, int(height), **kwargs)
+        coords, axes = _make_boundary_face_coords(field.shape[:3], only_top=only_top)
+        fields = [field[tuple(np.moveaxis(coord, -1, 0))] for coord in coords]
+        return _flatten_boundary_faces(coords, fields, axes)
+
+    if batch_size is None:
+        batch_size = int(1024 * 512 ** 2 / np.prod(b_n.shape))
     cube_shape = (*b_n.shape, height)
+    coords, axes = _make_boundary_face_coords(
+        cube_shape,
+        only_top=only_top,
+        include_derivative_stencil=True,
+    )
+    fields = compute_potential(
+        coords,
+        cube_shape,
+        b_n,
+        batch_size=batch_size,
+        progress=progress,
+        **kwargs,
+    )
+    return _flatten_boundary_faces(coords, fields, axes)
 
-    b_n = b_n.reshape((-1)).astype(np.float32)
-    coords = [np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], cube_shape[2] - 2:cube_shape[2] + 1], -1),
-              np.stack(np.mgrid[:cube_shape[0], -1:2, :cube_shape[2]], -1),
-              np.stack(np.mgrid[:cube_shape[0], cube_shape[1] - 2:cube_shape[1] + 1, :cube_shape[2]], -1),
-              np.stack(np.mgrid[-1:2, :cube_shape[1], :cube_shape[2]], -1),
-              np.stack(np.mgrid[cube_shape[0] - 2:cube_shape[0] + 1, :cube_shape[1], :cube_shape[2]], -1), ]
-    fields = compute_potential(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
-
-    fields = [fields[0][:, :, 1].reshape((-1, 3)),
-              fields[1][:, 1, :].reshape((-1, 3)), fields[2][:, 1, :].reshape((-1, 3)),
-              fields[3][1, :, :].reshape((-1, 3)), fields[4][1, :, :].reshape((-1, 3))]
-    coords = [coords[0][:, :, 1].reshape((-1, 3)),
-              coords[1][:, 1, :].reshape((-1, 3)), coords[2][:, 1, :].reshape((-1, 3)),
-              coords[3][1, :, :].reshape((-1, 3)), coords[4][1, :, :].reshape((-1, 3))]
-    return np.concatenate(coords), np.concatenate(fields)
-
-
-def get_potential_top(b_n, height, batch_size=2048, **kwargs):
-    assert not np.any(np.isnan(b_n)), 'Invalid data value'
-
-    cube_shape = (*b_n.shape, height)
-
-    b_n = b_n.reshape((-1)).astype(np.float32)
-    coords = [np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], cube_shape[2] - 2:cube_shape[2] + 1], -1)]
-    fields = compute_potential(coords, cube_shape, b_n, batch_size=batch_size, **kwargs)
-
-    fields = [fields[0][:, :, 1].reshape((-1, 3)),]
-    coords = [coords[0][:, :, 1].reshape((-1, 3)),]
-    return np.concatenate(coords), np.concatenate(fields)
-
-def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
-    coords_shape = [c.shape[:-1] for c in coords]
+def compute_scalar_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
     flat_coords = np.concatenate([c.reshape(((-1, 3))) for c in coords])
+    b_n = np.asarray(b_n)
+    expected_shape = tuple(cube_shape[:2])
+    if b_n.shape != expected_shape:
+        raise ValueError(f'b_n must have shape {expected_shape}, got {b_n.shape}')
+    b_n = b_n.reshape((-1)).astype(np.float32)
 
     r_p = np.stack(np.mgrid[:cube_shape[0], :cube_shape[1], :1], -1).reshape((-1, 3))
 
@@ -117,28 +135,38 @@ def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
         flat_coords = torch.tensor(flat_coords, dtype=torch.float32, )
 
         potential = []
-        iter = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=min(2, DEFAULT_NUM_WORKERS))
-        iter = tqdm(iter, desc='Potential Field') if progress else iter
-        for coord, in iter:
+        loader = DataLoader(TensorDataset(flat_coords), batch_size=batch_size, num_workers=min(2, DEFAULT_NUM_WORKERS))
+        loader = tqdm(loader, desc='Potential Field') if progress else loader
+        for coord, in loader:
             coord = coord.to(device)
             p_batch = model(coord)
-            potential += [p_batch.cpu()]
+            potential += [p_batch.detach().cpu()]
 
-    potential = torch.cat(potential).numpy()
-    idx = 0
-    fields = []
-    for s in coords_shape:
-        p = potential[idx:idx + np.prod(s)].reshape(s)
-        b = - 1 * np.stack(np.gradient(p, axis=[0, 1, 2], edge_order=2), axis=-1)
-        fields += [b]
-        idx += np.prod(s)
+    grid_sizes = [int(np.prod(c.shape[:-1])) for c in coords]
+    potential_chunks = torch.cat(potential).split(grid_sizes)
+    return [
+        chunk.reshape(c.shape[:-1]).numpy()
+        for chunk, c in zip(potential_chunks, coords)
+    ]
 
+
+def compute_potential(coords, cube_shape, b_n, batch_size=2048, progress=False):
+    potentials = compute_scalar_potential(
+        coords,
+        cube_shape,
+        b_n,
+        batch_size=batch_size,
+        progress=progress,
+    )
+    fields = [
+        -1 * np.stack(np.gradient(p, edge_order=2), axis=-1)
+        for p in potentials
+    ]
     return fields
 
 def get_fft_potential_field(Bz0, Nz, scale=1, alpha=0):
-    Nx = Bz0.shape[0]
-    Ny = Bz0.shape[1]
-    z = np.linspace(0, Nz - 1, Nz)
+    Nx, Ny = Bz0.shape
+    z = np.arange(Nz) * scale
 
     fftBz0 = np.fft.fft2(Bz0)
 
@@ -148,31 +176,25 @@ def get_fft_potential_field(Bz0, Nz, scale=1, alpha=0):
 
     k2 = kx * kx + ky * ky
     w2 = k2 - alpha ** 2
-    wabs = np.zeros([Nx, Ny], dtype=complex)
-    wabs = np.sqrt(w2.clip(0, None)) + 1j * np.sqrt(-w2.clip(None, 0))
+    wabs = np.sqrt(w2 + 0j)
 
-    HxB = np.zeros([Nx, Ny], dtype=complex)
-    HyB = np.zeros([Nx, Ny], dtype=complex)
-    HzB = np.ones([Nx, Ny], dtype=complex)
+    HxB = np.zeros((Nx, Ny), dtype=complex)
+    HyB = np.zeros((Nx, Ny), dtype=complex)
+    HzB = np.ones((Nx, Ny), dtype=complex)
 
-    mask = k2 != 0
-    kx_full = np.broadcast_to(kx, (Nx, Ny))
-    ky_full = np.broadcast_to(ky, (Nx, Ny))
-    HxB[mask] = -1j * kx_full[mask] * wabs[mask] / k2[mask] + 1j * alpha * ky_full[mask] / k2[mask]
     HxB[0, 0] = -1j
-
-    HyB[mask] = -1j * ky_full[mask] * wabs[mask] / k2[mask] - 1j * alpha * kx_full[mask] / k2[mask]
     HyB[0, 0] = -1j
 
-    Bx_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
-    By_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
-    Bz_ext = np.zeros([Nz, Nx, Ny], dtype=np.float32, order='F')
+    mask = k2 != 0
+    HxB[mask] = (-1j * kx * wabs + 1j * alpha * ky)[mask] / k2[mask]
+    HyB[mask] = (-1j * ky * wabs - 1j * alpha * kx)[mask] / k2[mask]
 
-    for i in range(0, Nz):
-        z_exp = z[i] * scale
-        Bx_ext[i, :, :] = np.fft.ifft2(fftBz0 * HxB * np.exp(-wabs * z_exp)).real
-        By_ext[i, :, :] = np.fft.ifft2(fftBz0 * HyB * np.exp(-wabs * z_exp)).real
-        Bz_ext[i, :, :] = np.fft.ifft2(fftBz0 * HzB * np.exp(-wabs * z_exp)).real
+    b = np.zeros((Nx, Ny, Nz, 3), dtype=np.float32, order="F")
 
-    b = np.stack([Bx_ext, By_ext, Bz_ext], axis=-1).transpose((1, 2, 0, 3))
+    for i in range(Nz):
+        fftBz = fftBz0 * np.exp(-wabs * z[i])
+
+        b[:, :, i, 0] = np.fft.ifft2(fftBz * HxB).real
+        b[:, :, i, 1] = np.fft.ifft2(fftBz * HyB).real
+        b[:, :, i, 2] = np.fft.ifft2(fftBz * HzB).real
     return b

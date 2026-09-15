@@ -18,7 +18,7 @@ def _differential_equation(mu, u, n, a2):
     return (dP_dmu, d2P_dmu2)
 
 
-def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[-1, 1, -1, 1, 0, 2], tau_surfaces=None):
+def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[-1, 1, -1, 1, 0, 2], tau_surfaces=None, calculate_alpha=False):
     """
     Calculate the analytic NLFF field from Low & Lou (1989).
 
@@ -29,6 +29,7 @@ def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[
     :param psi: angle of the magnetic field relative to the dipol axis
     :param resolution: spatial resolution of the magnetic field in pixels
     :param bounds: dimensions of the volume (x_start, x_end, y_start, y_end, z_start, z_end)
+    :param calculate_alpha: also return the exact force-free parameter
     :return: magnetic field B (x, y, z, v)
     """
     sol_P, a2 = solve_P(n, m)
@@ -86,6 +87,9 @@ def get_analytic_b_field(n=1, m=1, l=0.3, psi=np.pi / 4, resolution=64, bounds=[
     Bz = - BX * np.sin(psi) + BZ * np.cos(psi)
 
     b_field = np.real(np.stack([Bx, By, Bz], -1))
+    if calculate_alpha:
+        alpha = np.sqrt(a2) * (1 + 1 / n) * np.abs(A) ** (1 / n)
+        return b_field, alpha
     return b_field
 
 
