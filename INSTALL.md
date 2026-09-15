@@ -54,8 +54,8 @@ python -m build
 
 The build creates:
 
-- `dist/nf2-0.4.2.tar.gz`
-- `dist/nf2-0.4.2-py3-none-any.whl`
+- `dist/nf2-0.4.3.tar.gz`
+- `dist/nf2-0.4.3-py3-none-any.whl`
 
 ## Conda Environment
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nf2"
-version = "0.4.2"
+version = "0.4.3"
 description = "Neural non-linear force-free magnetic field extrapolation framework"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"

@@ -4,7 +4,7 @@ The top-level package intentionally avoids importing heavy astronomy and deep
 learning dependencies until a caller asks for the matching helper.
 """
 
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 
 def load(path, device=None):
