@@ -132,7 +132,7 @@ class BHeightLossScalingModule(BaseScalingModule):
     Loss scaling based on magnetic field B.
     """
 
-    def __init__(self, power=2, detach=True, *args, **kwargs):
+    def __init__(self, power=2, detach=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.power = power
         self.detach = detach

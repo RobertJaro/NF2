@@ -18,7 +18,7 @@ generate(Path(__file__).parent)
 
 project = "NF2"
 author = "Robert Jarolim"
-release = "0.4.2"
+release = "0.4.3"
 
 extensions = [
     "myst_parser",
