@@ -250,6 +250,47 @@ class RandomRadialGroupedCoordinateDataset(NF2Dataset):
         return {'coords': coords, 'grouped_coords': grouped_cartesian_coords}
 
 
+class RandomSourceSurfaceBoundaryDataset(RandomFixedRadiusCoordinateDataset):
+    """Reference directions at 1 Rsun and u=1, mapped to learned Rss on device."""
+
+    def __init__(self, batch_size, Mm_per_ds, **kwargs):
+        if 'radius' in kwargs or 'radius_range' in kwargs:
+            raise ValueError('Source-surface samplers use learned Rss; omit radius and radius_range.')
+        super().__init__(radius_range=(1, 1), radius=1, batch_size=batch_size,
+                         Mm_per_ds=Mm_per_ds, **kwargs)
+
+    def __getitem__(self, item):
+        batch = super().__getitem__(item)
+        batch['source_surface_fraction'] = torch.ones((self.batch_size, 1))
+        return batch
+
+
+class RandomSourceSurfaceVolumeDataset(RandomSourceSurfaceBoundaryDataset):
+    """Grouped uniform radial fractions, mapped below the learned surface on device.
+
+    Groups share fractional heights, not physical radii. With exponent=1,
+    each fraction is uniform on [0, 1]; this is not uniform-volume sampling.
+    """
+
+    def __init__(self, n_lat_lon_sample=128, radial_sampling_exponent=1,
+                 requires_jacobian=True, **kwargs):
+        super().__init__(requires_jacobian=requires_jacobian, **kwargs)
+        self.n_lat_lon_sample = int(n_lat_lon_sample)
+        if self.n_lat_lon_sample <= 0 or self.batch_size % self.n_lat_lon_sample:
+            raise ValueError('batch_size must be divisible by positive n_lat_lon_sample.')
+        self.radial_sample = self.batch_size // self.n_lat_lon_sample
+        self.radial_sampling_exponent = float(radial_sampling_exponent)
+        if self.radial_sampling_exponent <= 0:
+            raise ValueError('radial_sampling_exponent must be positive.')
+
+    def __getitem__(self, item):
+        batch = super().__getitem__(item)
+        fraction = torch.rand(self.radial_sample, 1).pow(self.radial_sampling_exponent)
+        batch['source_surface_fraction'] = fraction.repeat(self.n_lat_lon_sample, 1)
+        batch['grouped_coords'] = batch['coords'].reshape(self.n_lat_lon_sample, self.radial_sample, 3)
+        return batch
+
+
 class SphereDataset(NF2Dataset):
 
     def __init__(self, radius_range, Mm_per_ds, resolution=256, batch_size=1024,

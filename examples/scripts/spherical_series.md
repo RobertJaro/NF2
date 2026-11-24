@@ -9,7 +9,7 @@ As with Cartesian series, a spherical series needs the completed first extrapola
 Use the single-run guide in [spherical.md](spherical.md) for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_initial" \
   --work_path "./runs/spherical_initial/work" \
@@ -39,7 +39,7 @@ The series template validates and logs every 10th dataset by default while still
 ## 3. Run The Series
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/spherical/hmi_full_disk_series.yaml" \
   --run_path "./runs/spherical_series" \
   --work_path "./runs/spherical_series/work" \
@@ -63,7 +63,7 @@ The `--full_disk_Br_err_pattern`, `--full_disk_Bt_err_pattern`, and `--full_disk
 ## 4. Export The Series
 
 ```bash
-nf2-export "./runs/spherical_series/*.nf2" \
+nf2 export "./runs/spherical_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/spherical_series/exports" \
   --metrics j alpha free_energy_fft \

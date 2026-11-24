@@ -281,23 +281,61 @@ class SourceSurfaceVectorPotentialModel(nn.Module):
             out['jac_matrix'] = jacobian(b, coords)
         return out
 
-    @torch.no_grad()
-    def source_surface_radius_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
-        device = next(self.parameters()).device if device is None else device
-        latitude = torch.linspace(-np.pi / 2, np.pi / 2, int(latitude_resolution), device=device)
-        longitude = torch.linspace(0, 2 * np.pi, int(longitude_resolution), device=device)
-        lat_grid, lon_grid = torch.meshgrid(latitude, longitude, indexing='ij')
-        unit_vectors = torch.stack([
-            torch.cos(lat_grid) * torch.cos(lon_grid),
-            torch.cos(lat_grid) * torch.sin(lon_grid),
-            torch.sin(lat_grid),
-        ], dim=-1)
-        radius = self.surface_model(unit_vectors.reshape(-1, 3)).reshape(lat_grid.shape)
-        return {
-            'radius': radius / self.solar_radius_ds,
-            'latitude': latitude,
-            'longitude': longitude,
-        }
+
+class FreeBoundaryVectorPotentialModel(ScaledVectorPotentialModel):
+    """Scaled potential inside a learned domain, with a separately penalized radial boundary.
+
+    Field derivatives are always taken in physical Cartesian model coordinates.
+    The surface affects training through sample locations, not through a field gate.
+    Both interior and boundary sample locations propagate gradients to the surface.
+    """
+
+    def __init__(self, source_surface=None, Mm_per_ds=None, **kwargs):
+        super().__init__(Mm_per_ds=Mm_per_ds, **kwargs)
+        surface = dict(source_surface or {})
+        height_range = surface.get('height_range', (1.5, 2.5))
+        if len(height_range) != 2 or not 1 < height_range[0] < height_range[1]:
+            raise ValueError('Free boundary height_range must satisfy 1 < min < max.')
+        initial_radius = float(surface.pop('initial_radius', sum(height_range) / 2))
+        if not height_range[0] < initial_radius < height_range[1]:
+            raise ValueError('initial_radius must be strictly inside height_range.')
+        self.surface_model = SourceSurfaceHeightModel(Mm_per_ds=Mm_per_ds, **surface)
+        self.solar_radius_ds = SOLAR_RADIUS_Mm / Mm_per_ds
+        fraction = (initial_radius - height_range[0]) / (height_range[1] - height_range[0])
+        # Begin with a sphere; angular structure develops during optimization.
+        nn.init.zeros_(self.surface_model.mapping_module.out_layer.weight)
+        nn.init.constant_(self.surface_model.mapping_module.out_layer.bias,
+                          float(np.log(fraction / (1 - fraction))))
+
+    def map_samples(self, batch):
+        """Map reference directions and fractions to r = 1 + u (Rss - 1)."""
+        reference = batch['coords']
+        directions = (reference / reference.norm(dim=-1, keepdim=True)).detach()
+        source_radius = self.surface_model(directions) / self.solar_radius_ds
+        fraction = batch['source_surface_fraction']
+        # Interior physics and the radial boundary loss both update Rss through
+        # sample locations; the separate height penalty opposes expansion.
+        radius = 1 + fraction * (source_radius - 1)
+        coords = directions * radius * self.solar_radius_ds
+        out = {'coords': coords, 'source_surface_radius': source_radius}
+        if 'grouped_coords' in batch:
+            out['grouped_coords'] = coords.reshape_as(batch['grouped_coords'])
+        if 'spherical_coords' in batch:
+            out['spherical_coords'] = torch.cat([radius, batch['spherical_coords'][:, 1:]], dim=-1)
+        return out
+
+    @staticmethod
+    def inside_source_surface(radius, source_radius):
+        # Recovering a radius from Cartesian boundary coordinates introduces roundoff.
+        return radius <= source_radius * (1 + 1e-6)
+
+    def forward(self, coords, compute_jacobian=True):
+        out = super().forward(coords, compute_jacobian=compute_jacobian)
+        radius = coords.norm(dim=-1, keepdim=True).clamp_min(self.eps)
+        source_radius = self.surface_model(coords / radius)
+        out['source_surface_radius'] = source_radius / self.solar_radius_ds
+        out['inside_source_surface'] = self.inside_source_surface(radius, source_radius)
+        return out
 
 
 class FixedSourceSurfaceVectorPotentialModel(nn.Module):
@@ -358,17 +396,6 @@ class FixedSourceSurfaceVectorPotentialModel(nn.Module):
         if compute_jacobian:
             out['jac_matrix'] = jacobian(b, coords)
         return out
-
-    @torch.no_grad()
-    def source_surface_radius_grid(self, latitude_resolution=180, longitude_resolution=360, device=None):
-        device = next(self.parameters()).device if device is None else device
-        latitude = torch.linspace(-np.pi / 2, np.pi / 2, int(latitude_resolution), device=device)
-        longitude = torch.linspace(0, 2 * np.pi, int(longitude_resolution), device=device)
-        radius = torch.ones(
-            (latitude.numel(), longitude.numel()), device=device,
-            dtype=self.source_surface_radius_ds.dtype,
-        ) * (self.source_surface_radius_ds / self.solar_radius_ds)
-        return {'radius': radius, 'latitude': latitude, 'longitude': longitude}
 
 
 def calculate_current(b, coords, jac_matrix=None):

@@ -1,6 +1,8 @@
 # CLI Reference
 
-## `nf2-extrapolate`
+NF2 installs a single `nf2` command. Use `nf2 --help` to list subcommands and `nf2 <command> --help` for command options. The same interface is available as `python -m nf2 <command>`.
+
+## `nf2 extrapolate`
 
 Run one YAML-configured extrapolation.
 
@@ -12,7 +14,7 @@ Run one YAML-configured extrapolation.
 | `--<placeholder>` | optional | Fills `<<placeholder>>` or `<<placeholder;default>>` before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Multiple values are supported for list placeholders such as --z_range 0 150. |
 
 
-## `nf2-extrapolate-series`
+## `nf2 extrapolate-series`
 
 Run a YAML-configured time series.
 
@@ -24,7 +26,7 @@ Run a YAML-configured time series.
 | `--<placeholder>` | optional | Fills `<<placeholder>>` or `<<placeholder;default>>` before YAML parsing. CLI values take precedence, defaults are used when omitted, and missing placeholders without defaults raise an error. Supports glob patterns and multi-value list placeholders. |
 
 
-## `nf2-download`
+## `nf2 download`
 
 Download supported JSOC/HMI data sources.
 
@@ -49,7 +51,7 @@ Download supported JSOC/HMI data sources.
 | `--keep_coordinates` | false | Keep generated latitude/longitude files after full-disk conversion. |
 
 
-## `nf2-export`
+## `nf2 export`
 
 Export NF2 results to exchange formats.
 
@@ -86,7 +88,7 @@ Export NF2 results to exchange formats.
 | `--overwrite` | false | Replace existing series export files. |
 
 
-## `nf2-metrics`
+## `nf2 metrics`
 
 Print standard NLFF quality metrics.
 
@@ -107,7 +109,7 @@ Print standard NLFF quality metrics.
 | `--longitude_range` | 0 360 | Spherical longitude range in degrees. |
 
 
-## `nf2-noaa-to-sharp`
+## `nf2 noaa-to-sharp`
 
 Resolve NOAA active-region numbers to SHARP/HARP numbers through JSOC metadata.
 

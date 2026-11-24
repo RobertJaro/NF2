@@ -12,7 +12,7 @@ This guide has two paths:
 First download a SHARP CEA vector time sequence from JSOC. Fill in your JSOC email and either a SHARP number or NOAA number.
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_sharp \
   --download_dir "./data/sharp_cea_377" \
   --email "you@example.org" \
@@ -37,7 +37,7 @@ ls ./data/sharp_cea_377/*.Bp.fits | head
 Run one complete single extrapolation for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea_377_initial" \
   --work_path "./runs/sharp_cea_377_initial/work" \
@@ -54,7 +54,7 @@ The `--Br_err`, `--Bt_err`, and `--Bp_err` arguments are optional. If you omit t
 Then start the SHARP CEA series by filling the placeholders in `nf2/cartesian/sharp_cea_series.yaml`:
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/sharp_cea_series.yaml" \
   --run_path "./runs/sharp_cea_377_series" \
   --work_path "./runs/sharp_cea_377_series/work" \
@@ -95,7 +95,7 @@ ls ./data/multi_height/chromosphere/*B_los.fits | head
 Run one complete single extrapolation for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/multi_height.yaml" \
   --run_path "./runs/multi_height_initial" \
   --work_path "./runs/multi_height_initial/work" \
@@ -110,7 +110,7 @@ nf2-extrapolate \
 Then run the series with glob patterns:
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --work_path "./runs/multi_height_series/work" \
@@ -189,7 +189,7 @@ training:
 Then run the copied config without per-component pattern arguments:
 
 ```bash
-nf2-extrapolate-series --config "./my_multi_height_series.yaml"
+nf2 extrapolate-series --config "./my_multi_height_series.yaml"
 ```
 
 List notation also accepts directories or glob dictionaries as list items, but explicit file dictionaries are the safest option when component names, timestamps, or observing cadences do not sort cleanly.
@@ -199,7 +199,7 @@ The series templates validate and log every 10th dataset by default while still 
 ## Export A Finished Series
 
 ```bash
-nf2-export "./runs/multi_height_series/*.nf2" \
+nf2 export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
   --Mm_per_pixel 0.72 \

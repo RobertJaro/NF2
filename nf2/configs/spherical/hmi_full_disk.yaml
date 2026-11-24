@@ -107,6 +107,7 @@ losses:
 loss_scaling:
   - type: b_height
     name: b_height
+    detach: true
     loss_ids: [force_free, potential_top, energy_gradient]
     power: 2
   - type: radial

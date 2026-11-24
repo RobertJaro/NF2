@@ -59,9 +59,12 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | data.sampler.type | height \| default | height | Cartesian random sampler type. |
 | data.sampler.batch_size | int | 16384 in examples | Cartesian random sampler batch size. |
 | data.samplers | list[dict] | random_radial_grouped | Spherical physics sampling datasets. |
-| data.samplers[].id | str | random | Spherical sampler id used by losses. |
-| data.samplers[].type | random_radial_grouped \| random_spherical \| random_fixed_radius | random_radial_grouped | Spherical random sampler type. |
+| data.samplers[].id | str | source_surface for random_source_surface_boundary, otherwise random | Spherical sampler ID used by losses. Training boundaries and samplers must have distinct IDs. |
+| data.samplers[].type | random_radial_grouped \| random_spherical \| random_fixed_radius \| random_source_surface_volume \| random_source_surface_boundary | random_radial_grouped | Spherical random sampler type. |
 | data.samplers[].batch_size | int | data.batch_size | Spherical random sampler batch size. |
+| data.samplers[].reference_map | str \| dict | optional | FITS map used to derive Carrington latitude/longitude sampling bounds. |
+| data.samplers[].reference_map.file | str | required for dict form | FITS file whose finite pixels define the angular sampling bounds. |
+| data.samplers[].reference_map.mu_filter | float \| dict | optional | Restrict bound extraction by the map's heliocentric mu value. |
 | data.potential_boundary | dict | FFT potential | Cartesian potential boundary data. Use type: none to disable. |
 | data.potential_boundary.id | str | ignored | Accepted for readability; normalized away because the runtime id is `potential`. |
 | data.potential_boundary.type | potential \| potential_top \| none | potential | Potential side/top boundary mode. |
@@ -81,7 +84,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| model.field | vector_potential \| open_vector_potential \| open_scaled_vector_potential \| scaled_vector_potential \| source_surface_vector_potential \| fixed_source_surface_vector_potential \| b | vector_potential | Field representation. |
+| model.field | vector_potential \| open_vector_potential \| open_scaled_vector_potential \| scaled_vector_potential \| free_boundary_vector_potential \| source_surface_vector_potential \| fixed_source_surface_vector_potential \| b | vector_potential | Field representation. |
 | model.network.type | siren | siren | Only SIREN networks are supported. |
 | model.network.hidden_dim | int | 256 cartesian, 512 spherical | SIREN hidden width. |
 | model.network.layers | int | model default | Number of SIREN layers. |
@@ -91,6 +94,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | model.coordinate_radial_power | float | 4.0 | Radial power for compressing SIREN input coordinates in scaled models, applied as `coords * (r / R_sun)^-coordinate_radial_power`. |
 | model.base_radius | float | R_sun in model units | Reference radius for `scaled_vector_potential`; omit for spherical runs. |
 | model.source_surface.height_range | list[float] | [2.0, 2.5] | Allowed learned source-surface radius range in solar radii. |
+| model.source_surface.initial_radius | float | midpoint of height_range | Initial spherical radius for free_boundary_vector_potential; strictly inside height_range. |
 | model.source_surface.height | float | 2.0 | Fixed source-surface radius in solar radii for fixed_source_surface_vector_potential. |
 | model.source_surface.hidden_dim | int | 64 | Hidden width of the source-surface height SIREN. |
 | model.source_surface.layers | int | 3 | Number of source-surface height SIREN layers. |
@@ -104,6 +108,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
+| training.validation_radial_extension | bool | true | Evaluate the free-boundary exterior as a radial inverse-square continuation during validation; training stays raw. |
 | training.epochs | int | 15 | Number of Lightning epochs. |
 | training.optimizer.type | adam \| soap | adam | Optimizer implementation. SOAP uses zero weight decay. |
 | training.optimizer.start | float | 5e-4 | Initial learning rate. |
@@ -122,8 +127,10 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
+| losses[].target_radius | float | 2.2 | Expected solid-angle mean radius in solar radii for source_surface_mean. |
+| losses[].radius_scale | float | 0.2 | Mean-radius deviation scale in solar radii for the quartic source_surface_mean prior. |
 | losses | list[dict] | geometry default | Training objective terms. Omit to use geometry-specific defaults. |
-| losses[].type | str | geometry default | Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, source_surface_transition_radial, min_height, energy_gradient, energy, sigma_j. |
+| losses[].type | str | geometry default | Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, source_surface_height, source_surface_mean, source_surface_transition_radial, min_height, energy_gradient, energy, sigma_j. |
 | losses[].name | str | type | Stable logging and scaling identifier. |
 | losses[].weight | float \| schedule | required when explicit | Loss weight. The legacy lambda key is not accepted. |
 | losses[].weight.type | exponential \| linear \| step | exponential | Schedule type when `weight` is a mapping. |
@@ -142,6 +149,7 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | loss_scaling[].base_radius | float | 1.1 radial default | Solar-radius baseline for radial scaling. |
 | loss_scaling[].max_radius | float \| null | none | Optional outer radius used to normalize radial scaling. |
 | loss_scaling[].power | float | module default | Exponent used by b_height or potential_fit scaling. |
+| loss_scaling[].detach | bool | true | Detach the b_height field-strength normalizer during backpropagation. Set false to differentiate through it. |
 
 ## Callbacks And Transforms
 

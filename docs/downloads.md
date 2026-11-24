@@ -1,6 +1,6 @@
 # Downloading Data
 
-`nf2-download` provides a single command with source-specific download modes.
+`nf2 download` provides a single command with source-specific download modes.
 
 Most download modes use JSOC. Use the email address registered with JSOC, make sure DRMS/JSOC access works in the active Python environment, and expect large full-disk or time-series requests to take longer than a local file copy. After each download, check that every required component exists before starting NF2:
 
@@ -15,7 +15,7 @@ For a single extrapolation, each component should resolve to one matching time s
 ## SHARP CEA
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_sharp \
   --download_dir "./data/sharp_cea_377" \
   --email "you@example.org" \
@@ -28,10 +28,10 @@ nf2-download \
 ```
 
 Use `--noaa_num` instead of `--sharp_num` when the NOAA active-region number should be resolved through JSOC metadata.
-To inspect the mapping directly, use `nf2-noaa-to-sharp`:
+To inspect the mapping directly, use `nf2 noaa-to-sharp`:
 
 ```bash
-nf2-noaa-to-sharp \
+nf2 noaa-to-sharp \
   --time 2011-02-15T00:00:00 \
   --email "you@example.org" \
   --noaa_nums 11158
@@ -42,7 +42,7 @@ SHARP CEA runs usually need `Br`, `Bt`, and `Bp`. Error maps `Br_err`, `Bt_err`,
 ## HMI Full Disk
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_full_disk \
   --download_dir "./data/hmi_spherical/full_disk" \
   --email "you@example.org" \
@@ -57,7 +57,7 @@ Use the converted Br/Bt/Bp products for the spherical example configs. If full-d
 ## HMI Synoptic
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \
@@ -71,7 +71,7 @@ Use `--carrington_rotation` to select the rotation explicitly, or `--t_start` to
 Download the polar-filled radial-field product with:
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \

@@ -34,7 +34,7 @@ data:
 Fill the placeholders from the command line:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config nf2/spherical/hmi_full_disk.yaml \
   --run_path ./runs/hmi_spherical \
   --work_path ./runs/hmi_spherical/work \
@@ -73,7 +73,7 @@ Spherical runs combine full-disk HMI vector data with synoptic maps and train in
 This command downloads a full-disk vector field and converts it to spherical Br/Bt/Bp components through JSOC's `HmiB2ptr` processing step.
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_full_disk \
   --download_dir "./data/hmi_spherical/full_disk" \
   --email "you@example.org" \
@@ -84,7 +84,7 @@ nf2-download \
 ### 2. Download Carrington Synoptic Maps
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \
@@ -100,7 +100,7 @@ You can also pass `--carrington_rotation` directly. Use `--synoptic_product mr_p
 Fill the placeholders with the downloaded files. The full-disk error placeholders point to optional uncertainty maps; omit the `--full_disk_*_err` arguments if those files are not available.
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_hmi" \
   --work_path "./runs/spherical_hmi/work" \
@@ -222,6 +222,12 @@ interior contribution decay faster. Coordinate compression is disabled by
 default. The two potentials are combined before a single curl. Pair the model
 with an explicit `random_fixed_radius` sampler and a `radial` loss on that
 sampler.
+
+The `radial` loss is `mean(|B cross r_hat|) / max(stopgrad(mean(|B|)), B_floor)`,
+where magnitudes are Euclidean norms and `B_floor` defaults to 0.01 G
+(`floor_gauss`). The normalization uses the whole loss batch and is detached
+from autograd. Both radial polarities satisfy the loss; it does not prescribe
+the amount of open flux.
 
 ```yaml
 data:

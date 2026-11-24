@@ -10,10 +10,11 @@ from lightning.pytorch import LightningModule
 from torch import nn
 from torch.optim.lr_scheduler import ExponentialLR
 
+from nf2.evaluation.field import evaluate_field
 from nf2.train.loss import loss_module_mapping
 from nf2.train.loss_scaling import ExponentialLossScalingModule, PotentialFitLossScalingModule, \
     BHeightLossScalingModule, RadialLossScalingModule
-from nf2.train.model import BModel, FixedSourceSurfaceVectorPotentialModel, OpenScaledVectorPotentialModel, \
+from nf2.train.model import FreeBoundaryVectorPotentialModel, BModel, FixedSourceSurfaceVectorPotentialModel, OpenScaledVectorPotentialModel, \
     OpenVectorPotentialModel, ScaledVectorPotentialModel, SourceSurfaceVectorPotentialModel, VectorPotentialModel
 from nf2.train.soap import SOAP
 from nf2.train.transform import HeightRangeTransformModel, AzimuthTransformModel, OpticalDepthTransformModel, \
@@ -24,7 +25,7 @@ class NF2Module(LightningModule):
 
     def __init__(self, validation_mapping, data_config, model_kwargs=None, loss_config=None,
                  lr_params={"start": 5e-4, "end": 5e-5, "iterations": 1e5},
-                 transforms=[], loss_scaling=[], meta_path=None, **kwargs):
+                 transforms=[], loss_scaling=[], meta_path=None, validation_radial_extension=True, **kwargs):
         """
         The main module for training the neural field model.
     
@@ -35,7 +36,8 @@ class NF2Module(LightningModule):
             model_kwargs (dict, optional): Model configuration dictionary containing:
                 - type (str): Model type, one of ['b', 'vector_potential', 'open_vector_potential',
                   'open_scaled_vector_potential', 'scaled_vector_potential',
-                  'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
+                  'source_surface_vector_potential', 'fixed_source_surface_vector_potential',
+                             'free_boundary_vector_potential']
                 - dim (int): Hidden dimension size of the neural network
                 Additional model-specific parameters
             loss_config (list, optional): List of dictionaries containing loss configurations:
@@ -82,6 +84,9 @@ class NF2Module(LightningModule):
         elif model_type == 'scaled_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = ScaledVectorPotentialModel(**model_kwargs)
+        elif model_type == 'free_boundary_vector_potential':
+            model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
+            model = FreeBoundaryVectorPotentialModel(**model_kwargs)
         elif model_type == 'source_surface_vector_potential':
             model_kwargs.setdefault('Mm_per_ds', Mm_per_ds)
             model = SourceSurfaceVectorPotentialModel(**model_kwargs)
@@ -91,7 +96,8 @@ class NF2Module(LightningModule):
         else:
             valid_options = ['b', 'vector_potential', 'open_vector_potential',
                              'open_scaled_vector_potential', 'scaled_vector_potential',
-                             'source_surface_vector_potential', 'fixed_source_surface_vector_potential']
+                             'source_surface_vector_potential', 'fixed_source_surface_vector_potential',
+                             'free_boundary_vector_potential']
             raise ValueError(f"Invalid model: {model_type}, must be in {valid_options}")
 
         # init coordinate mapping model
@@ -130,6 +136,7 @@ class NF2Module(LightningModule):
         self.weights = nn.ParameterDict(weights)
 
         self.model = model
+        self.validation_radial_extension = validation_radial_extension
         self.validation_mapping = validation_mapping
         self.lr_params = lr_params
 
@@ -146,7 +153,8 @@ class NF2Module(LightningModule):
                                                                            Mm_per_ds=Mm_per_ds, Gauss_per_dB=Gauss_per_dB)
             elif scaling_type == 'b_height':
                 name = 'B_height_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
-                loss_scaling_modules[name] = BHeightLossScalingModule(**scaling_config, name=name)
+                loss_scaling_modules[name] = BHeightLossScalingModule(**scaling_config, name=name,
+                                                                    Gauss_per_dB=Gauss_per_dB)
             elif scaling_type == 'radial':
                 name = 'radial_scaling' if 'name' not in scaling_config else scaling_config.pop('name')
                 loss_scaling_modules[name] = RadialLossScalingModule(**scaling_config, name=name, Mm_per_ds=Mm_per_ds)
@@ -323,6 +331,13 @@ class NF2Module(LightningModule):
         # transform batch
         self.apply_transforms(batch)
 
+        # Surface-dependent coordinates stay connected to the height network.
+        for state in batch.values():
+            if 'source_surface_fraction' in state:
+                if not isinstance(self.model, FreeBoundaryVectorPotentialModel):
+                    raise ValueError('Source-surface samplers require free_boundary_vector_potential.')
+                state.update(self.model.map_samples(state))
+
         # Existing-coordinate transforms may replace their coordinate tensors.
         for k in loader_keys:
             if 'coords' in batch[k]:
@@ -365,7 +380,7 @@ class NF2Module(LightningModule):
         total_loss = sum([self.weights[k] * loss_dict[k] for k in loss_dict.keys()])
 
         diagnostics = {}
-        if isinstance(self.model, SourceSurfaceVectorPotentialModel):
+        if isinstance(self.model, (SourceSurfaceVectorPotentialModel, FreeBoundaryVectorPotentialModel)):
             surface_radii = [
                 result_mapping[key]['source_surface_radius']
                 for key in loader_keys
@@ -455,7 +470,8 @@ class NF2Module(LightningModule):
                     batch[k] = v
 
         coords = batch['coords']
-        model_out = self.model(coords)
+        model_out = evaluate_field(
+            self.model, coords, radial_extension=self.validation_radial_extension)
 
         jac_matrix = model_out['jac_matrix']
         dBx_dx = jac_matrix[:, 0, 0]

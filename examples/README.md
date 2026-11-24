@@ -2,7 +2,7 @@
 
 This directory collects runnable NF2 examples for command-line runs, reusable YAML configuration templates, and notebooks. The examples are intended to be copied, edited, and reused with local data paths.
 
-Most YAML files use `<<...>>` placeholders so one template can be reused with different input files, scratch paths, and output directories. The placeholders can be filled from the command line with `nf2-extrapolate` or replaced directly in a local copy of the YAML file. Spherical series configs can also use `[[dataset.path.to.value]]` references for values resolved during dataset loading, such as the current time step's `[[full_disk.files.Br]]`.
+Most YAML files use `<<...>>` placeholders so one template can be reused with different input files, scratch paths, and output directories. The placeholders can be filled from the command line with `nf2 extrapolate` or replaced directly in a local copy of the YAML file. Spherical series configs can also use `[[dataset.path.to.value]]` references for values resolved during dataset loading, such as the current time step's `[[full_disk.files.Br]]`.
 
 Start from the repository root:
 
@@ -74,7 +74,7 @@ The notebooks are useful when you want a guided, editable run instead of command
 
 ## Export And Metrics
 
-After training, use `nf2-export` to write VTK, NPZ, or HDF5 products, and `nf2-metrics` to evaluate extrapolation quality.
+After training, use `nf2 export` to write VTK, NPZ, or HDF5 products, and `nf2 metrics` to evaluate extrapolation quality.
 
 Guide: [scripts/export_metrics.md](scripts/export_metrics.md)
 
@@ -83,7 +83,7 @@ Typical quality checks include boundary agreement, `divB`, current-weighted `the
 ## Common Usage Pattern
 
 1. Choose the closest YAML template in [../nf2/configs](../nf2/configs).
-2. Copy the template or pass placeholder values with `nf2-extrapolate`.
+2. Copy the template or pass placeholder values with `nf2 extrapolate`.
 3. Set `run_path` to a writable output directory, usually under `runs/`.
 4. Keep the produced `extrapolation_result.nf2`; it is the main input for exports and metrics.
 5. For series runs, first train the initial single extrapolation and then use its `last.ckpt` as `meta_path`.
@@ -91,7 +91,7 @@ Typical quality checks include boundary agreement, `divB`, current-weighted `the
 Example placeholder invocation:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config nf2/cartesian/minimal_fits.yaml \
   --run_path ./runs/minimal \
   --Br ./data/Br.fits \

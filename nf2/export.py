@@ -191,10 +191,10 @@ def export_series(
     return outputs
 
 
-def main():
+def main(argv=None, *, prog=None):
     from nf2.evaluation.output_metrics import metric_mapping
 
-    parser = argparse.ArgumentParser(description="Export NF2 extrapolation results.")
+    parser = argparse.ArgumentParser(prog=prog, description="Export NF2 extrapolation results.")
     parser.add_argument("nf2_path", nargs="+", help="NF2 file path or glob pattern")
     parser.add_argument(
         "--format",
@@ -243,7 +243,7 @@ def main():
     tracing.add_argument("--trace-batch-size", type=int, default=65_536)
     tracing.add_argument("--q-method", choices=["tangent", "perturbed"], default="tangent")
     tracing.add_argument("--q-epsilon-Mm", type=float, default=None)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     trace_config = {
         "method": args.trace_method,

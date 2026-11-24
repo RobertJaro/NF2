@@ -21,9 +21,38 @@ Dataset entries are used under `data.boundaries`, `data.validation`, `data.sampl
 | random_radial_grouped | spherical sampler | Grouped radial samples in the spherical volume. |
 | random_spherical | spherical sampler | Ungrouped random samples in the spherical volume. |
 | random_fixed_radius | spherical sampler | Area-uniform random samples on one spherical radial shell. |
+| random_source_surface_volume | spherical sampler | Uniform fractional-radius samples below learned Rss; mapped on device. |
+| random_source_surface_boundary | spherical sampler | Uniform solid-angle samples mapped to the learned Rss boundary. |
 | fits_reference | spherical validation | Reference spherical FITS comparison dataset. |
 | sphere | spherical validation | Spherical validation grid for field-quality callbacks. |
 | spherical_slices | spherical validation | Radial or angular slices for spherical visualization callbacks. |
+
+## `random_source_surface_volume`
+
+Role: spherical sampler.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| batch_size | int | data.batch_size | Samples per batch, divisible by n_lat_lon_sample. |
+| n_lat_lon_sample | int | 128 | Number of directions per shared fractional height. |
+| radial_sampling_exponent | float | 1 | Exponent of uniform u in r=1+u*(Rss-1); 1 gives uniform radial fractions. |
+| latitude_range | list[float] | [-90, 90] | Angular limits in degrees unless unit is changed. |
+| longitude_range | list[float] | [0, 360] | Angular limits in degrees unless unit is changed. |
+| reference_map | str \| dict | optional | Derive angular bounds from finite map pixels. |
+| length | int \| null | data.iterations | Number of batches per epoch. |
+| requires_jacobian | bool | true | Enable field derivatives for interior physics losses. |
+
+## `random_source_surface_boundary`
+
+Role: spherical sampler.
+
+| Key | Type | Default | Description |
+| --- | --- | --- | --- |
+| batch_size | int | data.batch_size | Learned boundary samples per batch. |
+| latitude_range | list[float] | [-90, 90] | Angular limits in degrees unless unit is changed. |
+| longitude_range | list[float] | [0, 360] | Angular limits in degrees unless unit is changed. |
+| length | int \| null | data.iterations | Number of batches per epoch. |
+| requires_jacobian | bool | false | Radiality uses B; curl(A) and surface gradients remain enabled. |
 
 ## `analytical`
 
@@ -184,6 +213,7 @@ Role: spherical sampler.
 | batch_size | int | 16384 in examples | Random spherical volume samples per batch. |
 | n_lat_lon_sample | int | 128 | Number of angular samples; `batch_size` must be divisible by this value. |
 | radial_sampling_exponent | float | 1 | Bias radial samples when greater than 1. |
+| reference_map | str \| dict | optional | FITS map used to derive Carrington angular bounds; dict form accepts `file` and optional `mu_filter`. |
 | latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
 | longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
 | length | int \| null | data.iterations | Internal sampler length; public YAML should usually use data.iterations. |
@@ -196,6 +226,7 @@ Role: spherical sampler.
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
 | batch_size | int | data.batch_size | Random spherical volume samples per batch. |
+| reference_map | str \| dict | optional | FITS map used to derive Carrington angular bounds; dict form accepts `file` and optional `mu_filter`. |
 | latitude_range | list[float] | [-90, 90] | Latitude range in degrees unless `unit` is changed. |
 | longitude_range | list[float] | [0, 360] | Longitude range in degrees unless `unit` is changed. |
 | length | int \| null | data.iterations | Internal sampler length; public YAML should usually use data.iterations. |

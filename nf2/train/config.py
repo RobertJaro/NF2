@@ -20,6 +20,22 @@ def normalize_config(config: dict) -> dict:
 
     data = _normalize_data(config.pop("data", {}))
     model = _normalize_model(config.pop("model", None), data["type"])
+    surface_samplers = [s for s in data.get("samplers", [])
+                        if s["type"] in {"random_source_surface_volume", "random_source_surface_boundary"}]
+    if any('radius' in s or 'radius_range' in s for s in surface_samplers):
+        raise ValueError('Source-surface samplers use learned Rss; omit radius and radius_range.')
+    if surface_samplers and model["type"] != "free_boundary_vector_potential":
+        raise ValueError('Source-surface samplers require model.field: free_boundary_vector_potential.')
+    if model["type"] == "free_boundary_vector_potential":
+        surface = model.get("source_surface", {})
+        bounds = surface.get("height_range", [1.5, 2.5])
+        if len(bounds) != 2 or not 1 < bounds[0] < bounds[1]:
+            raise ValueError('Free boundary height_range must satisfy 1 < min < max.')
+        if bounds[1] > data.get("max_radius", 1.3):
+            raise ValueError('data.max_radius must cover source_surface.height_range.')
+        if {s["type"] for s in surface_samplers} != {
+                "random_source_surface_volume", "random_source_surface_boundary"}:
+            raise ValueError('Free boundary requires both source-surface volume and boundary samplers.')
     transforms = _normalize_dataset_refs(config.pop("transforms", []))
     losses = _normalize_losses(config.pop("losses", None), data["type"], data)
     callbacks = _normalize_callbacks(config.pop("callbacks", None), data["type"], data)
@@ -135,8 +151,16 @@ def _normalize_spherical_data(data):
         raise ValueError("Spherical configs require data.boundaries with at least one boundary dataset.")
     if not samplers:
         samplers = [_normalize_dataset_config({"id": "random", "type": "random_radial_grouped"}, role="sampler")]
+    training_ids = set()
+    for dataset in [*boundaries, *samplers]:
+        dataset_id = dataset["id"]
+        if dataset_id in training_ids:
+            raise ValueError(f"Duplicate spherical training dataset ID '{dataset_id}'. "
+                             "Assign distinct IDs to boundaries and samplers.")
+        training_ids.add(dataset_id)
     for sampler in samplers:
-        if sampler.get("type") in {"random_spherical", "random_radial_grouped", "random_fixed_radius"}:
+        if sampler.get("type") in {"random_spherical", "random_radial_grouped", "random_fixed_radius",
+                                   "random_source_surface_volume", "random_source_surface_boundary"}:
             sampler.setdefault("length", iterations)
 
     validation = data.pop("validation", None)
@@ -160,11 +184,11 @@ def _normalize_model(model, geometry):
     model = deepcopy(model or {})
     field = model.pop("field", "vector_potential")
     if field not in {"b", "vector_potential", "open_vector_potential", "open_scaled_vector_potential",
-                     "scaled_vector_potential",
+                     "scaled_vector_potential", "free_boundary_vector_potential",
                      "source_surface_vector_potential", "fixed_source_surface_vector_potential"}:
         raise ValueError(
             "model.field must be 'b', 'vector_potential', 'open_vector_potential', "
-            "'open_scaled_vector_potential', 'scaled_vector_potential', "
+            "'open_scaled_vector_potential', 'scaled_vector_potential', 'free_boundary_vector_potential', "
             "'source_surface_vector_potential', or 'fixed_source_surface_vector_potential'.")
 
     source_surface = model.pop("source_surface", None)
@@ -176,6 +200,14 @@ def _normalize_model(model, geometry):
             raise ValueError(f"model.source_surface is not used by {field}.")
         if open_field is not None:
             model["open_field"] = open_field
+    elif field == "free_boundary_vector_potential":
+        if geometry != "spherical":
+            raise ValueError('free_boundary_vector_potential requires spherical geometry.')
+        if open_field is not None:
+            raise ValueError('free_boundary_vector_potential does not use model.open_field.')
+        source_surface = deepcopy(source_surface or {})
+        if source_surface.pop("type", "siren") != "siren":
+            raise ValueError('Only SIREN source-surface height models are supported.')
     elif field == "source_surface_vector_potential":
         if geometry != "spherical":
             raise ValueError("model.field: source_surface_vector_potential requires spherical geometry.")
@@ -256,7 +288,7 @@ def _default_losses(geometry, data):
     boundary_ids = [cfg["id"] for cfg in data["boundaries"] if cfg["type"] == "map"]
     volume_sampler_ids = [
         cfg["id"] for cfg in data.get("samplers", [])
-        if cfg["type"] in {"random_spherical", "random_radial_grouped"}
+        if cfg["type"] in {"random_spherical", "random_radial_grouped", "random_source_surface_volume"}
     ]
     volume_sampler_ids = volume_sampler_ids or ["random"]
     losses = [
@@ -265,6 +297,9 @@ def _default_losses(geometry, data):
     ]
     if boundary_ids:
         losses.insert(0, {"type": "boundary", "name": "boundary", "weight": 1.0, "datasets": boundary_ids})
+    surface_ids = [cfg["id"] for cfg in data["samplers"] if cfg["type"] == "random_source_surface_boundary"]
+    if surface_ids:
+        losses.append({"type": "radial", "name": "source_surface_radial", "weight": 1.0e-2, "datasets": surface_ids})
     return losses
 
 
@@ -347,7 +382,7 @@ def _normalize_dataset_config(config, role):
         if role == "boundary":
             config["id"] = "boundary"
         elif role == "sampler":
-            config["id"] = "random"
+            config["id"] = "source_surface" if config["type"] == "random_source_surface_boundary" else "random"
         else:
             config["id"] = f"valid_{config['type']}"
     return config

@@ -1,3 +1,5 @@
+import math
+
 import torch
 from astropy import units as u
 from torch import nn
@@ -89,6 +91,11 @@ class DivergenceLoss(BaseLoss):
 
 
 class RadialLoss(BaseLoss):
+    """Mean transverse magnitude normalized by detached mean field magnitude."""
+
+    def __init__(self, Gauss_per_dB, floor_gauss=0.01, **kwargs):
+        super().__init__(**kwargs)
+        self.floor_b = floor_gauss / Gauss_per_dB
 
     def forward(self, b, coords, *args, **kwargs):
         eps = 1e-8
@@ -98,11 +105,40 @@ class RadialLoss(BaseLoss):
 
         b_cross_r = torch.cross(b, r_hat, dim=-1)
 
-        mean_b2 = torch.sum(b**2, dim=-1).mean().detach().clamp_min(eps)
+        mean_b = b.norm(dim=-1).mean().detach().clamp_min(self.floor_b)
 
-        radial_loss = torch.sum(b_cross_r**2, dim=-1) / mean_b2
+        # The training module takes the mean of these per-sample contributions.
+        radial_loss = b_cross_r.norm(dim=-1) / mean_b
 
         return radial_loss
+
+
+class SourceSurfaceHeightLoss(BaseLoss):
+    """Downward pressure on mean radius, in solar radii above the photosphere."""
+
+    def forward(self, source_surface_radius, **kwargs):
+        return source_surface_radius.squeeze(-1) - 1
+
+
+class SourceSurfaceMeanLoss(BaseLoss):
+    """Quartic prior on the solid-angle mean radius, without a pointwise height prior.
+
+    Apply to uniformly sampled solid-angle directions, e.g. the full-sphere
+    source-surface boundary dataset. Radii and radius_scale are in solar radii.
+    """
+
+    def __init__(self, target_radius=2.2, radius_scale=0.2, **kwargs):
+        super().__init__(**kwargs)
+        self.target_radius = float(target_radius)
+        self.radius_scale = float(radius_scale)
+        if not math.isfinite(self.target_radius) or self.target_radius <= 1:
+            raise ValueError('target_radius must be finite and greater than 1 solar radius.')
+        if not math.isfinite(self.radius_scale) or self.radius_scale <= 0:
+            raise ValueError('radius_scale must be finite and positive.')
+
+    def forward(self, source_surface_radius, **kwargs):
+        mean_radius = source_surface_radius.mean()
+        return ((mean_radius - self.target_radius) / self.radius_scale).pow(4)
 
 
 class SourceSurfaceTransitionRadialLoss(BaseLoss):
@@ -376,6 +412,8 @@ loss_module_mapping = {'boundary': BoundaryLoss, 'boundary_br': BoundaryBrLoss,
                        'divergence': DivergenceLoss, 'force_free': ForceFreeLoss, 'potential': PotentialLoss,
                        'weighted_height': WeightedHeightLoss, 'height': HeightLoss,
                        'NaNs': NaNLoss, 'radial': RadialLoss,
+                       'source_surface_height': SourceSurfaceHeightLoss,
+                       'source_surface_mean': SourceSurfaceMeanLoss,
                        'source_surface_transition_radial': SourceSurfaceTransitionRadialLoss,
                        'source_surface_flux': SourceSurfaceFluxLoss,
                        'min_height': MinHeightLoss, 'energy_gradient': EnergyGradientLoss, 'energy': EnergyLoss,

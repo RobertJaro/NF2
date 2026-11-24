@@ -3,9 +3,9 @@
 Use the unified export command:
 
 ```bash
-nf2-export model.nf2 --format vtk --out model.vtk --metrics j alpha
-nf2-export "series/*.nf2" --format hdf5 --out-dir exports --overwrite
-nf2-export multi_height.nf2 --format height --out height_surfaces.npz
+nf2 export model.nf2 --format vtk --out model.vtk --metrics j alpha
+nf2 export "series/*.nf2" --format hdf5 --out-dir exports --overwrite
+nf2 export multi_height.nf2 --format height --out height_surfaces.npz
 ```
 
 Supported formats:
@@ -23,7 +23,7 @@ Every export includes the magnetic field evaluated from the NF2 checkpoint. The 
 ## Export A Cartesian Result
 
 ```bash
-nf2-export "./runs/sharp_cea_377/extrapolation_result.nf2" \
+nf2 export "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/sharp_cea_377/exports/field.vtk" \
   --Mm_per_pixel 0.72 \
@@ -36,7 +36,7 @@ Use `--format npz` for Python analysis or `--format hdf5` for a portable scienti
 ## Export A Spherical Result
 
 ```bash
-nf2-export "./runs/spherical_hmi/extrapolation_result.nf2" \
+nf2 export "./runs/spherical_hmi/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/spherical_hmi/exports/field.vtk" \
   --metrics j alpha energy spherical_energy_gradient
@@ -47,7 +47,7 @@ Spherical checkpoints currently export through VTK only. Spherical VTK files inc
 ## Export A Series
 
 ```bash
-nf2-export "./runs/multi_height_series/*.nf2" \
+nf2 export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
   --Mm_per_pixel 0.72 \
@@ -64,7 +64,7 @@ Height-surface exports use `--Mm_per_pixel` and require a checkpoint with a heig
 Pass one or more names after `--metrics`:
 
 ```bash
-nf2-export "./runs/case/extrapolation_result.nf2" \
+nf2 export "./runs/case/extrapolation_result.nf2" \
   --format npz \
   --out "./runs/case/field.npz" \
   --Mm_per_pixel 0.72 \
@@ -102,7 +102,7 @@ exported field cube. Field-line quantities requested together share one central
 forward/backward trace.
 
 ```bash
-nf2-export model.nf2 --format hdf5 --out topology.hdf5 \
+nf2 export model.nf2 --format hdf5 --out topology.hdf5 \
   --metrics squashing_factor twist_number fieldline_length \
             integrated_current_density fieldline_geometry \
   --trace-method rk4 --trace-step-Mm 0.25 \

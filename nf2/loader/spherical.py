@@ -11,6 +11,7 @@ from lightning.pytorch import LightningDataModule
 
 from nf2.data.dataset import (
     RandomFixedRadiusCoordinateDataset, RandomRadialGroupedCoordinateDataset,
+    RandomSourceSurfaceBoundaryDataset, RandomSourceSurfaceVolumeDataset,
     RandomSphericalCoordinateDataset, SphereDataset, SphereSlicesDataset,
 )
 from nf2.loader.base import BaseDataModule, DEFAULT_NUM_WORKERS
@@ -29,6 +30,8 @@ class SphericalDataModule(BaseDataModule):
                  batch_size=4096, iterations=None, type=None, geometry=None, overview_id=None, **kwargs):
 
         self.ds_mapping = {'map': SphericalMapDataset,
+                           'random_source_surface_volume': RandomSourceSurfaceVolumeDataset,
+                           'random_source_surface_boundary': RandomSourceSurfaceBoundaryDataset,
                            'fits_reference': SphericalFITSReferenceDataset,
                            'random_spherical': RandomSphericalCoordinateDataset,
                            'random_fixed_radius': RandomFixedRadiusCoordinateDataset,
@@ -77,17 +80,25 @@ class SphericalDataModule(BaseDataModule):
             config = deepcopy(config)
             c_type = config.pop('type')
             c_name = config.pop('id') if 'id' in config else f'{prefix}_{c_type}_{i}'
-            default_requires_jacobian = c_type != 'random_fixed_radius'
+            if c_name in datasets:
+                raise ValueError(f"Duplicate spherical {prefix} dataset ID '{c_name}'.")
+            default_requires_jacobian = c_type not in {'random_fixed_radius', 'random_source_surface_boundary'}
             requires_jacobian = config.pop('requires_jacobian', default_requires_jacobian)
             config['ds_name'] = c_name if self.overview_id is None else f'{self.overview_id}_{c_name}'
-            # update config with general config
+            learned_surface = c_type in {'random_source_surface_volume', 'random_source_surface_boundary'}
+            if learned_surface and ('radius' in config or 'radius_range' in config):
+                raise ValueError('Source-surface samplers use learned Rss; omit radius and radius_range.')
+            # Learned-domain samplers have no fixed physical radial interval.
             for k, v in general_config.items():
+                if learned_surface and k in {'radius', 'radius_range'}:
+                    continue
                 if k not in config:
                     config[k] = v
-            if c_type in ['random_spherical', 'random_radial_grouped', 'random_fixed_radius']:
+            if c_type in ['random_spherical', 'random_radial_grouped', 'random_fixed_radius',
+                          'random_source_surface_volume', 'random_source_surface_boundary']:
                 if self.iterations is not None and 'length' not in config:
                     config['length'] = self.iterations
-                if c_type in ['random_spherical', 'random_radial_grouped']:
+                if c_type in ['random_spherical', 'random_radial_grouped', 'random_source_surface_volume']:
                     self._apply_random_reference_map(config)
             config['requires_jacobian'] = requires_jacobian
             os.makedirs(config['work_path'], exist_ok=True)
@@ -233,7 +244,7 @@ class SphericalSeriesDataModule(LightningDataModule):
 
         if self.iterations is not None:
             for c in configs:
-                if c['type'] in ['random_spherical', 'random_radial_grouped'] and 'length' not in c:
+                if c['type'] in ['random_spherical', 'random_radial_grouped', 'random_source_surface_volume'] and 'length' not in c:
                     c['length'] = self.iterations
         return configs
 

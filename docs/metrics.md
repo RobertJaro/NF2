@@ -1,9 +1,9 @@
 # Quality Metrics
 
-`nf2-metrics` prints a standard set of NLFF quality metrics for Cartesian and spherical checkpoints.
+`nf2 metrics` prints a standard set of NLFF quality metrics for Cartesian and spherical checkpoints.
 
 ```bash
-nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" \
+nf2 metrics "./runs/sharp_cea/extrapolation_result.nf2" \
   --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
@@ -11,7 +11,7 @@ nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" \
 For spherical checkpoints, choose the sample grid explicitly:
 
 ```bash
-nf2-metrics "./runs/spherical/extrapolation_result.nf2" \
+nf2 metrics "./runs/spherical/extrapolation_result.nf2" \
   --spherical_sampling 32 64 128 \
   --radius_range 1.0 1.3 \
   --latitude_range -60 60
@@ -24,7 +24,7 @@ Use the same sampling ranges when comparing runs. Metrics depend on the evaluate
 ## Cartesian Quality Metrics
 
 ```bash
-nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
+nf2 metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
@@ -32,7 +32,7 @@ nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
 ## Spherical Quality Metrics
 
 ```bash
-nf2-metrics "./runs/spherical_hmi/extrapolation_result.nf2" \
+nf2 metrics "./runs/spherical_hmi/extrapolation_result.nf2" \
   --spherical_sampling 32 64 128 \
   --radius_range 1.0 1.3 \
   --latitude_range -60 60

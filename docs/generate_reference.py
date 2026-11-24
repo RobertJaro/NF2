@@ -75,7 +75,12 @@ def generate(root: str | Path):
 
     (target / "datasets_reference.md").write_text(_dataset_sections(), encoding="utf-8")
 
-    cli_sections = ["# CLI Reference\n"]
+    cli_sections = [
+        "# CLI Reference\n",
+        "NF2 installs a single `nf2` command. Use `nf2 --help` to list subcommands "
+        "and `nf2 <command> --help` for command options. "
+        "The same interface is available as `python -m nf2 <command>`.\n",
+    ]
     for command, summary, options in CLI_COMMANDS:
         cli_sections.append(f"## `{command}`\n\n{summary}\n\n")
         cli_sections.append(_table(["Option", "Default", "Description"], options))

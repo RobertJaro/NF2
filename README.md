@@ -59,10 +59,13 @@ See the online [installation guide](https://nf2.readthedocs.io/en/latest/install
 
 ## Quick Start
 
+All commands use `nf2 <command>`. Run `nf2 --help` to list commands and
+`nf2 <command> --help` for command options. You can also use `python -m nf2 <command>`.
+
 Run an extrapolation from a YAML configuration:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config nf2/cartesian/sharp_cea.yaml \
   --run_path "./runs/ar377" \
   --work_path "/scratch/ar377" \
@@ -76,7 +79,7 @@ Bundled Cartesian configs default to `z_range: [0, 100]` and `force_free_weight:
 Download HMI SHARP data:
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_sharp \
   --download_dir "./data/sharp" \
   --email "you@example.org" \
@@ -87,7 +90,7 @@ nf2-download \
 Export a trained extrapolation:
 
 ```bash
-nf2-export \
+nf2 export \
   "path/to/extrapolation_result.nf2" \
   --format vtk \
   --out "path/to/field.vtk" \
@@ -98,7 +101,7 @@ nf2-export \
 Print standard NLFF quality metrics:
 
 ```bash
-nf2-metrics \
+nf2 metrics \
   "path/to/extrapolation_result.nf2" \
   --Mm_per_pixel 0.72 \
   --height_range 0 80
@@ -107,7 +110,7 @@ nf2-metrics \
 Run a time series or parameter series:
 
 ```bash
-nf2-extrapolate-series --config "path/to/series.yaml"
+nf2 extrapolate-series --config "path/to/series.yaml"
 ```
 
 ## Python API

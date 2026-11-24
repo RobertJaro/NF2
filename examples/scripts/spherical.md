@@ -11,7 +11,7 @@ nf2/spherical/hmi_full_disk.yaml
 This command downloads a full-disk vector field and converts it to spherical Br/Bt/Bp components through JSOC's `HmiB2ptr` processing step.
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_full_disk \
   --download_dir "./data/hmi_spherical/full_disk" \
   --email "you@example.org" \
@@ -22,7 +22,7 @@ nf2-download \
 ## 2. Download Carrington Synoptic Maps
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_synoptic \
   --download_dir "./data/hmi_spherical/synoptic" \
   --email "you@example.org" \
@@ -38,7 +38,7 @@ You can also pass `--carrington_rotation` directly. Use `--synoptic_product mr_p
 Fill the placeholders with the downloaded files. The full-disk error placeholders point to optional uncertainty maps; omit the `--full_disk_*_err` arguments if those files are not available.
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_hmi" \
   --work_path "./runs/spherical_hmi/work" \

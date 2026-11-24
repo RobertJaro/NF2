@@ -548,7 +548,7 @@ layer, verify boundaries and convergence, then increase resolution.
 The unified exporter accepts the same metric names:
 
 ```bash
-nf2-export extrapolation_result.nf2 \
+nf2 export extrapolation_result.nf2 \
   --format hdf5 \
   --out topology.hdf5 \
   --metrics squashing_factor twist_number fieldline_length \

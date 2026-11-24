@@ -50,7 +50,7 @@ data:
 Run it with custom files:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config nf2/cartesian/minimal_fits.yaml \
   --run_path ./runs/ar377 \
   --Br ./data/ar377/Br.fits \

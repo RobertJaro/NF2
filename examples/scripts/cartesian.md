@@ -7,7 +7,7 @@ Cartesian runs train a local volume above one or more planar boundary maps. Use 
 First download a SHARP CEA vector magnetogram from JSOC. Fill in your JSOC email and either a SHARP number or NOAA number.
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_sharp \
   --download_dir "./data/sharp_cea_377" \
   --email "you@example.org" \
@@ -22,7 +22,7 @@ nf2-download \
 Then run the SHARP CEA config. The `sharp` dataset reads SHARP CEA maps with map metadata. Error-map arguments are optional; omit `--Br_err`, `--Bt_err`, and `--Bp_err` if those files are not available.
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea_377" \
   --work_path "./runs/sharp_cea_377/work" \
@@ -39,7 +39,7 @@ nf2-extrapolate \
 Use `minimal_fits.yaml` for plain Br/Bt/Bp FITS data arrays without SunPy map metadata. This config uses `type: fits` with `load_map: false`.
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/minimal_fits.yaml" \
   --run_path "./runs/cartesian_minimal" \
   --Br "./data/plain_fits/Br.fits" \
@@ -56,7 +56,7 @@ Use `--z_range z_min z_max` with any Cartesian extrapolation command to adjust t
 Multi-height examples assume you already prepared matching photospheric and chromospheric FITS files. No generic download command is provided because the source instruments and preprocessing are project-specific.
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/multi_height.yaml" \
   --run_path "./runs/multi_height_initial" \
   --work_path "./runs/multi_height_initial/work" \
@@ -74,4 +74,4 @@ Keep this first multi-height run if you plan to start a series. Its `last.ckpt` 
 
 - Reduce `data.sampler.batch_size`, boundary `batch_size`, or validation `batch_size` if training runs out of GPU memory.
 - Use `WANDB_MODE=offline` or `WANDB_MODE=disabled` if you do not want online W&B logging.
-- Run `nf2-metrics` after training to check boundary quality, divergence, current alignment, and magnetic energy.
+- Run `nf2 metrics` after training to check boundary quality, divergence, current alignment, and magnetic energy.

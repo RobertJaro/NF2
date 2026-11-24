@@ -129,13 +129,14 @@ class PotentialFitLossScalingModule(BaseScalingModule):
 
 class BHeightLossScalingModule(BaseScalingModule):
     """
-    Loss scaling based on magnetic field B.
+    Loss scaling based on magnetic field B, with a normalization floor in Gauss.
     """
 
-    def __init__(self, power=2, detach=False, *args, **kwargs):
+    def __init__(self, Gauss_per_dB, power=2, detach=True, floor_gauss=1, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.power = power
         self.detach = detach
+        self.floor = (floor_gauss / Gauss_per_dB) ** power
 
     def forward(self, loss, state):
         """
@@ -151,8 +152,15 @@ class BHeightLossScalingModule(BaseScalingModule):
         b = b.reshape(grouped_coords.shape[0], grouped_coords.shape[1], b.shape[-1])
         loss = loss.reshape(grouped_coords.shape[0], grouped_coords.shape[1])
 
-        b_norm = (b.norm(dim=-1) + 1e-8).pow(self.power)  # (angular samples, radial samples)
-        scaling = b_norm.mean(0, keepdim=True)  # mean across angular samples
+        magnitude = b.norm(dim=-1)
+        if 0 < self.power < 1:
+            # Assign zero gradient at a magnetic null without evaluating the singular power there.
+            null = magnitude == 0
+            powered = magnitude.masked_fill(null, 1).pow(self.power).masked_fill(null, 0)
+        else:
+            powered = magnitude.pow(self.power)
+        scaling = powered.mean(0, keepdim=True)  # mean across angular samples
+        scaling = scaling.clamp_min(self.floor)
         if self.detach:
             scaling = scaling.detach()  # No gradient through scaling
         scaled_loss = loss / scaling

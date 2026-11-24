@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import torch
 
 import nf2
@@ -11,6 +12,7 @@ from nf2.train.loss import (
     ForceFreeLoss, RadialLoss, SourceSurfaceFluxLoss, SourceSurfaceTransitionRadialLoss,
     loss_module_mapping,
 )
+from nf2.train.loss_scaling import BHeightLossScalingModule
 from nf2.train.model import (
     FixedSourceSurfaceVectorPotentialModel, SourceSurfaceVectorPotentialModel, curl,
 )
@@ -146,18 +148,19 @@ def test_source_surface_transition_radial_loss_uses_differentiable_shell_weights
         "source_surface_transition_radial"] is SourceSurfaceTransitionRadialLoss
 
 
-def test_radial_loss_uses_shell_mean_field_strength():
-    loss = RadialLoss(name="source_surface_radial", ds_id="source_surface")
+def test_radial_loss_uses_detached_batch_mean_field_magnitude():
+    loss = RadialLoss(name="source_surface_radial", ds_id="source_surface", Gauss_per_dB=100)
     coords = torch.tensor([[1.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     b = torch.tensor([[1.0, 1.0, 0.0], [0.1, 0.1, 0.0]], requires_grad=True)
 
     value = loss(b=b, coords=coords)
-    expected = torch.tensor([1.0, 0.01]) / torch.tensor(1.01)
+    mean_b = 0.55 * 2 ** 0.5
+    expected = torch.tensor([1.0, 0.1]) / mean_b
     torch.testing.assert_close(value, expected)
 
     value.mean().backward()
-    torch.testing.assert_close(b.grad[:, 0], torch.zeros(2))
-    assert torch.all(b.grad[:, 1] > 0)
+    expected_gradient = torch.tensor([[0.0, 1.0, 0.0], [0.0, 1.0, 0.0]]) / (2 * mean_b)
+    torch.testing.assert_close(b.grad, expected_gradient)
 
 
 def test_source_surface_flux_loss_uses_cartesian_radial_derivative_and_detached_gate():
@@ -260,6 +263,30 @@ def test_validation_uses_combined_source_surface_field():
     assert output["jac_matrix"].shape == (2, 3, 3)
 
 
+@pytest.mark.parametrize("options, expected_gradient", [({}, 0.25), ({"detach": False}, -0.25)])
+def test_height_normalization_gradient(options, expected_gradient):
+    scaler = BHeightLossScalingModule(Gauss_per_dB=100, loss_ids=["physics"], **options)
+    field = torch.tensor([[2., 0., 0.]], requires_grad=True)
+    state = {"b": field, "grouped_coords": torch.zeros(1, 1, 3)}
+    scaled_loss = scaler(field[:, 0], state)
+    scaled_loss.sum().backward()
+    torch.testing.assert_close(scaled_loss, torch.tensor([0.5]))
+    torch.testing.assert_close(field.grad, torch.tensor([[expected_gradient, 0., 0.]]))
+
+
+def test_fractional_height_scaling_at_magnetic_nulls():
+    scaler = BHeightLossScalingModule(Gauss_per_dB=100, loss_ids=['physics'], power=0.5, detach=False)
+    field = torch.tensor([[0., 0., 0.], [0., 0., 0.], [1., 0., 0.], [0., 0., 0.]], requires_grad=True)
+    state = {'b': field, 'grouped_coords': torch.zeros(2, 2, 3)}
+    scaled_loss = scaler(torch.ones(4), state)
+    # The first height has mean powered magnitude 0.5. The all-null height uses the 0.1 floor.
+    torch.testing.assert_close(scaled_loss, torch.tensor([2., 10., 2., 10.]))
+    scaled_loss.sum().backward()
+    expected_grad = torch.zeros_like(field)
+    expected_grad[2, 0] = -2.
+    torch.testing.assert_close(field.grad, expected_grad)
+
+
 def test_full_volume_training_preserves_grouped_height_scaling():
     module = NF2Module(
         validation_mapping={},
@@ -312,11 +339,11 @@ def test_full_volume_training_preserves_grouped_height_scaling():
 def test_source_surface_callback_plots_deformed_radius_grid(monkeypatch):
     model = _source_surface_model()
     expected_radius = torch.tensor([[1.5, 1.6, 1.7], [1.7, 1.6, 1.5]])
-    model.source_surface_radius_grid = lambda **kwargs: {
+    monkeypatch.setattr(callback_module, "source_surface_radius_grid", lambda model, **kwargs: {
         "radius": expected_radius,
         "latitude": torch.tensor([-np.pi / 2, np.pi / 2]),
         "longitude": torch.tensor([0.0, np.pi, 2 * np.pi]),
-    }
+    })
     scalar_logs = []
     plotted = []
     monkeypatch.setattr(callback_module.wandb, "log", lambda values: scalar_logs.append(values))
@@ -382,3 +409,59 @@ def test_spherical_slice_callback_plots_surface_contour(monkeypatch):
         "slices - Current density",
         "slices - Integrated Current density",
     ]
+
+
+def test_radial_loss_preserves_height_gradient_through_transverse_field():
+    loss = RadialLoss(name="radial", ds_id="surface", Gauss_per_dB=100)
+    radius = torch.tensor(2.25, dtype=torch.float64, requires_grad=True)
+    direction = torch.tensor([[1., 0., 0.]], dtype=torch.float64)
+    b = torch.tensor([[1., 1., 0.]], dtype=torch.float64) * radius.pow(-3)
+    value = loss(b=b, coords=radius * direction).mean()
+    gradient = torch.autograd.grad(value, radius)[0]
+    torch.testing.assert_close(value, torch.tensor(2 ** -0.5, dtype=torch.float64))
+    torch.testing.assert_close(gradient, -3 * value.detach() / radius.detach())
+
+
+def test_radial_loss_field_gradients_are_transverse():
+    loss = RadialLoss(name="radial", ds_id="surface", Gauss_per_dB=100)
+    coords = torch.tensor([[1., 0., 0.], [0., 1., 0.]], dtype=torch.float64)
+    b = torch.tensor([[1., 2., 0.3], [0.2, 1., 0.5]], dtype=torch.float64, requires_grad=True)
+    loss(b=b, coords=coords).mean().backward()
+    r_hat = coords / coords.norm(dim=-1, keepdim=True)
+    transverse_b = b.detach() - (b.detach() * r_hat).sum(-1, keepdim=True) * r_hat
+    expected_gradient = transverse_b / (
+        transverse_b.norm(dim=-1, keepdim=True) * len(b) * b.detach().norm(dim=-1).mean())
+    torch.testing.assert_close(b.grad, expected_gradient)
+    torch.testing.assert_close((b.grad * r_hat).sum(-1), torch.zeros(len(b), dtype=b.dtype))
+
+
+def test_radial_loss_zero_field_is_finite():
+    loss = RadialLoss(name="radial", ds_id="surface", Gauss_per_dB=100)
+    coords = torch.tensor([[1., 0., 0.]])
+    b = torch.zeros((1, 3), requires_grad=True)
+    value = loss(b=b, coords=coords).mean()
+    value.backward()
+    assert value.item() == 0
+    torch.testing.assert_close(b.grad, torch.zeros_like(b))
+
+
+@pytest.mark.parametrize("gauss_per_db", [1, 100, 1000])
+def test_radial_loss_floor_is_point_zero_one_gauss(gauss_per_db):
+    loss = RadialLoss(name="radial", ds_id="surface", Gauss_per_dB=gauss_per_db)
+    coords = torch.tensor([[1., 0., 0.]]).repeat(3, 1)
+    b = (torch.tensor([[0., 0.002, 0.], [0., 0.005, 0.], [0., 0.008, 0.]]) / gauss_per_db).requires_grad_()
+    value = loss(b=b, coords=coords)
+    torch.testing.assert_close(value, torch.tensor([0.2, 0.5, 0.8]))
+    value.sum().backward()
+    expected_gradient = torch.tensor([[0., 100., 0.], [0., 100., 0.], [0., 100., 0.]]) * gauss_per_db
+    torch.testing.assert_close(b.grad, expected_gradient)
+
+
+def test_radial_loss_accepts_both_radial_polarities_with_finite_gradients():
+    loss = RadialLoss(name="radial", ds_id="surface", Gauss_per_dB=100)
+    coords = torch.tensor([[2.5, 0., 0.], [0., 0., 2.5]])
+    b = torch.tensor([[1., 0., 0.], [0., 0., -2.]], requires_grad=True)
+    value = loss(b=b, coords=coords).mean()
+    value.backward()
+    assert value.item() == 0
+    torch.testing.assert_close(b.grad, torch.zeros_like(b))

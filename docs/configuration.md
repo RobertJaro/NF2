@@ -69,7 +69,7 @@ data:
 Run with:
 
 ```bash
-nf2-extrapolate --config nf2/cartesian/sharp_cea.yaml \
+nf2 extrapolate --config nf2/cartesian/sharp_cea.yaml \
   --run_path ./runs/ar377 \
   --work_path /scratch/ar377 \
   --Br /data/Br.fits \
@@ -251,7 +251,7 @@ The `start`, `end`, and `iterations` keys may be omitted; they retain the defaul
 
 Entries under `training.trainer` are passed to the Lightning `Trainer` after NF2 sets its defaults.
 
-The default `training.epochs: 15` is deliberately conservative. It is enough for quick functional checks, but observational extrapolations often need more epochs or more `data.iterations`. Use validation plots, loss curves, and `nf2-metrics` to decide whether a run has stabilized.
+The default `training.epochs: 15` is deliberately conservative. It is enough for quick functional checks, but observational extrapolations often need more epochs or more `data.iterations`. Use validation plots, loss curves, and `nf2 metrics` to decide whether a run has stabilized.
 
 ## Losses
 
@@ -288,3 +288,8 @@ Installed NF2 includes reusable YAML templates. Pass them to `--config` with the
 - `nf2/cartesian`: observational Cartesian configs.
 - `nf2/spherical`: spherical full-disk/synoptic configs.
 - `nf2/benchmark`: analytical benchmark configs.
+
+## Learned source-surface boundary
+
+See [Learned source-surface boundary](free_boundary.md) for the unit-vector height
+network, fractional interior sampling, and single-layer radial penalty.

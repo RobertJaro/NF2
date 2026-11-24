@@ -227,8 +227,8 @@ def print_metrics(metrics):
         print("      estimate uses the Cartesian FFT potential-field reference.")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Compute standard NLFF quality metrics for an NF2 result.")
+def main(argv=None, *, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description="Compute standard NLFF quality metrics for an NF2 result.")
     parser.add_argument("nf2_path", help="Path to an extrapolation_result.nf2 file.")
     parser.add_argument("--device", default=None)
     parser.add_argument("--progress", action="store_true")
@@ -241,7 +241,7 @@ def main():
     parser.add_argument("--radius_range", type=float, nargs=2, default=None)
     parser.add_argument("--latitude_range", type=float, nargs=2, default=None)
     parser.add_argument("--longitude_range", type=float, nargs=2, default=None)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     metrics = compute_metrics(
         args.nf2_path,

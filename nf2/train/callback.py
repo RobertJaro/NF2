@@ -10,7 +10,9 @@ from lightning.pytorch import Callback
 from lightning.pytorch.utilities import rank_zero_only
 
 from nf2.data.util import cartesian_to_spherical, vector_cartesian_to_spherical, img_to_los_trv_azi, los_trv_azi_to_img
-from nf2.train.model import FixedSourceSurfaceVectorPotentialModel, SourceSurfaceVectorPotentialModel
+from nf2.evaluation.source_surface import source_surface_radius_grid
+from nf2.train.model import (FixedSourceSurfaceVectorPotentialModel, SourceSurfaceVectorPotentialModel,
+                             FreeBoundaryVectorPotentialModel)
 
 
 def _log_norm(values, floor=1e-6):
@@ -341,9 +343,11 @@ class SourceSurfaceCallback(Callback):
     @rank_zero_only
     def on_validation_end(self, trainer, pl_module):
         model = pl_module.model
-        if not isinstance(model, (SourceSurfaceVectorPotentialModel, FixedSourceSurfaceVectorPotentialModel)):
+        if not isinstance(model, (SourceSurfaceVectorPotentialModel, FixedSourceSurfaceVectorPotentialModel,
+                                  FreeBoundaryVectorPotentialModel)):
             return
-        grid = model.source_surface_radius_grid(
+        grid = source_surface_radius_grid(
+            model,
             latitude_resolution=self.latitude_resolution,
             longitude_resolution=self.longitude_resolution,
             device=pl_module.device,

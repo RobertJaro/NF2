@@ -147,6 +147,7 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     nf2 = NF2Module(data_module.validation_dataset_mapping, data_module.config,
                     model_kwargs=model, loss_config=losses, transforms=transforms, loss_scaling=loss_scaling,
                     meta_path=meta_state_path,
+                    validation_radial_extension=training.get("validation_radial_extension", True),
                     lr_params=training.get('optimizer', {"start": 5e-4, "end": 5e-5, "iterations": 1e5}))
 
     reload_dataloaders_interval = training[
@@ -203,13 +204,13 @@ def run(path, data, meta_path, work_path=None, callbacks=None, logging=None, mod
     trainer.fit(nf2, data_module, ckpt_path=ckpt_path)
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def main(argv=None, *, prog=None):
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument('--config', type=str, required=True,
                         help='config file for the simulation')
     parser.add_argument('--reload', action='store_true',
                         help='Rebuild the saved series data module state even if work_path/data_module.pkl exists.')
-    args, overwrite_args = parser.parse_known_args()
+    args, overwrite_args = parser.parse_known_args(argv)
 
     yaml_config_file = args.config
     config = load_yaml_config(yaml_config_file, overwrite_args)

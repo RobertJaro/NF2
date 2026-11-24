@@ -75,7 +75,7 @@ def download_hmi_sharp(
 ):
     """Download an HMI SHARP or SHARP CEA vector magnetogram series.
 
-    Parameters mirror the ``nf2-download --source hmi_sharp`` command. Provide
+    Parameters mirror the ``nf2 download --source hmi_sharp`` command. Provide
     either ``sharp_num`` or ``noaa_num``.
     """
     return download_SHARP_series(
@@ -178,8 +178,8 @@ def _parse_time(value):
     return parse(value) if value is not None else None
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Download data for NF2 runs.')
+def main(argv=None, *, prog=None):
+    parser = argparse.ArgumentParser(prog=prog, description='Download data for NF2 runs.')
     parser.add_argument(
         '--source',
         choices=['hmi_sharp', 'hmi_synoptic', 'hmi_full_disk'],
@@ -206,7 +206,7 @@ def main():
     parser.add_argument('--include_mr_polfil', action='store_true')
     parser.add_argument('--no_convert_ptr', action='store_true')
     parser.add_argument('--keep_coordinates', action='store_true')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.source == 'hmi_sharp':
         if args.t_start is None:

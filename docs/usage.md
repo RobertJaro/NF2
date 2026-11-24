@@ -18,10 +18,14 @@ notebooks
 
 ## Command Line
 
-Use `nf2-extrapolate` for one run:
+NF2 installs a single `nf2` command with subcommands. Run `nf2 --help` to list
+them, or `nf2 <command> --help` for the options of a specific command.
+The same interface is available as `python -m nf2 <command>`.
+
+Use `nf2 extrapolate` for one run:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea" \
   --Br "./data/Br.fits" \
@@ -29,20 +33,20 @@ nf2-extrapolate \
   --Bp "./data/Bp.fits"
 ```
 
-Use `nf2-extrapolate-series` when file placeholders are glob patterns:
+Use `nf2 extrapolate-series` when file placeholders are glob patterns:
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --photosphere_B_los_pattern "./data/photosphere/*B_los.fits"
 ```
 
-Use `nf2-export` and `nf2-metrics` after training:
+Use `nf2 export` and `nf2 metrics` after training:
 
 ```bash
-nf2-export "./runs/sharp_cea/extrapolation_result.nf2" --format vtk --metrics j alpha free_energy_fft
-nf2-metrics "./runs/sharp_cea/extrapolation_result.nf2" --Mm_per_pixel 0.72 --height_range 0 80
+nf2 export "./runs/sharp_cea/extrapolation_result.nf2" --format vtk --metrics j alpha free_energy_fft
+nf2 metrics "./runs/sharp_cea/extrapolation_result.nf2" --Mm_per_pixel 0.72 --height_range 0 80
 ```
 
 The generated [CLI reference](generated/cli_reference.md) lists all command options.

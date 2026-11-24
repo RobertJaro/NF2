@@ -7,7 +7,7 @@ learning dependencies until a caller asks for the matching helper.
 __version__ = "0.4.3"
 
 
-def load(path, device=None):
+def load(path, device=None, *, radial_extension=True):
     """Load an NF2 result and return the matching output helper.
 
     Parameters
@@ -16,6 +16,10 @@ def load(path, device=None):
         Path to a ``.nf2`` checkpoint.
     device:
         Optional PyTorch device used for evaluation.
+    radial_extension:
+        Continue free-boundary fields radially beyond their learned source
+        surface with inverse-square decay (default True). False returns raw
+        network predictions. Other field representations are unchanged.
 
     Returns
     -------
@@ -30,9 +34,9 @@ def load(path, device=None):
     state = torch.load(path, map_location=device, weights_only=False)
     geometry = state.get("data", {}).get("type")
     if geometry == "cartesian":
-        return CartesianOutput(state, device=device)
+        return CartesianOutput(state, device=device, radial_extension=radial_extension)
     if geometry == "spherical":
-        return SphericalOutput(state, device=device)
+        return SphericalOutput(state, device=device, radial_extension=radial_extension)
     raise ValueError(f"Unsupported NF2 geometry: {geometry!r}")
 
 

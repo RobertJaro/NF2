@@ -2,7 +2,7 @@
 
 Series runs reuse the same public YAML schema as single extrapolations, but file placeholders usually point to glob patterns instead of single files. A series config tells NF2 how to build one boundary set per time step, then train each step while carrying forward state from the previous extrapolation.
 
-A series run requires an initial single extrapolation first. Run the first time step with `nf2-extrapolate`, then pass that first run's `last.ckpt` as `--meta_path` when starting the full series. The meta path is the start point for the series and lets each subsequent time step continue from a trained NF2 state, including optimizer state, instead of starting cold.
+A series run requires an initial single extrapolation first. Run the first time step with `nf2 extrapolate`, then pass that first run's `last.ckpt` as `--meta_path` when starting the full series. The meta path is the start point for the series and lets each subsequent time step continue from a trained NF2 state, including optimizer state, instead of starting cold.
 
 ## How The YAML Is Configured
 
@@ -23,7 +23,7 @@ data:
         B_azi: "<<photosphere_B_azi_pattern>>"
 ```
 
-When `nf2-extrapolate-series` loads the config, each pattern is expanded and sorted. At step `i`, NF2 uses the `i`th file from every matching component sequence. Every component sequence for a boundary must have the same length, and filenames should sort chronologically.
+When `nf2 extrapolate-series` loads the config, each pattern is expanded and sorted. At step `i`, NF2 uses the `i`th file from every matching component sequence. Every component sequence for a boundary must have the same length, and filenames should sort chronologically.
 
 You can write patterns directly in a local YAML file:
 
@@ -49,7 +49,7 @@ Use placeholders when the same config should run on different active regions, in
 Use the matching single-run config for the first frame in the sequence:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/multi_height.yaml" \
   --run_path "./runs/multi_height_initial" \
   --work_path "./runs/multi_height_initial/work" \
@@ -63,7 +63,7 @@ Wait until this run writes `./runs/multi_height_initial/last.ckpt`.
 ## Step 2: Start The Full Series
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --work_path "./runs/multi_height_series/work" \
@@ -77,7 +77,7 @@ The `--meta_path` value must point to the completed first extrapolation's `last.
 
 Each component pattern in a boundary must expand to the same number of files. NF2 pairs files by sorted order, so use filenames that sort chronologically and consistently across components.
 
-Series runs reuse `work_path/data_module.pkl` when it already exists, which avoids rebuilding every per-step data module after an interrupted run. Add `--reload` to the `nf2-extrapolate-series` command when you changed the input configuration or want to rebuild that saved state.
+Series runs reuse `work_path/data_module.pkl` when it already exists, which avoids rebuilding every per-step data module after an interrupted run. Add `--reload` to the `nf2 extrapolate-series` command when you changed the input configuration or want to rebuild that saved state.
 
 The example series configs use `check_val_every_n_epoch: 10`, so validation callbacks and W&B validation logging run every 10th dataset. The per-step `.nf2` result files are still saved at the end of every training epoch/dataset.
 
@@ -88,7 +88,7 @@ Multi-height extrapolations can be used as series runs when all boundary heights
 First download a SHARP CEA vector time sequence from JSOC. Fill in your JSOC email and either a SHARP number or NOAA number.
 
 ```bash
-nf2-download \
+nf2 download \
   --source hmi_sharp \
   --download_dir "./data/sharp_cea_377" \
   --email "you@example.org" \
@@ -113,7 +113,7 @@ ls ./data/sharp_cea_377/*.Bp.fits | head
 Run one complete single extrapolation for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/sharp_cea.yaml" \
   --run_path "./runs/sharp_cea_377_initial" \
   --work_path "./runs/sharp_cea_377_initial/work" \
@@ -130,7 +130,7 @@ The `--Br_err`, `--Bt_err`, and `--Bp_err` arguments are optional. If you omit t
 Then start the SHARP CEA series by filling the placeholders in `nf2/cartesian/sharp_cea_series.yaml`:
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/sharp_cea_series.yaml" \
   --run_path "./runs/sharp_cea_377_series" \
   --work_path "./runs/sharp_cea_377_series/work" \
@@ -171,7 +171,7 @@ ls ./data/multi_height/chromosphere/*B_los.fits | head
 Run one complete single extrapolation for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/cartesian/multi_height.yaml" \
   --run_path "./runs/multi_height_initial" \
   --work_path "./runs/multi_height_initial/work" \
@@ -186,7 +186,7 @@ nf2-extrapolate \
 Then run the series with glob patterns:
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/cartesian/multi_height_series.yaml" \
   --run_path "./runs/multi_height_series" \
   --work_path "./runs/multi_height_series/work" \
@@ -265,7 +265,7 @@ training:
 Then run the copied config without per-component pattern arguments:
 
 ```bash
-nf2-extrapolate-series --config "./my_multi_height_series.yaml"
+nf2 extrapolate-series --config "./my_multi_height_series.yaml"
 ```
 
 List notation also accepts directories or glob dictionaries as list items, but explicit file dictionaries are the safest option when component names, timestamps, or observing cadences do not sort cleanly.
@@ -283,7 +283,7 @@ As with Cartesian series, a spherical series needs the completed first extrapola
 Use the single-run guide in [Spherical extrapolations](spherical.md) for the first time step:
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/spherical/hmi_full_disk.yaml" \
   --run_path "./runs/spherical_initial" \
   --work_path "./runs/spherical_initial/work" \
@@ -313,7 +313,7 @@ The series template validates and logs every 10th dataset by default while still
 ### 3. Run The Series
 
 ```bash
-nf2-extrapolate-series \
+nf2 extrapolate-series \
   --config "nf2/spherical/hmi_full_disk_series.yaml" \
   --run_path "./runs/spherical_series" \
   --work_path "./runs/spherical_series/work" \
@@ -337,7 +337,7 @@ The `--full_disk_Br_err_pattern`, `--full_disk_Bt_err_pattern`, and `--full_disk
 ### 4. Export A Finished Series
 
 ```bash
-nf2-export "./runs/multi_height_series/*.nf2" \
+nf2 export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
   --Mm_per_pixel 0.72 \
@@ -347,7 +347,7 @@ nf2-export "./runs/multi_height_series/*.nf2" \
 ```
 
 ```bash
-nf2-export "./runs/spherical_series/*.nf2" \
+nf2 export "./runs/spherical_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/spherical_series/exports" \
   --metrics j alpha free_energy_fft \

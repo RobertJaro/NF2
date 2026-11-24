@@ -9,6 +9,7 @@ from torch import nn
 from tqdm import tqdm
 
 from nf2.data.util import spherical_to_cartesian, cartesian_to_spherical, vector_cartesian_to_spherical
+from nf2.evaluation.field import FieldEvaluator
 from nf2.evaluation.energy import get_free_mag_energy
 from nf2.evaluation.metric import energy
 from nf2.evaluation.output_metrics import metric_mapping, normalize_metric_names
@@ -26,7 +27,7 @@ class BaseOutput:
     instead of instantiating this class directly.
     """
 
-    def __init__(self, checkpoint, device=None):
+    def __init__(self, checkpoint, device=None, radial_extension=True):
         if device is None:
             device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
@@ -37,6 +38,8 @@ class BaseOutput:
         model = model.to(device)
         self._requires_grad = isinstance(model, VectorPotentialModel) or getattr(model, 'requires_grad_forward', False)
         self.model = nn.DataParallel(model) if torch.cuda.device_count() > 1 else model
+        evaluator = FieldEvaluator(model, radial_extension=radial_extension)
+        self._evaluation_model = nn.DataParallel(evaluator) if torch.cuda.device_count() > 1 else evaluator
         self.device = device
         self.c = constants.c
 
@@ -67,7 +70,7 @@ class BaseOutput:
             # Keep non-tensor arguments positional. DataParallel scatters keyword
             # arguments to every GPU even when a small coordinate batch produces
             # fewer tensor chunks, which would call an extra replica without coords.
-            result = self.model(coord, compute_jacobian)
+            result = self._evaluation_model(coord, compute_jacobian)
         return {key: value.detach() for key, value in result.items()}
 
     def _trace_geometry(self, max_height=None, max_radius=None):
@@ -232,6 +235,9 @@ class BaseOutput:
         state = {**model_out, 'coords': coords}
         metrics_out = {}
         for key in point_metrics:
+            if key == 'magnetic_helicity' and 'a' not in state:
+                raise ValueError('magnetic_helicity requires a vector potential. '
+                                 'Use radial_extension=False to inspect the raw vector-potential model.')
             metric_out = metric_mapping[key](**state)
             metrics_out.update(metric_out)
             state.update(metric_out)

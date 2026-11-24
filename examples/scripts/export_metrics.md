@@ -5,7 +5,7 @@ Use these commands after training has produced one or more `.nf2` files.
 ## Export A Cartesian Result
 
 ```bash
-nf2-export "./runs/sharp_cea_377/extrapolation_result.nf2" \
+nf2 export "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/sharp_cea_377/exports/field.vtk" \
   --Mm_per_pixel 0.72 \
@@ -18,7 +18,7 @@ Use `--format npz` for Python analysis or `--format hdf5` for a portable scienti
 ## Export A Spherical Result
 
 ```bash
-nf2-export "./runs/spherical_hmi/extrapolation_result.nf2" \
+nf2 export "./runs/spherical_hmi/extrapolation_result.nf2" \
   --format vtk \
   --out "./runs/spherical_hmi/exports/field.vtk" \
   --metrics j alpha free_energy_fft
@@ -27,7 +27,7 @@ nf2-export "./runs/spherical_hmi/extrapolation_result.nf2" \
 ## Export A Series
 
 ```bash
-nf2-export "./runs/multi_height_series/*.nf2" \
+nf2 export "./runs/multi_height_series/*.nf2" \
   --format hdf5 \
   --out-dir "./runs/multi_height_series/exports" \
   --Mm_per_pixel 0.72 \
@@ -39,7 +39,7 @@ nf2-export "./runs/multi_height_series/*.nf2" \
 ## Cartesian Quality Metrics
 
 ```bash
-nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
+nf2 metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
   --Mm_per_pixel 0.72 \
   --height_range 0 80
 ```
@@ -47,7 +47,7 @@ nf2-metrics "./runs/sharp_cea_377/extrapolation_result.nf2" \
 ## Spherical Quality Metrics
 
 ```bash
-nf2-metrics "./runs/spherical_hmi/extrapolation_result.nf2" \
+nf2 metrics "./runs/spherical_hmi/extrapolation_result.nf2" \
   --spherical_sampling 32 64 128 \
   --radius_range 1.0 1.3 \
   --latitude_range -60 60

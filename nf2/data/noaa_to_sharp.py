@@ -5,12 +5,12 @@ from dateutil.parser import parse
 
 from nf2.data.download import find_HARP
 
-def main():
-    parser = argparse.ArgumentParser()
+def main(argv=None, *, prog=None):
+    parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument('--time', type=str, required=True)
     parser.add_argument('--email', type=str, required=True, help='email address for JSOC')
     parser.add_argument('--noaa_nums', type=int, nargs='+', required=False, default=None)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     client = drms.Client(email=args.email)
     time = parse(args.time)

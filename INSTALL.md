@@ -97,14 +97,18 @@ Build the recipe:
 CONDA_BLD_PATH=/tmp/conda-bld conda build conda-recipe
 ```
 
-The recipe lives in `conda-recipe/meta.yaml` and exposes the public command-line tools:
+The recipe lives in `conda-recipe/meta.yaml`. Both pip and Conda installations
+provide a single `nf2` command with these subcommands:
 
-- `nf2-extrapolate`
-- `nf2-extrapolate-series`
-- `nf2-export`
-- `nf2-metrics`
-- `nf2-download`
-- `nf2-noaa-to-sharp`
+- `nf2 extrapolate`
+- `nf2 extrapolate-series`
+- `nf2 export`
+- `nf2 metrics`
+- `nf2 download`
+- `nf2 noaa-to-sharp`
+
+Run `nf2 --help` to list commands, or `nf2 <command> --help` to see its options.
+You can also invoke the CLI with `python -m nf2 <command>`.
 
 ## Smoke Test
 
@@ -123,6 +127,6 @@ for idx in range(torch.cuda.device_count()):
     print(f"CUDA device {idx}:", torch.cuda.get_device_name(idx))
 PY
 
-nf2-export --help
-nf2-extrapolate --help
+nf2 export --help
+nf2 extrapolate --help
 ```

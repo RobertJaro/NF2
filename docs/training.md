@@ -68,10 +68,19 @@ loss_scaling:
     loss_ids: [force_free, potential]
 ```
 
-Spherical examples use radial scaling:
+`b_height` recomputes the field-strength normalizer for each height group on
+every batch. By default, backpropagation treats that normalizer as constant.
+Set `detach: false` to differentiate through it.
+
+Spherical examples combine height normalization with radial scaling for selected losses.
 
 ```yaml
 loss_scaling:
+  - type: b_height
+    name: b_height
+    detach: true
+    power: 2
+    loss_ids: [force_free, potential, energy_gradient]
   - type: radial
     name: radial
     base_radius: 1.0
@@ -192,8 +201,8 @@ When training fails with CUDA out-of-memory errors, reduce memory in this order:
 4. Increase `potential_boundary.strides` for Cartesian runs.
 5. Reduce `model.network.hidden_dim` only after data and validation batches have been tuned.
 
-If the error happens only during export or `nf2-metrics`, pass a smaller evaluation batch size to the command:
+If the error happens only during export or `nf2 metrics`, pass a smaller evaluation batch size to the command:
 
 ```bash
-nf2-metrics ./runs/case/extrapolation_result.nf2 --batch_size 2048 --Mm_per_pixel 0.72 --height_range 0 80
+nf2 metrics ./runs/case/extrapolation_result.nf2 --batch_size 2048 --Mm_per_pixel 0.72 --height_range 0 80
 ```

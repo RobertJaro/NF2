@@ -13,7 +13,7 @@ The benchmark configs intentionally keep the run compact:
 ## Case 1
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/benchmark/analytical_case1.yaml" \
   --run_path "./runs/benchmark/case1" \
   --work_path "./runs/benchmark/case1/work"
@@ -22,7 +22,7 @@ nf2-extrapolate \
 ## Case 2
 
 ```bash
-nf2-extrapolate \
+nf2 extrapolate \
   --config "nf2/benchmark/analytical_case2.yaml" \
   --run_path "./runs/benchmark/case2" \
   --work_path "./runs/benchmark/case2/work"
@@ -40,7 +40,7 @@ runs/benchmark/case2/extrapolation_result.nf2
 Run metrics or exports with the commands in [export_metrics.md](export_metrics.md). For a quick check, use a small Cartesian export height range:
 
 ```bash
-nf2-metrics "./runs/benchmark/case1/extrapolation_result.nf2" \
+nf2 metrics "./runs/benchmark/case1/extrapolation_result.nf2" \
   --Mm_per_pixel 0.05 \
   --height_range 0 2
 ```

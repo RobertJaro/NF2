@@ -50,8 +50,8 @@ CONFIG_OPTIONS = [
     ("data.sampler.type", "height | default", "height", "Cartesian random sampler type."),
     ("data.sampler.batch_size", "int", "16384 in examples", "Cartesian random sampler batch size."),
     ("data.samplers", "list[dict]", "random_radial_grouped", "Spherical physics sampling datasets."),
-    ("data.samplers[].id", "str", "random", "Spherical sampler id used by losses."),
-    ("data.samplers[].type", "random_radial_grouped | random_spherical | random_fixed_radius", "random_radial_grouped", "Spherical random sampler type."),
+    ("data.samplers[].id", "str", "source_surface for random_source_surface_boundary, otherwise random", "Spherical sampler ID used by losses. Training boundaries and samplers must have distinct IDs."),
+    ("data.samplers[].type", "random_radial_grouped | random_spherical | random_fixed_radius | random_source_surface_volume | random_source_surface_boundary", "random_radial_grouped", "Spherical random sampler type."),
     ("data.samplers[].batch_size", "int", "data.batch_size", "Spherical random sampler batch size."),
     ("data.samplers[].reference_map", "str | dict", "optional", "FITS map used to derive Carrington latitude/longitude sampling bounds."),
     ("data.samplers[].reference_map.file", "str", "required for dict form", "FITS file whose finite pixels define the angular sampling bounds."),
@@ -70,7 +70,7 @@ CONFIG_OPTIONS = [
     ("data.persistent_workers", "bool", "true", "Keep training DataLoader workers alive while a loader is active."),
     ("data.preload_data_modules", "bool", "true", "For series runs, preload all step data modules up front instead of loading each step lazily."),
     ("data.data_module_workers", "int", "data.num_workers", "Series-only multiprocessing workers used to preload per-step data modules."),
-    ("model.field", "vector_potential | open_vector_potential | open_scaled_vector_potential | scaled_vector_potential | source_surface_vector_potential | fixed_source_surface_vector_potential | b", "vector_potential", "Field representation."),
+    ("model.field", "vector_potential | open_vector_potential | open_scaled_vector_potential | scaled_vector_potential | free_boundary_vector_potential | source_surface_vector_potential | fixed_source_surface_vector_potential | b", "vector_potential", "Field representation."),
     ("model.network.type", "siren", "siren", "Only SIREN networks are supported."),
     ("model.network.hidden_dim", "int", "256 cartesian, 512 spherical", "SIREN hidden width."),
     ("model.network.layers", "int", "model default", "Number of SIREN layers."),
@@ -80,6 +80,7 @@ CONFIG_OPTIONS = [
     ("model.coordinate_radial_power", "float", "4.0", "Radial power for compressing SIREN input coordinates in scaled models, applied as `coords * (r / R_sun)^-coordinate_radial_power`."),
     ("model.base_radius", "float", "R_sun in model units", "Reference radius for `scaled_vector_potential`; omit for spherical runs."),
     ("model.source_surface.height_range", "list[float]", "[2.0, 2.5]", "Allowed learned source-surface radius range in solar radii."),
+    ("model.source_surface.initial_radius", "float", "midpoint of height_range", "Initial spherical radius for free_boundary_vector_potential; strictly inside height_range."),
     ("model.source_surface.height", "float", "2.0", "Fixed source-surface radius in solar radii for fixed_source_surface_vector_potential."),
     ("model.source_surface.hidden_dim", "int", "64", "Hidden width of the source-surface height SIREN."),
     ("model.source_surface.layers", "int", "3", "Number of source-surface height SIREN layers."),
@@ -88,6 +89,7 @@ CONFIG_OPTIONS = [
     ("model.source_surface.transition_width", "float", "0.1", "Radial scale length of the sigmoid interior-potential gate in solar radii."),
     ("model.open_field.hidden_dim", "int", "64", "Hidden width of the tangential angular open-potential SIREN."),
     ("model.open_field.layers", "int", "3", "Number of tangential angular open-potential SIREN layers."),
+    ("training.validation_radial_extension", "bool", "true", "Evaluate the free-boundary exterior as a radial inverse-square continuation during validation; training stays raw."),
     ("training.epochs", "int", "15", "Number of Lightning epochs."),
     ("training.optimizer.type", "adam | soap", "adam", "Optimizer implementation. SOAP uses zero weight decay."),
     ("training.optimizer.start", "float", "5e-4", "Initial learning rate."),
@@ -101,8 +103,10 @@ CONFIG_OPTIONS = [
     ("training.val_check_interval", "int | float", "Lightning default", "Optional Lightning validation interval alias used by single-run training."),
     ("training.trainer", "dict", "{}", "Additional Lightning Trainer keyword arguments."),
     ("training.trainer.*", "any", "Lightning default", "Additional keyword passed through to `lightning.pytorch.Trainer`."),
+    ("losses[].target_radius", "float", "2.2", "Expected solid-angle mean radius in solar radii for source_surface_mean."),
+    ("losses[].radius_scale", "float", "0.2", "Mean-radius deviation scale in solar radii for the quartic source_surface_mean prior."),
     ("losses", "list[dict]", "geometry default", "Training objective terms. Omit to use geometry-specific defaults."),
-    ("losses[].type", "str", "geometry default", "Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, source_surface_transition_radial, min_height, energy_gradient, energy, sigma_j."),
+    ("losses[].type", "str", "geometry default", "Loss implementation name. Supported values are boundary, boundary_br, boundary_los_trv, boundary_azi, boundary_los_trv_azi, boundary_los, divergence, force_free, potential, weighted_height, height, NaNs, radial, source_surface_height, source_surface_mean, source_surface_transition_radial, min_height, energy_gradient, energy, sigma_j."),
     ("losses[].name", "str", "type", "Stable logging and scaling identifier."),
     ("losses[].weight", "float | schedule", "required when explicit", "Loss weight. The legacy lambda key is not accepted."),
     ("losses[].weight.type", "exponential | linear | step", "exponential", "Schedule type when `weight` is a mapping."),
@@ -121,6 +125,7 @@ CONFIG_OPTIONS = [
     ("loss_scaling[].base_radius", "float", "1.1 radial default", "Solar-radius baseline for radial scaling."),
     ("loss_scaling[].max_radius", "float | null", "none", "Optional outer radius used to normalize radial scaling."),
     ("loss_scaling[].power", "float", "module default", "Exponent used by b_height or potential_fit scaling."),
+    ("loss_scaling[].detach", "bool", "true", "Detach the b_height field-strength normalizer during backpropagation. Set false to differentiate through it."),
     ("callbacks", "list[dict]", "geometry default", "Validation plots and metrics logged during training."),
     ("callbacks[].type", "boundary | metrics | slices | spherical_slices | source_surface | fits_comparison | disambiguation | los_trv_azi_boundary", "required", "Callback implementation name."),
     ("callbacks[].dataset", "str", "required for most callbacks", "Public alias for validation dataset id; normalized internally to `ds_id`."),
@@ -153,12 +158,39 @@ DATASET_TYPES = [
     ("random_radial_grouped", "spherical sampler", "Grouped radial samples in the spherical volume."),
     ("random_spherical", "spherical sampler", "Ungrouped random samples in the spherical volume."),
     ("random_fixed_radius", "spherical sampler", "Area-uniform random samples on one spherical radial shell."),
+    ("random_source_surface_volume", "spherical sampler", "Uniform fractional-radius samples below learned Rss; mapped on device."),
+    ("random_source_surface_boundary", "spherical sampler", "Uniform solid-angle samples mapped to the learned Rss boundary."),
     ("fits_reference", "spherical validation", "Reference spherical FITS comparison dataset."),
     ("sphere", "spherical validation", "Spherical validation grid for field-quality callbacks."),
     ("spherical_slices", "spherical validation", "Radial or angular slices for spherical visualization callbacks."),
 ]
 
 DATASET_KEYS = [
+    (
+        "random_source_surface_volume",
+        "spherical sampler",
+        [
+            ("batch_size", "int", "data.batch_size", "Samples per batch, divisible by n_lat_lon_sample."),
+            ("n_lat_lon_sample", "int", "128", "Number of directions per shared fractional height."),
+            ("radial_sampling_exponent", "float", "1", "Exponent of uniform u in r=1+u*(Rss-1); 1 gives uniform radial fractions."),
+            ("latitude_range", "list[float]", "[-90, 90]", "Angular limits in degrees unless unit is changed."),
+            ("longitude_range", "list[float]", "[0, 360]", "Angular limits in degrees unless unit is changed."),
+            ("reference_map", "str | dict", "optional", "Derive angular bounds from finite map pixels."),
+            ("length", "int | null", "data.iterations", "Number of batches per epoch."),
+            ("requires_jacobian", "bool", "true", "Enable field derivatives for interior physics losses."),
+        ],
+    ),
+    (
+        "random_source_surface_boundary",
+        "spherical sampler",
+        [
+            ("batch_size", "int", "data.batch_size", "Learned boundary samples per batch."),
+            ("latitude_range", "list[float]", "[-90, 90]", "Angular limits in degrees unless unit is changed."),
+            ("longitude_range", "list[float]", "[0, 360]", "Angular limits in degrees unless unit is changed."),
+            ("length", "int | null", "data.iterations", "Number of batches per epoch."),
+            ("requires_jacobian", "bool", "false", "Radiality uses B; curl(A) and surface gradients remain enabled."),
+        ],
+    ),
     (
         "analytical",
         "benchmark boundary",
@@ -375,7 +407,7 @@ DATASET_KEYS = [
 
 CLI_COMMANDS = [
     (
-        "nf2-extrapolate",
+        "nf2 extrapolate",
         "Run one YAML-configured extrapolation.",
         [
             ("--config", "required", "Path to a YAML configuration file."),
@@ -384,7 +416,7 @@ CLI_COMMANDS = [
         ],
     ),
     (
-        "nf2-extrapolate-series",
+        "nf2 extrapolate-series",
         "Run a YAML-configured time series.",
         [
             ("--config", "required", "Path to a series YAML configuration file."),
@@ -393,7 +425,7 @@ CLI_COMMANDS = [
         ],
     ),
     (
-        "nf2-download",
+        "nf2 download",
         "Download supported JSOC/HMI data sources.",
         [
             ("--source", "hmi_sharp", "One of hmi_sharp, hmi_synoptic, hmi_full_disk."),
@@ -415,7 +447,7 @@ CLI_COMMANDS = [
         ],
     ),
     (
-        "nf2-export",
+        "nf2 export",
         "Export NF2 results to exchange formats.",
         [
             ("nf2_path", "required", "One or more .nf2 paths or glob patterns."),
@@ -449,7 +481,7 @@ CLI_COMMANDS = [
         ],
     ),
     (
-        "nf2-metrics",
+        "nf2 metrics",
         "Print standard NLFF quality metrics.",
         [
             ("nf2_path", "required", "Path to extrapolation_result.nf2."),
@@ -467,7 +499,7 @@ CLI_COMMANDS = [
         ],
     ),
     (
-        "nf2-noaa-to-sharp",
+        "nf2 noaa-to-sharp",
         "Resolve NOAA active-region numbers to SHARP/HARP numbers through JSOC metadata.",
         [
             ("--time", "required", "Observation time used for the NOAA-to-HARP lookup."),
