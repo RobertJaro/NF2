@@ -92,7 +92,7 @@ def generate(root: str | Path):
         "## Export Metrics\n\n"
         + _table(["Metric", "Output Key(s)", "Description"], EXPORT_METRICS)
         + "\n\n## Quality Metrics\n\n"
-        + _table(["Metric", "Description"], QUALITY_METRICS)
+        + _table(["Metric", "Group", "Unit", "Geometry", "Description"], QUALITY_METRICS)
         + "\n",
         encoding="utf-8",
     )

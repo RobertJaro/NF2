@@ -270,7 +270,8 @@ class CartesianOutput(BaseOutput):
         assert self.state['data']['type'] == 'cartesian', 'Requires cartesian NF2 data!'
 
         self.coord_range = self.state['data']['coord_range']
-        self.coord_range = self.coord_range[0] if isinstance(self.coord_range, list) else self.coord_range
+        if np.ndim(self.coord_range[0]) == 2:
+            self.coord_range = self.coord_range[0]
         self.max_height = self.state['data']['max_height']
         self.ds_per_pixel = self.state['data']['ds_per_pixel']
         self.ds_per_pixel = self.ds_per_pixel[0] if isinstance(self.ds_per_pixel, list) else self.ds_per_pixel

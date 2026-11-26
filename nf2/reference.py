@@ -1,6 +1,7 @@
 """Structured reference data used by the NF2 documentation."""
 
 from nf2.evaluation.output_metrics import OUTPUT_METRICS
+from nf2.evaluation.metric_catalog import METRICS
 
 CONFIG_OPTIONS = [
     ("path", "str", "./runs/nf2", "Directory for checkpoints, logs, and extrapolation_result.nf2."),
@@ -482,9 +483,12 @@ CLI_COMMANDS = [
     ),
     (
         "nf2 metrics",
-        "Print standard NLFF quality metrics.",
+        "Evaluate selected scalar diagnostics and print or save a report.",
         [
-            ("nf2_path", "required", "Path to extrapolation_result.nf2."),
+            ("nf2_path", "required for evaluation", "Path to extrapolation_result.nf2."),
+            ("--metrics", "standard", "Space-separated metric names or groups. Use standard to include the defaults."),
+            ("--list-metrics", "false", "List metric names, groups, units and supported geometries."),
+            ("--output", "terminal", "Output file ending in .txt, .csv or .json."),
             ("--device", "auto", "PyTorch evaluation device."),
             ("--progress", "false", "Show evaluation progress."),
             ("--batch_size", "output default", "Evaluation batch size."),
@@ -517,19 +521,7 @@ EXPORT_METRICS = [
 
 
 QUALITY_METRICS = [
-    ("mean_abs_divB", "Mean absolute divergence in G/Mm."),
-    ("rms_divB", "Root-mean-square divergence in G/Mm."),
-    ("mean_abs_divB_over_B", "Mean |div B| / |B| in 1/Mm."),
-    ("rms_divB_over_B", "Root-mean-square |div B| / |B| in 1/Mm."),
-    ("theta_J", "Current-weighted angle between J and B in degrees."),
-    ("sigma_J", "Current-weighted sine of the J-B angle."),
-    ("CWsin", "Alias for sigma_J used in NLFF comparisons."),
-    ("mean_force_free_residual", "Mean |J x B| / |B|."),
-    ("rms_force_free_residual", "Root-mean-square |J x B| / |B|."),
-    ("E_tot", "Total magnetic energy."),
-    ("E_free", "Free magnetic energy. Cartesian uses the FFT potential-field reference."),
-    ("E_pot", "Potential magnetic energy estimate E_tot - E_free."),
-    ("E_free_over_E_tot", "Free-energy fraction."),
-    ("mean_B", "Mean magnetic-field strength."),
-    ("max_B", "Maximum magnetic-field strength."),
+    (name, metric.group, metric.unit, "Cartesian" if metric.cartesian_only else "Cartesian and spherical",
+     metric.description)
+    for name, metric in METRICS.items()
 ]

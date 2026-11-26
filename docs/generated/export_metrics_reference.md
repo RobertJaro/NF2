@@ -23,20 +23,31 @@
 
 ## Quality Metrics
 
-| Metric | Description |
-| --- | --- |
-| mean_abs_divB | Mean absolute divergence in G/Mm. |
-| rms_divB | Root-mean-square divergence in G/Mm. |
-| mean_abs_divB_over_B | Mean \|div B\| / \|B\| in 1/Mm. |
-| rms_divB_over_B | Root-mean-square \|div B\| / \|B\| in 1/Mm. |
-| theta_J | Current-weighted angle between J and B in degrees. |
-| sigma_J | Current-weighted sine of the J-B angle. |
-| CWsin | Alias for sigma_J used in NLFF comparisons. |
-| mean_force_free_residual | Mean \|J x B\| / \|B\|. |
-| rms_force_free_residual | Root-mean-square \|J x B\| / \|B\|. |
-| E_tot | Total magnetic energy. |
-| E_free | Free magnetic energy. Cartesian uses the FFT potential-field reference. |
-| E_pot | Potential magnetic energy estimate E_tot - E_free. |
-| E_free_over_E_tot | Free-energy fraction. |
-| mean_B | Mean magnetic-field strength. |
-| max_B | Maximum magnetic-field strength. |
+| Metric | Group | Unit | Geometry | Description |
+| --- | --- | --- | --- | --- |
+| mean_abs_divB | quality | G / Mm | Cartesian and spherical | Mean absolute divergence. |
+| rms_divB | quality | G / Mm | Cartesian and spherical | Root-mean-square divergence. |
+| mean_abs_divB_over_B | quality | 1 / Mm | Cartesian and spherical | Mean absolute divergence divided by local field strength. |
+| rms_divB_over_B | quality | 1 / Mm | Cartesian and spherical | RMS divergence divided locally by field strength. |
+| theta_J | quality | deg | Cartesian and spherical | Arcsine of the current-weighted mean sine of the alignment angle. |
+| sigma_J | quality | 1 | Cartesian and spherical | Current-weighted mean sine of the alignment angle (also CWsin). |
+| mean_force_free_residual | quality | G / Mm | Cartesian and spherical | Mean magnitude of curl(B) perpendicular to B. |
+| rms_force_free_residual | quality | G / Mm | Cartesian and spherical | RMS magnitude of curl(B) perpendicular to B. |
+| E_tot | energies | erg | Cartesian and spherical | Total magnetic energy. |
+| E_pot | energies | erg | Cartesian | Potential energy from the lower-boundary FFT reference. |
+| E_free | energies | erg | Cartesian | Total energy minus FFT potential energy. |
+| E_free_over_E_tot | energies | 1 | Cartesian | Fraction of total energy in excess of FFT potential energy. |
+| mean_B | strength | G | Cartesian and spherical | Mean field strength. |
+| max_B | strength | G | Cartesian and spherical | Maximum field strength. |
+| net_flux_Mx | flux | Mx | Cartesian | Signed outward flux through all six faces. |
+| unsigned_flux_Mx | flux | Mx | Cartesian | Unsigned flux through all six faces. |
+| bottom_unsigned_flux_Mx | flux | Mx | Cartesian | Unsigned flux through the lower face. |
+| flux_imbalance_fraction | flux | 1 | Cartesian | Absolute net flux divided by unsigned flux (zero for zero flux). |
+| outward_field_offset_removed_G | helicity | G | Cartesian | Uniform outward offset removed from reference data. |
+| rms_div_B_G_per_Mm | helicity | G / Mm | Cartesian | RMS finite-difference divergence on the closed box. |
+| H_V_bottom | helicity | Mx² | Cartesian | Total relative helicity integrated from the bottom. |
+| H_V_top | helicity | Mx² | Cartesian | Total relative helicity integrated from the top. |
+| H_J_bottom | helicity | Mx² | Cartesian | Current-carrying helicity integrated from the bottom. |
+| H_J_top | helicity | Mx² | Cartesian | Current-carrying helicity integrated from the top. |
+| H_PJ_bottom | helicity | Mx² | Cartesian | Mutual helicity integrated from the bottom. |
+| H_PJ_top | helicity | Mx² | Cartesian | Mutual helicity integrated from the top. |

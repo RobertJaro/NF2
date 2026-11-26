@@ -90,12 +90,15 @@ Export NF2 results to exchange formats.
 
 ## `nf2 metrics`
 
-Print standard NLFF quality metrics.
+Evaluate selected scalar diagnostics and print or save a report.
 
 
 | Option | Default | Description |
 | --- | --- | --- |
-| `nf2_path` | required | Path to extrapolation_result.nf2. |
+| `nf2_path` | required for evaluation | Path to extrapolation_result.nf2. |
+| `--metrics` | standard | Space-separated metric names or groups. Use standard to include the defaults. |
+| `--list-metrics` | false | List metric names, groups, units and supported geometries. |
+| `--output` | terminal | Output file ending in .txt, .csv or .json. |
 | `--device` | auto | PyTorch evaluation device. |
 | `--progress` | false | Show evaluation progress. |
 | `--batch_size` | output default | Evaluation batch size. |
