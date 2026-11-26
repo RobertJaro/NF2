@@ -15,7 +15,7 @@ Dataset entries are used under `data.boundaries`, `data.validation`, `data.sampl
 | numpy | cartesian boundary | Preprocessed NumPy Cartesian vector-field input. |
 | muram_slice | cartesian boundary | MURaM slice boundary input. |
 | muram_cube | cartesian boundary | MURaM cube boundary input. |
-| height | cartesian sampler | Random Cartesian volume samples for force-free and potential losses. |
+| height | cartesian sampler | Random Cartesian volume samples for physics losses such as force-free and divergence. |
 | potential | cartesian boundary | Potential-field boundary generated from the photospheric boundary. |
 | map | spherical boundary | Spherical Br/Bt/Bp map input for full-disk or synoptic maps. |
 | random_radial_grouped | spherical sampler | Grouped radial samples in the spherical volume. |
@@ -146,7 +146,7 @@ Role: cartesian sampler.
 
 | Key | Type | Default | Description |
 | --- | --- | --- | --- |
-| batch_size | int | 16384 in examples | Random volume samples per training batch. |
+| batch_size | int | 4096 in observational templates | Random volume samples per training batch. |
 | type | height \| default | height | Height-biased sampler or uniform Cartesian sampler. |
 | z_sample | int | 128 | Number of heights sampled per xy location. |
 | z_sampling_exponent | float | 2 | Bias random samples toward lower heights when greater than 1. |

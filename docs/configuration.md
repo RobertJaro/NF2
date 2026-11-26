@@ -19,9 +19,7 @@ data:
         Bp: ./data/Bp.fits
 ```
 
-This uses defaults for SIREN model, random sampling, potential boundary data, losses, callbacks, normalization, and training settings.
-
-Defaults are meant to make a valid first run, not to encode every scientific choice. They are a good starting point for smoke tests, SHARP-like Cartesian examples, and quick checks that the data loader works. Review them before production runs, especially the physical normalization, domain size, loss weights, batch sizes, and validation resolution.
+This handwritten config uses the loader defaults. For example, omitting `losses` gives a fixed force-free weight of 1.0e-4 and, with the default potential boundary, a volume potential-loss warm-up. To use the observational training schedule and batch sizes for plain FITS files, start with `nf2/cartesian/minimal_fits.yaml`.
 
 ## Minimal Spherical Example
 
@@ -87,13 +85,14 @@ data:
 losses:
   - type: force_free
     name: force_free
-    weight: <<force_free_weight;1.0e-3>>
-  - type: potential
-    name: potential
-    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
+    weight:
+      type: exponential
+      start: 1.0e-5
+      end: <<force_free_weight;1.0e-3>>
+      iterations: 30000
 ```
 
-The bundled Cartesian configs expose these defaults, so `--z_range 0 200` sets the height range to `[0, 200]`, and `--force_free_weight 2.0e-3` updates both the force-free loss weight and the potential-loss starting weight.
+The bundled Cartesian configs expose these defaults, so `--z_range 0 200` sets the height range to `[0, 200]`, and `--force_free_weight 2.0e-3` sets the final scheduled physics weight.
 
 Placeholder resolution happens before YAML parsing:
 
@@ -255,31 +254,7 @@ The default `training.epochs: 15` is deliberately conservative. It is enough for
 
 ## Losses
 
-Losses use `weight`, not `lambda`.
-
-```yaml
-losses:
-  - type: boundary
-    name: boundary
-    weight: 1.0
-    datasets: [boundary]
-  - type: force_free
-    name: force_free
-    weight: <<force_free_weight;1.0e-3>>
-    datasets: [random]
-```
-
-Scheduled weights are also supported:
-
-```yaml
-weight:
-  type: step
-  steps: 5000
-  start: <<force_free_weight;1.0e-3>>
-  end: 0.0
-```
-
-Explicit losses are useful when you want the YAML to record the full scientific objective. If `losses` is omitted, NF2 inserts geometry-appropriate defaults. When tuning a run, change one loss weight or schedule at a time and compare metrics on the same exported volume.
+Each entry in `losses` specifies a weight and the datasets it acts on. The packaged SHARP templates use a weight of 1 for the observed boundary and the potential side/top boundary. The force-free loss increases exponentially over 30,000 training steps. The direct-B template also applies that schedule to the divergence loss. See the [training guide](training.md#loss-schedules) for the YAML.
 
 ## Bundled Config Names
 
@@ -291,5 +266,4 @@ Installed NF2 includes reusable YAML templates. Pass them to `--config` with the
 
 ## Learned source-surface boundary
 
-See [Learned source-surface boundary](free_boundary.md) for the unit-vector height
-network, fractional interior sampling, and single-layer radial penalty.
+The `free_boundary_vector_potential` model learns a surface radius for each direction. Pair `random_source_surface_volume` with `random_source_surface_boundary` to sample the interior and its outer surface. The [dataset reference](generated/datasets_reference.md) lists the sampler options.

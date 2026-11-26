@@ -35,7 +35,8 @@ Guide: [scripts/benchmark.md](scripts/benchmark.md)
 Use these for local Cartesian volumes above planar boundary maps.
 
 - [../nf2/configs/cartesian/minimal_fits.yaml](../nf2/configs/cartesian/minimal_fits.yaml): minimal Cartesian run for plain Br/Bt/Bp FITS arrays. Uses `type: fits` and `load_map: false`.
-- [../nf2/configs/cartesian/sharp_cea.yaml](../nf2/configs/cartesian/sharp_cea.yaml): SHARP CEA vector magnetogram run with map metadata.
+- [../nf2/configs/cartesian/sharp_cea.yaml](../nf2/configs/cartesian/sharp_cea.yaml): SHARP CEA run with a vector-potential model.
+- [Direct-B SHARP CEA template](../nf2/configs/cartesian/sharp_cea_b.yaml) uses the same inputs and adds a scheduled divergence loss.
 - [../nf2/configs/cartesian/auto_disambiguation.yaml](../nf2/configs/cartesian/auto_disambiguation.yaml): Cartesian LOS/transverse/azimuth run with azimuth disambiguation support.
 - [../nf2/configs/cartesian/multi_height.yaml](../nf2/configs/cartesian/multi_height.yaml): single multi-height Cartesian extrapolation with photospheric and chromospheric boundaries.
 

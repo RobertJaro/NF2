@@ -138,7 +138,7 @@ files:
     - ./data/multi_height/photosphere/20240101_001200_B_azi.fits
 ```
 
-The equivalent per-time-step form is:
+In a local copy of `nf2/cartesian/multi_height_series.yaml`, set the paths and `data.boundaries` as shown below. Keep the template’s sampler, losses, height transform, and training settings.
 
 ```yaml
 path: ./runs/multi_height_series
@@ -172,18 +172,6 @@ data:
       height_mapping: { z: 2.0, z_min: 0.0, z_max: 20.0 }
       ambiguous_azimuth: true
       load_map: false
-  sampler:
-    type: height
-    batch_size: 16384
-  potential_boundary:
-    id: potential
-    type: potential
-    strides: 4
-  iterations: 10000
-  z_range: [0, 100]
-training:
-  reload_dataloaders_every_n_epochs: 1
-  check_val_every_n_epoch: 10
 ```
 
 Then run the copied config without per-component pattern arguments:

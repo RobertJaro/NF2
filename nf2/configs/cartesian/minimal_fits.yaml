@@ -2,6 +2,8 @@
 path: "<<run_path>>"
 data:
   geometry: cartesian
+  batch_size: 2048
+  z_range: <<z_range;[0, 100]>>
   boundaries:
     - id: boundary
       type: fits
@@ -10,10 +12,15 @@ data:
         Br: "<<Br>>"
         Bt: "<<Bt>>"
         Bp: "<<Bp>>"
+  sampler:
+    type: height
+    batch_size: 4096
   potential_boundary:
     id: potential
     type: potential
     strides: 4
+model:
+  field: vector_potential
 losses:
   - type: boundary
     name: boundary
@@ -21,17 +28,19 @@ losses:
     datasets: [boundary]
   - type: boundary
     name: potential_boundary
-    weight: 10.0
+    weight: 1.0
     datasets: potential
   - type: force_free
     name: force_free
-    weight: <<force_free_weight;1.0e-3>>
-    datasets: [random]
-  - type: potential
-    name: potential
-    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
+    weight:
+      type: exponential
+      start: 1.0e-5
+      end: <<force_free_weight;1.0e-3>>
+      iterations: 30000
     datasets: [random]
 loss_scaling:
   - type: b_height
     name: b_height
-    loss_ids: [force_free, potential]
+    loss_ids: [force_free]
+    power: 2
+    detach: true

@@ -81,14 +81,26 @@ def test_cartesian_z_range_can_be_overridden_from_cli_args():
     assert config["data"]["z_range"] == [0.0, 150.0]
 
 
-def test_default_cartesian_potential_start_matches_force_free_weight():
+@pytest.mark.parametrize(("template", "field", "physics"), [
+    ("sharp_cea.yaml", "vector_potential", ["force_free"]),
+    ("sharp_cea_b.yaml", "b", ["force_free", "divergence"]),
+])
+def test_sharp_physics_defaults(template, field, physics):
     config = load_yaml_config(
-        "nf2/cartesian/minimal_fits.yaml",
-        ["--run_path", "./runs/minimal", "--Br", "Br.fits", "--Bt", "Bt.fits", "--Bp", "Bp.fits"],
+        f"nf2/cartesian/{template}",
+        ["--run_path", "./runs/sharp", "--work_path", "./work",
+         "--Br", "br", "--Bt", "bt", "--Bp", "bp",
+         "--Br_err", "er", "--Bt_err", "et", "--Bp_err", "ep"],
     )
 
-    losses = {loss["name"]: loss for loss in config["losses"]}
-    assert losses["potential"]["weight"]["start"] == losses["force_free"]["weight"]
+    assert config["model"]["type"] == field
+    assert config["data"]["batch_size"] == 2048
+    assert config["data"]["sampler"]["batch_size"] == 4096
+    losses = {loss["name"]: loss["weight"] for loss in config["losses"]}
+    schedule = {"type": "exponential", "start": 1.0e-5, "end": 1.0e-3, "iterations": 30000}
+    assert losses == {"boundary": 1.0, "potential_boundary": 1.0, **dict.fromkeys(physics, schedule)}
+    assert config["loss_scaling"] == [
+        {"name": "b_height", "type": "b_height", "loss_ids": physics, "power": 2, "detach": True}]
 
 
 def test_cartesian_force_free_weight_can_be_overridden_from_cli_args():
@@ -99,8 +111,7 @@ def test_cartesian_force_free_weight_can_be_overridden_from_cli_args():
     )
 
     losses = {loss["name"]: loss for loss in config["losses"]}
-    assert losses["force_free"]["weight"] == 2.0e-3
-    assert losses["potential"]["weight"]["start"] == 2.0e-3
+    assert losses["force_free"]["weight"]["end"] == 2.0e-3
 
 
 def test_missing_required_placeholder_raises_error():

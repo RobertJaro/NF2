@@ -16,4 +16,4 @@ Colab-ready notebooks are available for the most common remote workflows:
 
 Each notebook exposes editable fields near the top for paths, active-region identifiers, time ranges, cadence, and run controls. The notebooks then walk through the full analysis path: data download or file selection, Python API extrapolation, export, metrics, and visualization.
 
-The visualization cells include current maps, free-energy maps, and boundary comparisons. Training cells are disabled by default through `RUN_TRAINING = False`; set that flag to `True` once the configuration and input files are ready. GPU runtime is recommended for training; CPU runtime is usually only practical for configuration checks and already-trained outputs.
+The visualization cells include current maps, free-energy maps, and boundary comparisons. The SHARP and Cartesian series notebooks enable download and training by default. To inspect a config first, disable its run flags in the settings cell. GPU runtime is recommended for training; CPU runtime is usually only practical for configuration checks and already-trained outputs.

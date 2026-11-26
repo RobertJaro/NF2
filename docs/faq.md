@@ -24,16 +24,16 @@ If metrics are still improving at the end of training, increase `training.epochs
 
 ## How do I avoid using W&B online?
 
-Set W&B to offline or disabled mode in the environment before launching NF2. Offline mode keeps local logs without syncing:
+Set W&B to offline or disabled mode in the environment before launching NF2. For a local config with your input paths filled in, offline mode keeps local logs without syncing.
 
 ```bash
-WANDB_MODE=offline nf2 extrapolate --config nf2/cartesian/sharp_cea.yaml --run_path ./runs/case
+WANDB_MODE=offline nf2 extrapolate --config ./my_sharp.yaml
 ```
 
 Disabled mode turns W&B logging off more aggressively:
 
 ```bash
-WANDB_MODE=disabled nf2 extrapolate --config nf2/cartesian/sharp_cea.yaml --run_path ./runs/case
+WANDB_MODE=disabled nf2 extrapolate --config ./my_sharp.yaml
 ```
 
 You can still keep a minimal `logging` block in the YAML for run names and local organization.

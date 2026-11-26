@@ -19,15 +19,15 @@ losses:
     name: boundary
     weight: 1.0
     datasets: [boundary]
-  - type: force_free
-    name: force_free
-    weight: 1.0e-3
-    datasets: [random]
+  - type: boundary
+    name: potential_boundary
+    weight: 1.0
+    datasets: potential
 ```
 
 Use `datasets` to point a loss at boundary, sampler, or validation dataset ids. NF2 v0.4 uses `weight`; the legacy `lambda` key is rejected.
 
-Common Cartesian losses include `boundary`, `force_free`, and `potential`. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. The older `boundary_azi` loss remains available for split transverse/azimuth experiments; prefer `boundary_los_trv_azi` for new ambiguity-aware LOS/transverse/azimuth runs. Spherical configs usually combine `boundary`, `force_free`, `potential`, and sometimes `energy_gradient`.
+The observational Cartesian templates fit the measured boundary and a potential field on the sides and top, each with weight 1. They apply a scheduled force-free loss in the volume. The direct-B SHARP template also applies a divergence loss on those volume samples. Multi-height LOS/transverse/azimuth configs often use `boundary_los_trv_azi` plus a `height` loss on the elevated boundary. The older `boundary_azi` loss remains available for split transverse/azimuth experiments; prefer `boundary_los_trv_azi` for new ambiguity-aware LOS/transverse/azimuth runs. Spherical configs usually combine `boundary`, `force_free`, `potential`, and sometimes `energy_gradient`.
 
 For `boundary` losses, set `weights` to raw per-component multipliers in dataset component order. For spherical Br/Btheta/Bphi maps, `weights: [1.0, 0.1, 0.1]` keeps Br at full strength and gives Btheta and Bphi one tenth of the Br penalty.
 
@@ -41,31 +41,25 @@ losses:
     name: force_free
     weight:
       type: exponential
-      start: 1.0e-4
-      end: 1.0e-2
-      iterations: 50000
-    datasets: [random]
-  - type: potential
-    name: potential
-    weight:
-      type: step
-      steps: 5000
-      start: 1.0e-4
-      end: 0.0
+      start: 1.0e-5
+      end: 1.0e-3
+      iterations: 30000
     datasets: [random]
 ```
 
-Use schedules when one objective should enter gradually or disappear after a warm-up. A common Cartesian pattern is to turn off the potential loss after the model has learned the initial large-scale structure.
+The bundled observational Cartesian templates use this ramp. Set its endpoint with `--force_free_weight`. In `sharp_cea_b.yaml` the divergence loss shares the schedule and the height scaling.
 
 ## Height Scaling
 
-Loss scaling changes how strongly selected losses contribute across height or radius. Cartesian examples use `b_height` scaling for volume losses:
+Loss scaling changes how strongly selected losses contribute across height or radius. The bundled Cartesian vector-potential templates use the following scaling for the force-free loss.
 
 ```yaml
 loss_scaling:
   - type: b_height
     name: b_height
-    loss_ids: [force_free, potential]
+    loss_ids: [force_free]
+    power: 2
+    detach: true
 ```
 
 `b_height` recomputes the field-strength normalizer for each height group on
@@ -80,12 +74,12 @@ loss_scaling:
     name: b_height
     detach: true
     power: 2
-    loss_ids: [force_free, potential, energy_gradient]
+    loss_ids: [force_free, potential_top, energy_gradient]
   - type: radial
     name: radial
-    base_radius: 1.0
+    base_radius: 1.03
     max_radius: 1.3
-    loss_ids: [force_free, potential, energy_gradient]
+    loss_ids: [energy_gradient, potential_top]
 ```
 
 For multi-height data, set `height_mapping` on the elevated boundary and add a matching height transform:
@@ -104,18 +98,14 @@ transforms:
 
 ## Batch Sizes
 
-Training memory is mostly controlled by dataset batch sizes. Start by reducing the largest sampler or boundary batches:
+The packaged observational Cartesian configs use 2048 samples shared across the observed boundaries and 4096 random volume samples per training batch. The generated potential boundary uses one quarter of `data.batch_size` by default (512 samples here). To reduce training memory, lower the observed-boundary or sampler batch size.
 
 ```yaml
 data:
+  batch_size: 2048
   sampler:
     type: height
-    batch_size: 8192
-  potential_boundary:
-    type: potential
-    strides: 4
     batch_size: 4096
-  validation_batch_size: 4096
 ```
 
 For spherical `random_radial_grouped` samplers, `batch_size` must be divisible by `n_lat_lon_sample`.

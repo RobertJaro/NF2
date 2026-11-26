@@ -52,12 +52,12 @@ This page is generated from `nf2.reference` and mirrors the public v0.4 YAML sch
 | data.validation[].mask_configs.min | float | mask dependent | Minimum value for validation threshold-style masks such as `mu_filter`. |
 | data.validation[].mask_configs[].type | str | mask dependent | Mask/filter implementation name when validation masks are provided as a list. |
 | data.validation[].mask_configs[].min | float | mask dependent | Minimum value when list-form validation masks use `mu_filter`. |
-| data.batch_size | int | 4096 spherical, 8192 cartesian | Default dataset batch size passed to loaders. |
+| data.batch_size | int | 4096 spherical, 8192 cartesian | Loader fallback. Packaged observational Cartesian templates set 2048 total observed-boundary samples per batch. |
 | data.validation_batch_size | int | 16384 | Cartesian validation batch size. |
 | data.validation_pixel_per_ds | float | 128 | Cartesian validation sampling density; larger values make coarser validation cubes. |
 | data.sampler | dict | height sampler | Cartesian physics sampling dataset. |
 | data.sampler.type | height \| default | height | Cartesian random sampler type. |
-| data.sampler.batch_size | int | 16384 in examples | Cartesian random sampler batch size. |
+| data.sampler.batch_size | int | 4096 in observational templates | Cartesian random sampler batch size. |
 | data.samplers | list[dict] | random_radial_grouped | Spherical physics sampling datasets. |
 | data.samplers[].id | str | source_surface for random_source_surface_boundary, otherwise random | Spherical sampler ID used by losses. Training boundaries and samplers must have distinct IDs. |
 | data.samplers[].type | random_radial_grouped \| random_spherical \| random_fixed_radius \| random_source_surface_volume \| random_source_surface_boundary | random_radial_grouped | Spherical random sampler type. |

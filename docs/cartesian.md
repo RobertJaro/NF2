@@ -5,7 +5,8 @@ Cartesian runs use `data.geometry: cartesian` and train a local Cartesian volume
 Primary bundled config names:
 
 - `nf2/cartesian/minimal_fits.yaml`
-- `nf2/cartesian/sharp_cea.yaml`
+- `nf2/cartesian/sharp_cea.yaml` (vector potential)
+- `nf2/cartesian/sharp_cea_b.yaml` (direct B)
 - `nf2/cartesian/auto_disambiguation.yaml`
 - `nf2/cartesian/multi_height.yaml`
 - `nf2/cartesian/sharp_cea_series.yaml`
@@ -148,9 +149,10 @@ Cartesian configs commonly set `z_range`, a random volume sampler, a potential b
 data:
   geometry: cartesian
   z_range: <<z_range;[0, 100]>>
+  batch_size: 2048
   sampler:
     type: height
-    batch_size: 16384
+    batch_size: 4096
   potential_boundary:
     type: potential
     strides: 4
@@ -181,15 +183,25 @@ losses:
     datasets: [boundary]
   - type: force_free
     name: force_free
-    weight: <<force_free_weight;1.0e-3>>
+    weight:
+      type: exponential
+      start: 1.0e-5
+      end: <<force_free_weight;1.0e-3>>
+      iterations: 30000
     datasets: [random]
-  - type: potential
-    name: potential
-    weight: { type: step, steps: 5000, start: <<force_free_weight;1.0e-3>>, end: 0.0 }
-    datasets: [random]
+  - type: boundary
+    name: potential_boundary
+    weight: 1.0
+    datasets: potential
+loss_scaling:
+  - type: b_height
+    name: b_height
+    loss_ids: [force_free]
+    power: 2
+    detach: true
 ```
 
-The bundled Cartesian configs expose `force_free_weight` as a placeholder default. Passing `--force_free_weight 2.0e-3` updates the force-free loss and the potential-loss starting weight together. The `datasets` entries refer to dataset ids from `data.boundaries`, `data.sampler`, or generated defaults such as `random` and `potential`.
+The bundled observational Cartesian templates use a vector potential by default. For a direct-B SHARP run, use `nf2/cartesian/sharp_cea_b.yaml`. It applies the same weight schedule and height scaling to force-free and divergence losses. Pass `--force_free_weight 2.0e-3` to change the final scheduled weight. The `datasets` entries refer to dataset ids from `data.boundaries`, `data.sampler`, or generated defaults such as `random` and `potential`.
 
 ## Python API
 

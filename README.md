@@ -74,7 +74,7 @@ nf2 extrapolate \
   --Bp "/data/Bp.fits"
 ```
 
-Bundled Cartesian configs default to `z_range: [0, 100]` and `force_free_weight: 1.0e-3`; override them with arguments such as `--z_range 0 150` and `--force_free_weight 2.0e-3`.
+Bundled observational Cartesian configs use 2048 boundary samples and 4096 random samples per batch. The force-free weight increases exponentially from 1.0e-5 to 1.0e-3 over 30,000 steps. Set the final weight with `--force_free_weight` and the height range (default 0–100 Mm) with `--z_range`.
 
 Download HMI SHARP data:
 
@@ -134,7 +134,8 @@ from nf2 import CartesianOutput, SphericalOutput, run, run_series
 
 Example configurations are bundled with the package and can be passed as names such as `nf2/cartesian/sharp_cea.yaml`. Source templates live in [nf2/configs](nf2/configs); see the [examples overview](examples/README.md) for guidance by run type:
 
-- `nf2/cartesian/sharp_cea.yaml`
+- `nf2/cartesian/sharp_cea.yaml` (vector potential, default)
+- `nf2/cartesian/sharp_cea_b.yaml` (direct B, with divergence loss)
 - `nf2/cartesian/minimal_fits.yaml`
 - `nf2/cartesian/auto_disambiguation.yaml`
 - `nf2/cartesian/multi_height.yaml`
